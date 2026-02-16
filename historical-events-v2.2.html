@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historical Events Database v2.2</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/vis-network.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/dist/vis-network.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Karla', sans-serif; background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%); color: #e0e6ed; overflow-x: hidden; }
+    body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 20% 50%, rgba(96,165,250,0.05) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(167,139,250,0.05) 0%, transparent 50%); pointer-events: none; z-index: 0; }
+    .app { min-height: 100vh; display: flex; flex-direction: column; position: relative; z-index: 1; }
+    .fullscreen { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; background: #0a0e27; padding: 2rem; }
+    .header { background: linear-gradient(135deg, rgba(26,31,58,0.95), rgba(45,53,97,0.95)); padding: 2rem 3rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); border-bottom: 3px solid rgba(96,165,250,0.3); backdrop-filter: blur(10px); }
+    .header h1 { font-family: 'Space Mono', monospace; font-size: 2.5rem; background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #10b981 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1rem; letter-spacing: -1px; font-weight: 700; }
+    .stats { display: flex; gap: 3rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .stat { display: flex; flex-direction: column; gap: 0.25rem; position: relative; padding-left: 1rem; }
+    .stat::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 80%; background: linear-gradient(180deg, #60a5fa, #a78bfa); border-radius: 2px; }
+    .stat-label { font-size: 0.75rem; color: #8b92b0; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+    .stat-value { font-family: 'Space Mono', monospace; font-size: 1.75rem; font-weight: bold; color: #60a5fa; }
+    .breadcrumb-bar { padding: 0.6rem 3rem; background: rgba(10,14,39,0.5); border-bottom: 1px solid rgba(61,69,99,0.4); display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; min-height: 36px; }
+    .bc-item { color: #60a5fa; cursor: pointer; transition: all 0.15s; padding: 0.2rem 0.4rem; border-radius: 4px; }
+    .bc-item:hover { background: rgba(96,165,250,0.15); text-decoration: underline; }
+    .bc-sep { color: #3d4563; font-size: 0.75rem; }
+    .bc-current { color: #e0e6ed; font-weight: 600; padding: 0.2rem 0.4rem; }
+    .controls-bar { display: flex; justify-content: space-between; align-items: center; padding: 1rem 3rem; background: rgba(21,25,50,0.6); border-bottom: 1px solid rgba(61,69,99,0.5); backdrop-filter: blur(10px); }
+    .save-btn { padding: 0.75rem 2rem; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 8px; color: white; font-weight: 700; cursor: pointer; transition: all 0.3s; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; font-size: 0.875rem; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+    .save-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16,185,129,0.5); }
+    .save-status { font-size: 0.875rem; color: #10b981; font-weight: 600; }
+    .nav { display: flex; gap: 0.75rem; padding: 1.5rem 3rem; background: rgba(21,25,50,0.4); border-bottom: 1px solid rgba(61,69,99,0.5); overflow-x: auto; backdrop-filter: blur(5px); }
+    .nav-btn { padding: 0.875rem 1.75rem; background: rgba(26,31,58,0.8); border: 2px solid rgba(45,53,97,0.5); border-radius: 12px; cursor: pointer; transition: all 0.3s; white-space: nowrap; font-weight: 600; color: #8b92b0; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .nav-btn:hover { background: rgba(37,43,74,0.9); border-color: #60a5fa; color: #e0e6ed; transform: translateY(-2px); }
+    .nav-btn.active { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: #0a0e27; border-color: #60a5fa; box-shadow: 0 4px 12px rgba(96,165,250,0.4); }
+    .content { flex: 1; padding: 2rem 3rem; }
+    .filters { background: rgba(26,31,58,0.6); padding: 2rem; border-radius: 16px; margin-bottom: 2rem; border: 2px solid rgba(61,69,99,0.5); backdrop-filter: blur(10px); }
+    .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .filters-title { font-size: 1.25rem; font-weight: 700; color: #60a5fa; text-transform: uppercase; letter-spacing: 1px; }
+    .filter-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .filter-group { flex: 1; min-width: 220px; }
+    .filter-label { display: block; font-size: 0.875rem; color: #8b92b0; margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    input, select { width: 100%; padding: 0.875rem; background: rgba(10,14,39,0.8); border: 2px solid rgba(45,53,97,0.5); border-radius: 10px; color: #e0e6ed; font-size: 0.875rem; transition: all 0.2s; font-family: 'Karla', sans-serif; }
+    input:focus, select:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.1); }
+    .search-row { display: flex; gap: 0.5rem; }
+    .search-row input { flex: 1; width: auto; }
+    .search-btn { padding: 0.875rem 1.5rem; background: linear-gradient(135deg, #60a5fa, #3b82f6); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer; font-size: 0.875rem; white-space: nowrap; transition: all 0.2s; }
+    .search-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(96,165,250,0.4); }
+    .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem; max-height: 200px; overflow-y: auto; padding: 0.5rem; background: rgba(10,14,39,0.4); border-radius: 8px; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(45,53,97,0.4); border: 1px solid rgba(61,69,99,0.5); border-radius: 6px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; user-select: none; }
+    .checkbox-label:hover { background: rgba(96,165,250,0.1); border-color: #60a5fa; }
+    .checkbox-label input[type="checkbox"] { margin: 0; cursor: pointer; width: 16px; height: 16px; flex-shrink: 0; }
+    .checkbox-label.checked { background: rgba(96,165,250,0.2); border-color: #60a5fa; }
+    .btn { padding: 0.875rem 2rem; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; transition: all 0.3s; display: inline-flex; align-items: center; gap: 0.75rem; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .btn-primary { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: white; box-shadow: 0 4px 12px rgba(96,165,250,0.3); }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(96,165,250,0.5); }
+    .btn-secondary { background: rgba(45,53,97,0.6); color: #e0e6ed; border: 2px solid rgba(96,165,250,0.3); }
+    .btn-secondary:hover { background: rgba(96,165,250,0.15); }
+    .btn-danger { background: rgba(239,68,68,0.2); color: #ef4444; border: 2px solid rgba(239,68,68,0.4); }
+    .btn-cancel { background: rgba(239,68,68,0.2); color: #ef4444; border: 2px solid rgba(239,68,68,0.4); }
+    .fullscreen-btn { position: absolute; top: 1rem; right: 1rem; z-index: 100; }
+    .timeline-wrapper { background: rgba(26,31,58,0.6); border-radius: 12px; padding: 3rem 2rem; border: 2px solid rgba(61,69,99,0.5); min-height: 400px; position: relative; overflow-x: auto; overflow-y: visible; }
+    .timeline-container { position: relative; min-width: max-content; padding: 3rem 1rem; }
+    .timeline-line { position: absolute; left: 0; right: 0; top: 50%; height: 4px; background: linear-gradient(90deg, #60a5fa, #a78bfa); border-radius: 2px; transform: translateY(-50%); }
+    .timeline-events { position: relative; display: flex; align-items: center; gap: 4rem; min-width: 100%; }
+    .timeline-event { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: all 0.3s; z-index: 10; }
+    .timeline-icon { width: 50px; height: 50px; background: linear-gradient(135deg, #60a5fa, #3b82f6); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; border: 3px solid #0a0e27; box-shadow: 0 4px 12px rgba(96,165,250,0.4); transition: all 0.3s; }
+    .timeline-event:hover .timeline-icon { transform: scale(1.2); box-shadow: 0 6px 20px rgba(96,165,250,0.6); }
+    .timeline-event.major .timeline-icon { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 12px rgba(16,185,129,0.4); }
+    .timeline-label { position: absolute; top: 62px; font-size: 0.68rem; color: #8b92b0; text-align: center; width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .timeline-year { position: absolute; top: -32px; font-family: 'Space Mono', monospace; font-size: 0.8rem; font-weight: 700; color: #60a5fa; white-space: nowrap; }
+    .network { background: rgba(26,31,58,0.6); border-radius: 16px; border: 2px solid rgba(61,69,99,0.5); height: 700px; position: relative; backdrop-filter: blur(10px); }
+    #network-graph { width: 100%; height: 100%; border-radius: 16px; }
+    .spreadsheet { background: rgba(26,31,58,0.6); border-radius: 16px; padding: 1.5rem; border: 2px solid rgba(61,69,99,0.5); overflow-x: auto; backdrop-filter: blur(10px); }
+    .table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .table th { background: rgba(37,43,74,0.8); padding: 1.25rem; text-align: left; font-weight: 700; color: #60a5fa; border-bottom: 3px solid rgba(61,69,99,0.8); position: sticky; top: 0; z-index: 10; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.75rem; }
+    .table td { padding: 1rem 1.25rem; border-bottom: 1px solid rgba(45,53,97,0.3); }
+    .table tr:hover td { background: rgba(37,43,74,0.4); }
+    .table a { color: #60a5fa; text-decoration: none; }
+    .table a:hover { text-decoration: underline; }
+    .copy-link { margin-left: 0.5rem; cursor: pointer; color: #10b981; font-weight: bold; opacity: 0.6; }
+    .copy-link:hover { opacity: 1; }
+    .upload { background: linear-gradient(135deg, rgba(26,31,58,0.6), rgba(45,53,97,0.4)); border: 3px dashed rgba(96,165,250,0.3); border-radius: 16px; padding: 4rem; text-align: center; cursor: pointer; transition: all 0.4s; margin-bottom: 2rem; backdrop-filter: blur(10px); }
+    .upload:hover { border-color: #60a5fa; background: linear-gradient(135deg, rgba(37,43,74,0.8), rgba(61,69,99,0.6)); transform: scale(1.01); }
+    .upload-icon { font-size: 4rem; margin-bottom: 1.5rem; }
+    .upload-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .upload-tab { padding: 0.75rem 1.5rem; background: rgba(26,31,58,0.6); border: 2px solid rgba(45,53,97,0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #8b92b0; transition: all 0.2s; }
+    .upload-tab.active { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: white; border-color: #60a5fa; }
+    .url-input-section { background: rgba(26,31,58,0.8); border: 2px solid rgba(96,165,250,0.3); border-radius: 16px; padding: 2.5rem; margin-bottom: 2rem; }
+    .url-input-header { font-size: 1.5rem; font-weight: 700; color: #60a5fa; margin-bottom: 1.5rem; }
+    .url-input-row { display: flex; gap: 1rem; align-items: flex-end; }
+    .url-input-group { flex: 1; }
+    .processing-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 3000; }
+    .processing-card { background: rgba(26,31,58,0.98); border-radius: 16px; padding: 2.5rem; max-width: 400px; border: 2px solid rgba(96,165,250,0.5); text-align: center; }
+    .processing-spinner { border: 4px solid rgba(96,165,250,0.2); border-top: 4px solid #60a5fa; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 1.5rem; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(8px); animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-content { background: linear-gradient(135deg, rgba(26,31,58,0.98), rgba(45,53,97,0.98)); border-radius: 20px; padding: 3rem; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; border: 3px solid rgba(96,165,250,0.3); box-shadow: 0 24px 80px rgba(0,0,0,0.6); animation: slideUp 0.3s; }
+    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 2px solid rgba(96,165,250,0.2); }
+    .modal-title { font-size: 1.75rem; font-weight: 700; color: #60a5fa; font-family: 'Space Mono', monospace; flex: 1; line-height: 1.3; }
+    .modal-actions { display: flex; gap: 0.5rem; margin-left: 1rem; flex-shrink: 0; }
+    .close { background: rgba(239,68,68,0.2); border: 2px solid rgba(239,68,68,0.4); font-size: 1.5rem; color: #ef4444; cursor: pointer; padding: 0.5rem 1rem; border-radius: 8px; transition: all 0.2s; font-weight: bold; }
+    .close:hover { background: rgba(239,68,68,0.4); transform: scale(1.1); }
+    .edit-btn { background: rgba(16,185,129,0.2); border: 2px solid rgba(16,185,129,0.4); color: #10b981; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.875rem; }
+    .edit-btn:hover { background: rgba(16,185,129,0.3); }
+    .form-group { margin-bottom: 2rem; }
+    .form-label { display: block; font-size: 0.875rem; font-weight: 700; color: #8b92b0; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .edit-input { width: 100%; padding: 0.875rem; background: rgba(10,14,39,0.8); border: 2px solid rgba(45,53,97,0.5); border-radius: 10px; color: #e0e6ed; font-size: 0.9rem; font-family: inherit; }
+    textarea.edit-input { min-height: 100px; resize: vertical; font-family: inherit; }
+    .ai-summary-box { background: linear-gradient(135deg, rgba(167,139,250,0.1), rgba(139,92,246,0.1)); border: 2px solid rgba(167,139,250,0.3); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .ai-summary-label { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; color: #a78bfa; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.75rem; }
+    .ai-summary-label::before { content: '🤖'; font-size: 1.25rem; }
+    .tags { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
+    .tag { padding: 0.5rem 1rem; background: linear-gradient(135deg, rgba(45,53,97,0.8), rgba(61,69,99,0.8)); border-radius: 24px; font-size: 0.8125rem; color: #a78bfa; border: 2px solid rgba(167,139,250,0.3); font-weight: 600; transition: all 0.2s; cursor: pointer; }
+    .tag:hover { background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(139,92,246,0.2)); border-color: #a78bfa; transform: scale(1.05); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+    .card { background: linear-gradient(135deg, rgba(26,31,58,0.8), rgba(45,53,97,0.6)); border: 2px solid rgba(61,69,99,0.5); border-radius: 16px; padding: 2rem; cursor: pointer; transition: all 0.3s; backdrop-filter: blur(10px); }
+    .card:hover { border-color: #60a5fa; transform: translateY(-4px); box-shadow: 0 8px 24px rgba(96,165,250,0.2); }
+    .card-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.75rem; color: #e0e6ed; }
+    .card-count { font-size: 0.875rem; color: #8b92b0; font-weight: 600; }
+    .card-tags { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .card-tag { padding: 0.25rem 0.6rem; background: rgba(96,165,250,0.15); border: 1px solid rgba(96,165,250,0.3); border-radius: 12px; font-size: 0.7rem; color: #60a5fa; }
+    .level-1 { background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 0.375rem 0.75rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
+    .level-2 { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 0.375rem 0.75rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
+    .level-3 { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 0.375rem 0.75rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; display: inline-block; }
+    .success-msg { background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(5,150,105,0.2)); color: #10b981; padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid rgba(16,185,129,0.3); font-weight: 600; }
+    .error-msg { background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.2)); color: #ef4444; padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem; border: 2px solid rgba(239,68,68,0.3); font-weight: 600; }
+    .back-btn { padding: 0.75rem 1.5rem; background: rgba(45,53,97,0.6); border: 2px solid rgba(96,165,250,0.3); border-radius: 10px; color: #60a5fa; font-weight: 600; cursor: pointer; margin-bottom: 2rem; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
+    .back-btn:hover { background: rgba(96,165,250,0.2); border-color: #60a5fa; }
+    .export-btns { display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .empty-state { text-align: center; padding: 4rem 2rem; color: #8b92b0; }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    const EMBEDDED_DATA = {"events":[{"id":"EVT-0001","title":"Are we all breathing SMART dust?","description":"everything can be done with smart dust, eventually you'll breathe it, but because it isn't mass manufactured yet you prob aren't breathing it YET","date":null,"dateUploaded":"2026-02-12","topics":["Nano particles","smart dust","CYBORG","MERGING WITH MACHINES","micro particles"],"people":[],"organizations":["Brite Innovation"],"links":["https://brite.ikeinstitute.org/brite_innovation_review_issue_31_winter_2023/are_we_all_breathing_smart_dust"],"researchLevel":1,"sourceType":"Article","sourceSheet":"Sheet1","connections":[],"aiSummary":"Article discussing smart dust and nano particles technology. RAND developed microelectromechanical systems (MEMS) that can monitor anything anywhere."},{"id":"EVT-0002","title":"Chemtrails: What In The World Are They Spraying?","description":"documentary on chemtrails and geoengineering","date":"2010-01-01","dateUploaded":"2026-02-12","topics":["chemtrails","Geoengineering"],"people":[],"organizations":[],"links":["https://www.youtube.com/watch?v=jf0khstYDLA"],"researchLevel":2,"sourceType":"Documentary","sourceSheet":"Sheet1","connections":[],"aiSummary":"Documentary exploring chemtrails and geoengineering programs, examining what is being sprayed in the atmosphere."},{"id":"EVT-0003","title":"CIA Document 1035-960: Concerning Criticism of the Warren Report","description":"CIA coins the term 'conspiracy theory' to discredit critics of the Warren Commission","date":"1967-01-01","dateUploaded":"2026-02-12","topics":["CIA","conspiracy theory","Warren Commission","JFK"],"people":[],"organizations":["Central Intelligence Agency (CIA)"],"links":[],"researchLevel":3,"sourceType":"Declassified Document","sourceSheet":"Sheet1","connections":[],"aiSummary":"Declassified CIA document that is widely credited with popularizing the term 'conspiracy theory' as a way to discredit critics of the Warren Commission report on JFK's assassination."},{"id":"EVT-0004","title":"COVID-19 Lab Leak Theory","description":"Evidence suggests COVID-19 may have originated from a laboratory in Wuhan, China rather than natural transmission","date":"2020-01-01","dateUploaded":"2026-02-12","topics":["COVID-19","lab leak","Wuhan","biological weapons"],"people":[],"organizations":[],"links":[],"researchLevel":2,"sourceType":"Article","sourceSheet":"Covid","connections":[],"aiSummary":"Analysis of COVID-19 origins and the lab leak hypothesis. Multiple intelligence agencies now assess this as the likely origin."},{"id":"EVT-0005","title":"Direct Energy Weapon Patent","description":"Patent for directed energy weapon technology used by military","date":"1990-01-01","dateUploaded":"2026-02-12","topics":["Directed Energy Weapons (DEW)","military technology","weapons"],"people":[],"organizations":[],"links":[],"researchLevel":2,"sourceType":"Patent","sourceSheet":"Direct energy weapon","connections":[],"aiSummary":"Patent covering directed energy weapon systems including microwave and laser-based weapons."},{"id":"EVT-0006","title":"Election of President Abraham Lincoln","description":"Abraham Lincoln served as the 16th President of the United States from 1861-03-04 to 1865-04-15.","date":"1861-03-04","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Abraham Lincoln"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Abraham Lincoln as the 16th President. Led the country through the Civil War and issued the Emancipation Proclamation.","isMajorEvent":true},{"id":"EVT-0007","title":"Election of President Barack Obama","description":"Barack Obama served as the 44th President of the United States from 2009-01-20 to 2017-01-20.","date":"2009-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Barack Obama"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Barack Obama as the 44th President and first African-American president of the United States.","isMajorEvent":true},{"id":"EVT-0008","title":"Election of President Bill Clinton","description":"Bill Clinton served as the 42nd President of the United States from 1993-01-20 to 2001-01-20.","date":"1993-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Bill Clinton"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Bill Clinton as the 42nd President of the United States.","isMajorEvent":true},{"id":"EVT-0009","title":"Election of President Donald Trump","description":"Donald Trump served as the 45th President of the United States from 2017-01-20 to 2021-01-20, and was elected again as the 47th President in 2024.","date":"2017-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Donald Trump"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Donald Trump as the 45th President.","isMajorEvent":true},{"id":"EVT-0010","title":"Election of President Dwight D. Eisenhower","description":"Dwight D. Eisenhower served as the 34th President of the United States from 1953-01-20 to 1961-01-20.","date":"1953-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Dwight D. Eisenhower"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Dwight D. Eisenhower. Famously warned about the military-industrial complex in his farewell address.","isMajorEvent":true},{"id":"EVT-0011","title":"Election of President Franklin D. Roosevelt","description":"Franklin D. Roosevelt served as the 32nd President of the United States from 1933-03-04 to 1945-04-12.","date":"1933-03-04","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Franklin D. Roosevelt"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Franklin D. Roosevelt. Led the country through the Great Depression and World War II.","isMajorEvent":true},{"id":"EVT-0012","title":"Election of President George W. Bush","description":"George W. Bush served as the 43rd President of the United States from 2001-01-20 to 2009-01-20.","date":"2001-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics","9/11"],"people":["George W. Bush"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of George W. Bush. His presidency was defined by the 9/11 attacks and subsequent War on Terror.","isMajorEvent":true},{"id":"EVT-0013","title":"Election of President George Washington","description":"George Washington served as the 1st President of the United States from 1789-04-30 to 1797-03-04.","date":"1789-04-30","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics","Founding Fathers"],"people":["George Washington"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Inauguration of George Washington as the first President of the United States and Founding Father.","isMajorEvent":true},{"id":"EVT-0014","title":"Election of President Harry S. Truman","description":"Harry S. Truman served as the 33rd President of the United States from 1945-04-12 to 1953-01-20.","date":"1945-04-12","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Harry S. Truman"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Harry S. Truman became President after FDR's death. Authorized use of atomic bombs on Japan and oversaw end of WWII.","isMajorEvent":true},{"id":"EVT-0015","title":"Election of President Joe Biden","description":"Joe Biden served as the 46th President of the United States from 2021-01-20 to 2025-01-20.","date":"2021-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Joe Biden"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Joe Biden as the 46th President.","isMajorEvent":true},{"id":"EVT-0016","title":"Election of President John F. Kennedy","description":"John F. Kennedy served as the 35th President of the United States from 1961-01-20 to 1963-11-22.","date":"1961-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics","JFK","assassination"],"people":["John F. Kennedy"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of JFK. His assassination in 1963 remains one of history's most debated events.","isMajorEvent":true},{"id":"EVT-0017","title":"Gulf War","description":"Gulf War was a major military conflict involving the United States and coalition forces against Iraq, lasting from 1991-01-17 to 1991-02-28.","date":"1991-01-17","dateUploaded":"2026-02-14","topics":["War","Military Conflict","American History","Gulf War","Middle East"],"people":[],"organizations":["United States Armed Forces"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Wars","connections":[],"aiSummary":"Major military conflict: Gulf War (Operation Desert Storm). Coalition forces expelled Iraq from Kuwait.","isMajorEvent":true},{"id":"EVT-0018","title":"Iraq War","description":"Iraq War was a major military conflict involving the United States, lasting from 2003-03-20 to 2011-12-15. Launched after claims of weapons of mass destruction.","date":"2003-03-20","dateUploaded":"2026-02-14","topics":["War","Military Conflict","American History","Iraq War","Middle East","weapons of mass destruction"],"people":[],"organizations":["United States Armed Forces","Central Intelligence Agency (CIA)"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Wars","connections":[],"aiSummary":"Major military conflict: Iraq War. Launched based on disputed WMD claims. No WMDs were found.","isMajorEvent":true},{"id":"EVT-0019","title":"Korean War","description":"Korean War was a major military conflict involving the United States, lasting from 1950-06-25 to 1953-07-27.","date":"1950-06-25","dateUploaded":"2026-02-14","topics":["War","Military Conflict","American History","Korean War"],"people":[],"organizations":["United States Armed Forces"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Wars","connections":[],"aiSummary":"Major military conflict: Korean War, often called 'The Forgotten War'. Ended in armistice, not a peace treaty.","isMajorEvent":true},{"id":"EVT-0020","title":"October Surprise: A Four-Decade Secret","description":"Media now admits October Surprise is real — proof that the CIA and intelligence agencies will interfere with elections","date":"2023-03-28","dateUploaded":"2026-02-12","topics":["October Surprise","CIA","Ronald Reagan","Jimmy Carter","election fraud","election interference"],"people":["Jimmy Carter","Ronald Reagan"],"organizations":["New York Times (NYT)","The Intercept","Central Intelligence Agency (CIA)"],"links":["https://www.nytimes.com/2023/03/18/us/politics/jimmy-carter-october-surprise-iran-hostages.html","https://theintercept.com/2023/03/24/october-surprise-ben-barnes/"],"researchLevel":1,"sourceType":"Article","sourceSheet":"Sheet1","connections":[],"aiSummary":"Article in NYT confirming the October Surprise — that Reagan's 1980 campaign secretly negotiated with Iran to delay hostage release to undermine Carter's re-election."}],"people":["Abraham Lincoln","Barack Obama","Bill Clinton","Donald Trump","Dwight D. Eisenhower","Franklin D. Roosevelt","George W. Bush","George Washington","Harry S. Truman","Jimmy Carter","Joe Biden","John F. Kennedy","Ronald Reagan"],"organizations":["Brite Innovation","Central Intelligence Agency (CIA)","New York Times (NYT)","The Intercept","United States Armed Forces","United States Government"],"topics":["9/11","American History","CYBORG","CIA","COVID-19","Directed Energy Weapons (DEW)","Founding Fathers","Geoengineering","Gulf War","Iraq War","JFK","Jimmy Carter","Korean War","MERGING WITH MACHINES","Middle East","Military Conflict","Nano particles","October Surprise","Politics","Presidential Election","Ronald Reagan","US President","War","Warren Commission","Wuhan","assassination","biological weapons","chemtrails","conspiracy theory","election fraud","election interference","lab leak","micro particles","military technology","smart dust","weapons of mass destruction"],"metadata":{"totalEvents":20,"totalPeople":13,"totalOrganizations":6,"totalTopics":36,"lastUpdated":"2026-02-16T12:00:00.000Z"}};
+
+    // ─── FILTERS COMPONENT (defined OUTSIDE App so it never remounts on keypress) ───
+    const FiltersComponent = ({ filters, setFilters, data, activeTab, onSearch, onClear, onExportCSV, onExportJSON }) => {
+      return (
+        <div className="filters">
+          <div className="filters-header">
+            <div className="filters-title">Filters</div>
+            <button className="btn btn-secondary" onClick={onClear} style={{padding:'0.5rem 1rem', fontSize:'0.8rem'}}>
+              🗑️ Clear All Filters
+            </button>
+          </div>
+          <div className="filter-row">
+            <div className="filter-group">
+              <label className="filter-label">Search</label>
+              <div className="search-row">
+                <input
+                  type="text"
+                  placeholder="Search events, topics, people..."
+                  value={filters.search}
+                  onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onSearch(); } }}
+                />
+                <button className="search-btn" onClick={onSearch}>→</button>
+              </div>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label">Date From</label>
+              <input type="date" value={filters.dateFrom} onChange={e => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))} />
+            </div>
+            <div className="filter-group">
+              <label className="filter-label">Date To</label>
+              <input type="date" value={filters.dateTo} onChange={e => setFilters(prev => ({ ...prev, dateTo: e.target.value }))} />
+            </div>
+          </div>
+          <div className="filter-row">
+            <div className="filter-group">
+              <label className="filter-label">Topics</label>
+              <div className="checkbox-grid">
+                {(data.topics || []).map(t => (
+                  <label key={t} className={`checkbox-label ${filters.topics.includes(t) ? 'checked' : ''}`}>
+                    <input type="checkbox" checked={filters.topics.includes(t)}
+                      onChange={e => setFilters(prev => ({
+                        ...prev, topics: e.target.checked ? [...prev.topics, t] : prev.topics.filter(x => x !== t)
+                      }))} />
+                    {t}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label">People</label>
+              <div className="checkbox-grid">
+                {(data.people || []).map(p => (
+                  <label key={p} className={`checkbox-label ${filters.people.includes(p) ? 'checked' : ''}`}>
+                    <input type="checkbox" checked={filters.people.includes(p)}
+                      onChange={e => setFilters(prev => ({
+                        ...prev, people: e.target.checked ? [...prev.people, p] : prev.people.filter(x => x !== p)
+                      }))} />
+                    {p}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label">Organizations</label>
+              <div className="checkbox-grid">
+                {(data.organizations || []).map(o => (
+                  <label key={o} className={`checkbox-label ${filters.organizations.includes(o) ? 'checked' : ''}`}>
+                    <input type="checkbox" checked={filters.organizations.includes(o)}
+                      onChange={e => setFilters(prev => ({
+                        ...prev, organizations: e.target.checked ? [...prev.organizations, o] : prev.organizations.filter(x => x !== o)
+                      }))} />
+                    {o}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="filter-row">
+            <div className="filter-group">
+              <label className="filter-label">Research Levels</label>
+              <div style={{display:'flex', gap:'0.75rem', flexWrap:'wrap'}}>
+                {['1','2','3'].map(level => (
+                  <label key={level} className={`checkbox-label ${filters.researchLevels.includes(level) ? 'checked' : ''}`}>
+                    <input type="checkbox" checked={filters.researchLevels.includes(level)}
+                      onChange={e => setFilters(prev => ({
+                        ...prev, researchLevels: e.target.checked ? [...prev.researchLevels, level] : prev.researchLevels.filter(x => x !== level)
+                      }))} />
+                    Level {level}
+                  </label>
+                ))}
+              </div>
+            </div>
+            {activeTab === 'timeline' && (
+              <div className="filter-group">
+                <label className="filter-label">Display Options</label>
+                <label className="checkbox-label" style={{width:'fit-content'}}>
+                  <input type="checkbox" checked={filters.showMajorOnly}
+                    onChange={e => setFilters(prev => ({ ...prev, showMajorOnly: e.target.checked }))} />
+                  Major Events Only (Presidents & Wars)
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="export-btns">
+            <button className="btn btn-primary" onClick={onExportCSV}>📥 Export CSV</button>
+            <button className="btn btn-primary" onClick={onExportJSON}>📥 Export JSON</button>
+          </div>
+        </div>
+      );
+    };
+
+    // ─── MAIN APP ───
+    function App() {
+      const [data, setData] = useState(() => {
+        try {
+          const saved = localStorage.getItem('historicalEventsDB');
+          return saved ? JSON.parse(saved) : EMBEDDED_DATA;
+        } catch (e) { return EMBEDDED_DATA; }
+      });
+
+      const TABS = ['timeline','network','spreadsheet','topics','people','organizations','upload','my uploads'];
+
+      const [activeTab, setActiveTab] = useState('timeline');
+      const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const [showModal, setShowModal] = useState(false);
+      const [modalData, setModalData] = useState(null);
+      const [isEditing, setIsEditing] = useState(false);
+      const [editedEvent, setEditedEvent] = useState(null);
+      const [uploadMessage, setUploadMessage] = useState('');
+      const [saveStatus, setSaveStatus] = useState('');
+      const [selectedEntity, setSelectedEntity] = useState(null);
+      const [urlInput, setUrlInput] = useState('');
+      const [isTimelineFullscreen, setIsTimelineFullscreen] = useState(false);
+      const [isNetworkFullscreen, setIsNetworkFullscreen] = useState(false);
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [uploadTab, setUploadTab] = useState('new');
+      // Breadcrumb: array of {label, action}
+      const [breadcrumbs, setBreadcrumbs] = useState([]);
+      const fileInputRef = useRef(null);
+
+      // ── Auto-save every 30s ──
+      useEffect(() => {
+        const timer = setInterval(() => {
+          try {
+            localStorage.setItem('historicalEventsDB', JSON.stringify(data));
+            setSaveStatus('Auto-saved ✓');
+            setTimeout(() => setSaveStatus(''), 2000);
+          } catch (e) {}
+        }, 30000);
+        return () => clearInterval(timer);
+      }, [data]);
+
+      const saveState = useCallback(() => {
+        try {
+          localStorage.setItem('historicalEventsDB', JSON.stringify(data));
+          setSaveStatus('Saved ✓');
+          setTimeout(() => setSaveStatus(''), 3000);
+        } catch (e) { setSaveStatus('Save Error'); }
+      }, [data]);
+
+      // ── Breadcrumb helpers ──
+      const pushBreadcrumb = (label, action) => {
+        setBreadcrumbs(prev => [...prev, { label, action }]);
+      };
+
+      const goToBreadcrumb = (index) => {
+        const crumb = breadcrumbs[index];
+        setBreadcrumbs(prev => prev.slice(0, index));
+        if (crumb && crumb.action) crumb.action();
+      };
+
+      const navigateToTab = (tab) => {
+        setActiveTab(tab);
+        setSelectedEntity(null);
+        setBreadcrumbs([{ label: tab.charAt(0).toUpperCase() + tab.slice(1), action: () => { setActiveTab(tab); setSelectedEntity(null); } }]);
+      };
+
+      // ── Filters ──
+      const applySearch = () => setFilters(prev => ({ ...prev, appliedSearch: prev.search }));
+
+      const clearAllFilters = () => setFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+
+      const filteredEvents = useMemo(() => {
+        return data.events.filter(e => {
+          if (filters.showMajorOnly && !e.isMajorEvent) return false;
+          if (filters.appliedSearch) {
+            const s = filters.appliedSearch.toLowerCase();
+            const match = (e.title||'').toLowerCase().includes(s) || (e.description||'').toLowerCase().includes(s) ||
+              (e.topics||[]).some(t => t.toLowerCase().includes(s)) ||
+              (e.people||[]).some(p => p.toLowerCase().includes(s)) ||
+              (e.organizations||[]).some(o => o.toLowerCase().includes(s));
+            if (!match) return false;
+          }
+          if (filters.topics.length > 0 && !(e.topics||[]).some(t => filters.topics.includes(t))) return false;
+          if (filters.people.length > 0 && !(e.people||[]).some(p => filters.people.includes(p))) return false;
+          if (filters.organizations.length > 0 && !(e.organizations||[]).some(o => filters.organizations.includes(o))) return false;
+          if (filters.researchLevels.length > 0 && !filters.researchLevels.includes(String(e.researchLevel))) return false;
+          if (filters.dateFrom && e.date && e.date < filters.dateFrom) return false;
+          if (filters.dateTo && e.date && e.date > filters.dateTo) return false;
+          return true;
+        });
+      }, [data.events, filters]);
+
+      const sortedEvents = useMemo(() => [...filteredEvents].sort((a,b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return new Date(b.date) - new Date(a.date);
+      }), [filteredEvents]);
+
+      const timelineEvents = useMemo(() =>
+        filteredEvents.filter(e => e.date).sort((a,b) => new Date(a.date) - new Date(b.date))
+      , [filteredEvents]);
+
+      const filteredTopics = useMemo(() =>
+        (data.topics||[]).map(t => ({ name:t, count: filteredEvents.filter(e => (e.topics||[]).includes(t)).length })).filter(t => t.count > 0)
+      , [data.topics, filteredEvents]);
+
+      const filteredPeople = useMemo(() =>
+        (data.people||[]).map(p => ({ name:p, count: filteredEvents.filter(e => (e.people||[]).includes(p)).length })).filter(p => p.count > 0)
+      , [data.people, filteredEvents]);
+
+      const filteredOrganizations = useMemo(() =>
+        (data.organizations||[]).map(o => ({ name:o, count: filteredEvents.filter(e => (e.organizations||[]).includes(o)).length })).filter(o => o.count > 0)
+      , [data.organizations, filteredEvents]);
+
+      const myUploads = useMemo(() =>
+        data.events.filter(e => ['Uploaded Excel','Uploaded CSV','Uploaded Text','Uploaded PDF','Uploaded Word','Video URL','Web URL'].includes(e.sourceType))
+      , [data.events]);
+
+      const filteredMyUploads = useMemo(() => {
+        return myUploads.filter(e => {
+          if (filters.appliedSearch) {
+            const s = filters.appliedSearch.toLowerCase();
+            if (!(e.title||'').toLowerCase().includes(s) && !(e.description||'').toLowerCase().includes(s)) return false;
+          }
+          if (filters.topics.length > 0 && !(e.topics||[]).some(t => filters.topics.includes(t))) return false;
+          if (filters.people.length > 0 && !(e.people||[]).some(p => filters.people.includes(p))) return false;
+          if (filters.organizations.length > 0 && !(e.organizations||[]).some(o => filters.organizations.includes(o))) return false;
+          return true;
+        });
+      }, [myUploads, filters]);
+
+      // ── Network ──
+      useEffect(() => {
+        if (activeTab === 'network' && filteredEvents.length > 0) setTimeout(initNetwork, 100);
+      }, [activeTab, filteredEvents]);
+
+      const initNetwork = () => {
+        const nodes = new vis.DataSet();
+        const edges = new vis.DataSet();
+        const eventsToShow = filteredEvents.slice(0, 50);
+        eventsToShow.forEach(e => {
+          nodes.add({ id: e.id, label: (e.title||'Untitled').substring(0,40)+'...', color:{ background:'#60a5fa', border:'#3b82f6' }, title: e.title||'Untitled' });
+          (e.people||[]).forEach(p => {
+            if (!nodes.get('p-'+p)) nodes.add({ id:'p-'+p, label:p, shape:'box', color:{ background:'#a78bfa', border:'#8b5cf6' } });
+            edges.add({ from:e.id, to:'p-'+p, color:{ color:'#8b92b0' } });
+          });
+          (e.organizations||[]).forEach(o => {
+            if (!nodes.get('o-'+o)) nodes.add({ id:'o-'+o, label:o, shape:'diamond', color:{ background:'#10b981', border:'#059669' } });
+            edges.add({ from:e.id, to:'o-'+o, color:{ color:'#8b92b0' } });
+          });
+        });
+        const container = document.getElementById('network-graph');
+        if (container) {
+          const net = new vis.Network(container, { nodes, edges }, {
+            physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 } },
+            interaction:{ hover:true }
+          });
+          net.on('click', params => {
+            if (params.nodes.length > 0) {
+              const id = params.nodes[0];
+              if (id.startsWith('p-')) openEntityDetail('person', id.substring(2));
+              else if (id.startsWith('o-')) openEntityDetail('org', id.substring(2));
+              else { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, activeTab); }
+            }
+          });
+        }
+      };
+
+      // ── AI doc analysis ──
+      const analyzeDocument = (text) => {
+        const words = text.toLowerCase().split(/\s+/);
+        const wordFreq = {};
+        words.forEach(w => { if (w.length > 4 && /^[a-z]+$/.test(w)) wordFreq[w] = (wordFreq[w]||0)+1; });
+        const topicCandidates = Object.entries(wordFreq).filter(([,f]) => f >= 3).map(([w]) => w).slice(0,10);
+        const names = [...new Set((text.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g)||[]))].slice(0,10);
+        const orgs = [...new Set((text.match(/\b[A-Z][a-zA-Z\s&]+(Inc\.|Corp\.|LLC|Agency|Department|Institute|University|Company|Foundation)\b/g)||[]))].slice(0,5);
+        const sentences = text.split(/[.!?]+/).filter(s=>s.trim());
+        const summary = `AI Analysis: ${words.length} words analyzed. Key topics identified: ${topicCandidates.slice(0,5).join(', ')}. ${sentences.slice(0,2).join('. ').substring(0,200)}...`;
+        return { topics: topicCandidates, people: names, organizations: orgs, summary };
+      };
+
+      // ── File upload ──
+      const handleFileUpload = async (event) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        setIsProcessing(true);
+        setUploadMessage('Processing files...');
+        const newEvents = [];
+        let eventId = data.events.length + 1;
+        const timeout = setTimeout(() => { setIsProcessing(false); setUploadMessage('⚠️ Timeout - file may be too large'); setTimeout(()=>setUploadMessage(''),3000); }, 60000);
+        try {
+          for (const file of files) {
+            let extractedText = '';
+            if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+              await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  try {
+                    const wb = XLSX.read(ev.target.result, { type:'binary' });
+                    wb.SheetNames.forEach(sheetName => {
+                      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+                      rows.forEach(row => {
+                        extractedText += JSON.stringify(row)+' ';
+                        newEvents.push({
+                          id:`EVT-${String(eventId).padStart(4,'0')}`,
+                          title: row.title||row.Title||row.TITLE||`Uploaded: ${file.name}`,
+                          description: row.description||row.Description||row.Abstract||'',
+                          date: row.date||row.Date||row.year||null,
+                          dateUploaded: new Date().toISOString().split('T')[0],
+                          topics: (row.topics||row.Topics||sheetName).toString().split(/[,;/]/).map(t=>t.trim()).filter(t=>t),
+                          people: (row.writer||row.inventor||row.people||'').toString().split(/[,;]/).map(p=>p.trim()).filter(p=>p),
+                          organizations: (row.publisher||row.company||row.organization||'').toString().split(/[,;/]/).map(o=>o.trim()).filter(o=>o),
+                          links: [row['link main']||row.link||''].filter(l=>l),
+                          researchLevel: parseInt(row['srch lvl']||row['My search lvl']||1)||1,
+                          sourceType:'Uploaded Excel', sourceSheet:sheetName, connections:[], aiSummary:'', isMajorEvent:false
+                        });
+                        eventId++;
+                      });
+                    });
+                  } catch(err) {}
+                  resolve();
+                };
+                reader.onerror = ()=>resolve();
+                reader.readAsBinaryString(file);
+              });
+            } else if (file.name.endsWith('.csv')) {
+              extractedText = await file.text();
+              const lines = extractedText.split('\n').filter(l=>l.trim());
+              if (lines.length > 1) {
+                const headers = lines[0].split(',').map(h=>h.trim());
+                for (let i=1; i<Math.min(lines.length,1000); i++) {
+                  const vals = lines[i].split(',');
+                  const row = {};
+                  headers.forEach((h,idx)=>{ row[h]=vals[idx]?.trim()||''; });
+                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString().split('T')[0], topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false });
+                  eventId++;
+                }
+              }
+            } else if (file.name.endsWith('.txt')) {
+              extractedText = await file.text();
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false });
+              eventId++;
+            } else if (file.name.endsWith('.pdf')) {
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.pdf',''), description:`PDF document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['PDF Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded PDF', sourceSheet:file.name, connections:[], aiSummary:'PDF document uploaded - text extraction pending.', isMajorEvent:false });
+              eventId++;
+            } else if (file.name.endsWith('.docx')) {
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.docx',''), description:`Word document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Word Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Word', sourceSheet:file.name, connections:[], aiSummary:'Word document uploaded - text extraction pending.', isMajorEvent:false });
+              eventId++;
+            }
+            if (extractedText && newEvents.length > 0) {
+              const analysis = analyzeDocument(extractedText);
+              const last = newEvents[newEvents.length-1];
+              last.aiSummary = analysis.summary;
+              last.topics = [...new Set([...last.topics, ...analysis.topics])];
+              last.people = [...new Set([...last.people, ...analysis.people])];
+              last.organizations = [...new Set([...last.organizations, ...analysis.organizations])];
+            }
+          }
+          clearTimeout(timeout);
+          if (newEvents.length > 0) {
+            const updated = {
+              events:[...data.events,...newEvents],
+              people:Array.from(new Set([...data.people,...newEvents.flatMap(e=>e.people)])).sort(),
+              organizations:Array.from(new Set([...data.organizations,...newEvents.flatMap(e=>e.organizations)])).sort(),
+              topics:Array.from(new Set([...data.topics,...newEvents.flatMap(e=>e.topics)])).sort(),
+              metadata:{...data.metadata, totalEvents:data.events.length+newEvents.length, lastUpdated:new Date().toISOString()}
+            };
+            setData(updated);
+            setIsProcessing(false);
+            setUploadMessage(`✓ Successfully uploaded ${newEvents.length} event(s)!`);
+            openEventModal(newEvents[0], 'upload');
+            setTimeout(()=>setUploadMessage(''),5000);
+          } else { setIsProcessing(false); setUploadMessage('⚠️ No valid data found'); setTimeout(()=>setUploadMessage(''),3000); }
+        } catch(err) { clearTimeout(timeout); setIsProcessing(false); setUploadMessage(`❌ Error: ${err.message}`); setTimeout(()=>setUploadMessage(''),5000); }
+        event.target.value='';
+      };
+
+      const handleUrlSubmit = async () => {
+        if (!urlInput.trim()) return;
+        setIsProcessing(true);
+        setUploadMessage('Analyzing URL...');
+        try {
+          const isVideo = /youtube|youtu\.be|vimeo|dailymotion/i.test(urlInput);
+          const newEvent = {
+            id:`EVT-${String(data.events.length+1).padStart(4,'0')}`,
+            title:`${isVideo?'Video':'Web'} Link: ${urlInput}`,
+            description:`Content from ${urlInput}`,
+            date:new Date().toISOString().split('T')[0],
+            dateUploaded:new Date().toISOString().split('T')[0],
+            topics:[isVideo?'Video Content':'Web Link'],
+            people:[], organizations:[],
+            links:[urlInput], researchLevel:1,
+            sourceType:isVideo?'Video URL':'Web URL',
+            sourceSheet:'URL Import', connections:[],
+            aiSummary:`${isVideo?'Video':'Web'} content from ${urlInput}. AI would extract metadata, identify key topics and entities, and generate a full summary.`,
+            isMajorEvent:false, isVideo,
+            transcription: isVideo ? { chapters:[{timestamp:'0:00',title:'Introduction',text:'AI transcription would appear here'},{timestamp:'5:30',title:'Main Content',text:'Full video transcription with chapter markers'}] } : null
+          };
+          const updated = {
+            events:[...data.events, newEvent],
+            people:data.people, organizations:data.organizations,
+            topics:Array.from(new Set([...data.topics, isVideo?'Video Content':'Web Link'])).sort(),
+            metadata:{...data.metadata, totalEvents:data.events.length+1, lastUpdated:new Date().toISOString()}
+          };
+          setData(updated);
+          setIsProcessing(false);
+          setUploadMessage('✓ URL added successfully!');
+          setUrlInput('');
+          openEventModal(newEvent, 'upload');
+          setTimeout(()=>setUploadMessage(''),3000);
+        } catch(err) { setIsProcessing(false); setUploadMessage(`❌ Error: ${err.message}`); setTimeout(()=>setUploadMessage(''),5000); }
+      };
+
+      const cancelProcessing = () => { setIsProcessing(false); setUploadMessage('Processing cancelled'); setTimeout(()=>setUploadMessage(''),2000); };
+
+      // ── Modal ──
+      const openEventModal = (event, fromTab) => {
+        setModalData(event);
+        setEditedEvent({...event});
+        setIsEditing(false);
+        setShowModal(true);
+      };
+
+      const openEntityDetail = (type, name) => {
+        const fromTab = activeTab;
+        const fromLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+        pushBreadcrumb(fromLabel, () => { setSelectedEntity(null); setActiveTab(fromTab); });
+        setShowModal(false);
+        setSelectedEntity({
+          type, name,
+          events: data.events.filter(e => {
+            if (type === 'person') return (e.people||[]).includes(name);
+            if (type === 'org') return (e.organizations||[]).includes(name);
+            if (type === 'topic') return (e.topics||[]).includes(name);
+            return false;
+          })
+        });
+      };
+
+      const goBack = () => {
+        setSelectedEntity(null);
+        setBreadcrumbs(prev => prev.slice(0,-1));
+      };
+
+      const saveEditedEvent = () => {
+        const updatedEvents = data.events.map(e => e.id === editedEvent.id ? editedEvent : e);
+        const allP=new Set(), allO=new Set(), allT=new Set();
+        updatedEvents.forEach(e => { (e.people||[]).forEach(p=>allP.add(p)); (e.organizations||[]).forEach(o=>allO.add(o)); (e.topics||[]).forEach(t=>allT.add(t)); });
+        setData({...data, events:updatedEvents, people:[...allP].sort(), organizations:[...allO].sort(), topics:[...allT].sort()});
+        setModalData(editedEvent);
+        setIsEditing(false);
+        setUploadMessage('✓ Event updated!');
+        setTimeout(()=>setUploadMessage(''),3000);
+      };
+
+      const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text).then(()=>{ setUploadMessage('📋 Copied!'); setTimeout(()=>setUploadMessage(''),2000); });
+      };
+
+      const exportToCSV = () => {
+        const headers = ['ID','Title','Description','AI Summary','Date','Topics','People','Organizations','Research Level','Source','Link'];
+        const rows = filteredEvents.map(e => [e.id,e.title,e.description,e.aiSummary||'',e.date||'',(e.topics||[]).join('; '),(e.people||[]).join('; '),(e.organizations||[]).join('; '),e.researchLevel,e.sourceType,(e.links&&e.links[0])||'']);
+        const csv = [headers,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+        a.download = `historical-events-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+      };
+
+      const exportToJSON = () => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify({events:filteredEvents,metadata:data.metadata},null,2)],{type:'application/json'}));
+        a.download = `historical-events-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      };
+
+      // ── Shared filter props ──
+      const filterProps = { filters, setFilters, data, activeTab, onSearch:applySearch, onClear:clearAllFilters, onExportCSV:exportToCSV, onExportJSON:exportToJSON };
+
+      // ── Uploads grid component (reused in tab and page) ──
+      const UploadsContent = () => (
+        <div>
+          <FiltersComponent {...filterProps} />
+          {filteredMyUploads.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">📂</div>
+              <p>No uploads yet — use the Upload page to add files or URLs.</p>
+            </div>
+          ) : (
+            <div className="spreadsheet">
+              <table className="table">
+                <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Date Uploaded</th><th>Topics</th><th>AI Summary</th></tr></thead>
+                <tbody>
+                  {filteredMyUploads.map(e => (
+                    <tr key={e.id} onClick={()=>openEventModal(e,'my uploads')} style={{cursor:'pointer'}}>
+                      <td>{e.id}</td>
+                      <td>{e.title}</td>
+                      <td><span style={{padding:'0.25rem 0.6rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',fontSize:'0.75rem',color:'#60a5fa'}}>{e.sourceType}</span></td>
+                      <td>{e.dateUploaded||'—'}</td>
+                      <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
+                      <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{(e.aiSummary||'—').substring(0,60)}...</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+
+      // ── Modal ──
+      const ModalView = () => (
+        <div className="modal" onClick={()=>setShowModal(false)}>
+          <div className="modal-content" onClick={e=>e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{isEditing ? 'Edit Event' : modalData.title}</h2>
+              <div className="modal-actions">
+                {!isEditing && <button className="edit-btn" onClick={()=>setIsEditing(true)}>✏️ Edit</button>}
+                {isEditing && <button className="btn btn-primary" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={saveEditedEvent}>💾 Save</button>}
+                {isEditing && <button className="btn btn-danger" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={()=>setIsEditing(false)}>Cancel</button>}
+                <button className="close" onClick={()=>setShowModal(false)}>×</button>
+              </div>
+            </div>
+            {!isEditing ? (
+              <>
+                {modalData.aiSummary && <div className="ai-summary-box"><div className="ai-summary-label">AI Summary</div><p style={{color:'#e0e6ed',lineHeight:1.6}}>{modalData.aiSummary}</p></div>}
+                <div style={{marginBottom:'1.5rem',lineHeight:1.8}}>
+                  <strong>ID:</strong> {modalData.id}<br/>
+                  <strong>Date:</strong> {modalData.date||'Unknown'}<br/>
+                  <strong>Source:</strong> {modalData.sourceType}<br/>
+                  <strong>Research Level:</strong> <span className={`level-${modalData.researchLevel}`}>Level {modalData.researchLevel}</span>
+                </div>
+                <div className="form-group"><label className="form-label">Description</label><p style={{color:'#e0e6ed',lineHeight:1.6}}>{modalData.description}</p></div>
+                {modalData.transcription && (
+                  <div style={{background:'rgba(16,185,129,0.1)',border:'2px solid rgba(16,185,129,0.3)',borderRadius:'12px',padding:'1.5rem',marginBottom:'1.5rem'}}>
+                    <h3 style={{color:'#10b981',marginBottom:'1rem'}}>📝 Video Transcription</h3>
+                    {modalData.transcription.chapters.map((ch,i)=>(
+                      <div key={i} style={{padding:'1rem',marginBottom:'0.75rem',background:'rgba(26,31,58,0.5)',borderLeft:'4px solid #10b981',borderRadius:'8px'}}>
+                        <div style={{fontWeight:700,color:'#10b981',marginBottom:'0.4rem'}}>{ch.timestamp} — {ch.title}</div>
+                        <p style={{color:'#8b92b0',fontSize:'0.875rem'}}>{ch.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(modalData.topics||[]).length > 0 && <div className="form-group"><label className="form-label">Topics</label><div className="tags">{modalData.topics.map((t,i)=><span key={i} className="tag" onClick={()=>{setShowModal(false);openEntityDetail('topic',t);}}>{t}</span>)}</div></div>}
+                {(modalData.people||[]).length > 0 && <div className="form-group"><label className="form-label">People</label><div className="tags">{modalData.people.map((p,i)=><span key={i} className="tag" onClick={()=>{setShowModal(false);openEntityDetail('person',p);}}>{p}</span>)}</div></div>}
+                {(modalData.organizations||[]).length > 0 && <div className="form-group"><label className="form-label">Organizations</label><div className="tags">{modalData.organizations.map((o,i)=><span key={i} className="tag" onClick={()=>{setShowModal(false);openEntityDetail('org',o);}}>{o}</span>)}</div></div>}
+                {(modalData.links||[]).length > 0 && (
+                  <div className="form-group"><label className="form-label">Links</label>
+                    {modalData.links.map((l,i)=>(
+                      <div key={i} style={{marginBottom:'0.75rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+                        <a href={l} target="_blank" rel="noopener noreferrer" style={{color:'#60a5fa',wordBreak:'break-all',flex:1}}>{l}</a>
+                        <button onClick={()=>copyToClipboard(l)} className="btn btn-secondary" style={{padding:'0.5rem 1rem',fontSize:'0.8rem'}}>📋 Copy</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="form-group"><label className="form-label">Title</label><input className="edit-input" value={editedEvent.title||''} onChange={e=>setEditedEvent({...editedEvent,title:e.target.value})} /></div>
+                <div className="form-group"><label className="form-label">Description</label><textarea className="edit-input" value={editedEvent.description||''} onChange={e=>setEditedEvent({...editedEvent,description:e.target.value})} /></div>
+                <div className="form-group"><label className="form-label">AI Summary</label><textarea className="edit-input" value={editedEvent.aiSummary||''} onChange={e=>setEditedEvent({...editedEvent,aiSummary:e.target.value})} /></div>
+                <div className="form-group"><label className="form-label">Date</label><input type="date" className="edit-input" value={editedEvent.date||''} onChange={e=>setEditedEvent({...editedEvent,date:e.target.value})} /></div>
+                <div className="form-group"><label className="form-label">Topics (comma-separated)</label><input className="edit-input" value={(editedEvent.topics||[]).join(', ')} onChange={e=>setEditedEvent({...editedEvent,topics:e.target.value.split(',').map(t=>t.trim()).filter(t=>t)})} /></div>
+                <div className="form-group"><label className="form-label">People (comma-separated)</label><input className="edit-input" value={(editedEvent.people||[]).join(', ')} onChange={e=>setEditedEvent({...editedEvent,people:e.target.value.split(',').map(p=>p.trim()).filter(p=>p)})} /></div>
+                <div className="form-group"><label className="form-label">Organizations (comma-separated)</label><input className="edit-input" value={(editedEvent.organizations||[]).join(', ')} onChange={e=>setEditedEvent({...editedEvent,organizations:e.target.value.split(',').map(o=>o.trim()).filter(o=>o)})} /></div>
+                <div className="form-group"><label className="form-label">Research Level</label>
+                  <select className="edit-input" value={editedEvent.researchLevel||1} onChange={e=>setEditedEvent({...editedEvent,researchLevel:parseInt(e.target.value)})}>
+                    <option value="1">Level 1</option><option value="2">Level 2</option><option value="3">Level 3</option>
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+
+      // ── Entity Detail page ──
+      if (selectedEntity) {
+        return (
+          <div className="app">
+            <header className="header">
+              <h1>Historical Events Database</h1>
+              <div className="stats">
+                <div className="stat"><span className="stat-label">Total Events</span><span className="stat-value">{data.events.length}</span></div>
+                <div className="stat"><span className="stat-label">People</span><span className="stat-value">{data.people.length}</span></div>
+                <div className="stat"><span className="stat-label">Organizations</span><span className="stat-value">{data.organizations.length}</span></div>
+                <div className="stat"><span className="stat-label">Topics</span><span className="stat-value">{data.topics.length}</span></div>
+              </div>
+            </header>
+            <div className="breadcrumb-bar">
+              <span className="bc-item" onClick={()=>{ setSelectedEntity(null); setBreadcrumbs([]); setActiveTab('timeline'); }}>🏠 Home</span>
+              {breadcrumbs.map((b,i) => (
+                <React.Fragment key={i}>
+                  <span className="bc-sep">›</span>
+                  <span className="bc-item" onClick={()=>goToBreadcrumb(i)}>{b.label}</span>
+                </React.Fragment>
+              ))}
+              <span className="bc-sep">›</span>
+              <span className="bc-current">{selectedEntity.name}</span>
+            </div>
+            <main className="content">
+              <button className="back-btn" onClick={goBack}>← Back</button>
+              <div style={{marginBottom:'2rem'}}>
+                <h2 style={{fontSize:'2rem',color:'#60a5fa',marginBottom:'0.5rem',fontFamily:"'Space Mono',monospace"}}>{selectedEntity.name}</h2>
+                <p style={{color:'#8b92b0'}}>{selectedEntity.events.length} related event{selectedEntity.events.length!==1?'s':''}</p>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:'1.5rem'}}>
+                {selectedEntity.events.map(e=>(
+                  <div key={e.id} style={{background:'rgba(26,31,58,0.6)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'12px',padding:'1.5rem',cursor:'pointer',transition:'all 0.2s'}}
+                    onClick={()=>openEventModal(e,'entity')}
+                    onMouseEnter={ev=>ev.currentTarget.style.borderColor='#60a5fa'}
+                    onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                    <div style={{color:'#60a5fa',fontSize:'0.85rem',marginBottom:'0.5rem'}}>{e.date||'Date Unknown'}</div>
+                    <div style={{fontSize:'1.2rem',fontWeight:700,marginBottom:'0.75rem'}}>{e.title}</div>
+                    <div style={{color:'#8b92b0',marginBottom:'1rem',lineHeight:1.5}}>{(e.description||'').substring(0,200)}{(e.description||'').length>200?'...':''}</div>
+                    <div className="tags">{(e.topics||[]).slice(0,5).map((t,i)=><span key={i} className="tag">{t}</span>)}</div>
+                  </div>
+                ))}
+              </div>
+            </main>
+            {showModal && modalData && <ModalView />}
+          </div>
+        );
+      }
+
+      // ── Main layout ──
+      return (
+        <div className="app">
+          <header className="header">
+            <h1>Historical Events Database</h1>
+            <div className="stats">
+              <div className="stat"><span className="stat-label">Total Events</span><span className="stat-value">{data.events.length}</span></div>
+              <div className="stat"><span className="stat-label">Filtered</span><span className="stat-value">{filteredEvents.length}</span></div>
+              <div className="stat"><span className="stat-label">People</span><span className="stat-value">{data.people.length}</span></div>
+              <div className="stat"><span className="stat-label">Organizations</span><span className="stat-value">{data.organizations.length}</span></div>
+              <div className="stat"><span className="stat-label">Topics</span><span className="stat-value">{data.topics.length}</span></div>
+            </div>
+          </header>
+
+          {/* Breadcrumb bar */}
+          <div className="breadcrumb-bar">
+            <span className="bc-item" onClick={()=>navigateToTab('timeline')}>🏠 Home</span>
+            <span className="bc-sep">›</span>
+            <span className="bc-current">{activeTab.charAt(0).toUpperCase()+activeTab.slice(1)}</span>
+          </div>
+
+          <div className="controls-bar">
+            <button className="save-btn" onClick={saveState}>💾 Save Now</button>
+            <span className="save-status">{saveStatus}</span>
+          </div>
+
+          <nav className="nav">
+            {TABS.map(tab=>(
+              <button key={tab} className={`nav-btn ${activeTab===tab?'active':''}`} onClick={()=>navigateToTab(tab)}>
+                {tab.charAt(0).toUpperCase()+tab.slice(1)}
+              </button>
+            ))}
+          </nav>
+
+          <main className="content">
+            {uploadMessage && <div className={uploadMessage.includes('❌')||uploadMessage.includes('⚠️')?'error-msg':'success-msg'}>{uploadMessage}</div>}
+
+            {/* Show filters on all tabs except upload */}
+            {activeTab !== 'upload' && <FiltersComponent {...filterProps} />}
+
+            {/* TIMELINE */}
+            {activeTab === 'timeline' && (
+              <div className={`timeline-wrapper ${isTimelineFullscreen?'fullscreen':''}`}>
+                <button className="btn btn-primary fullscreen-btn" onClick={()=>setIsTimelineFullscreen(!isTimelineFullscreen)}>
+                  {isTimelineFullscreen?'✕ Exit':'⛶ Fullscreen'}
+                </button>
+                <div className="timeline-container">
+                  <div className="timeline-line"></div>
+                  <div className="timeline-events">
+                    {timelineEvents.length===0 ? (
+                      <div className="empty-state"><div className="empty-state-icon">📅</div><p>No dated events to display. Try clearing filters.</p></div>
+                    ) : timelineEvents.map((e,index)=>{
+                      const dateStr = String(e.date||'');
+                      const year = dateStr.length>=4 ? dateStr.substring(0,4) : '?';
+                      const prevYear = index>0 ? String(timelineEvents[index-1].date||'').substring(0,4) : null;
+                      const showYear = index===0 || year!==prevYear;
+                      return (
+                        <div key={e.id} className={`timeline-event ${e.isMajorEvent?'major':''}`} onClick={()=>openEventModal(e,'timeline')}>
+                          {showYear && <div className="timeline-year">{year}</div>}
+                          <div className="timeline-icon">{e.isMajorEvent?'⭐':'📌'}</div>
+                          <div className="timeline-label">{(e.title||'').substring(0,28)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* NETWORK */}
+            {activeTab === 'network' && (
+              <div className={`network ${isNetworkFullscreen?'fullscreen':''}`}>
+                <button className="btn btn-primary fullscreen-btn" onClick={()=>setIsNetworkFullscreen(!isNetworkFullscreen)}>
+                  {isNetworkFullscreen?'✕ Exit':'⛶ Fullscreen'}
+                </button>
+                <div id="network-graph"></div>
+              </div>
+            )}
+
+            {/* SPREADSHEET */}
+            {activeTab === 'spreadsheet' && (
+              <div className="spreadsheet">
+                <table className="table">
+                  <thead><tr><th>ID</th><th>Title</th><th>AI Summary</th><th>Topics</th><th>Level</th><th>Date</th><th>Source</th><th>Link</th></tr></thead>
+                  <tbody>
+                    {sortedEvents.map(e=>(
+                      <tr key={e.id} onClick={()=>openEventModal(e,'spreadsheet')} style={{cursor:'pointer'}}>
+                        <td>{e.id}</td>
+                        <td style={{fontWeight:600}}>{e.title}</td>
+                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{e.aiSummary?(e.aiSummary.substring(0,80)+'...'):'—'}</td>
+                        <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
+                        <td><span className={`level-${e.researchLevel}`}>L{e.researchLevel}</span></td>
+                        <td>{e.date||'—'}</td>
+                        <td>{e.sourceType}</td>
+                        <td>
+                          {e.links&&e.links[0]&&(
+                            <><a href={e.links[0]} target="_blank" rel="noopener noreferrer" onClick={ev=>ev.stopPropagation()}>{e.links[0].substring(0,28)}...</a>
+                            <span className="copy-link" onClick={ev=>{ev.stopPropagation();copyToClipboard(e.links[0]);}}>📋</span></>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* TOPICS */}
+            {activeTab === 'topics' && (
+              <div className="grid">
+                {filteredTopics.length===0 ? <div className="empty-state"><div className="empty-state-icon">🏷️</div><p>No topics match the current filters.</p></div> :
+                filteredTopics.map(t=>{
+                  const relEvents = filteredEvents.filter(e=>(e.topics||[]).includes(t.name)).slice(0,3);
+                  return (
+                    <div key={t.name} className="card" onClick={()=>openEntityDetail('topic',t.name)}>
+                      <div className="card-title">{t.name}</div>
+                      <div className="card-count">{t.count} event{t.count!==1?'s':''} →</div>
+                      <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* PEOPLE */}
+            {activeTab === 'people' && (
+              <div className="grid">
+                {filteredPeople.length===0 ? <div className="empty-state"><div className="empty-state-icon">👤</div><p>No people match the current filters.</p></div> :
+                filteredPeople.map(p=>{
+                  const relEvents = filteredEvents.filter(e=>(e.people||[]).includes(p.name)).slice(0,3);
+                  return (
+                    <div key={p.name} className="card" onClick={()=>openEntityDetail('person',p.name)}>
+                      <div className="card-title">{p.name}</div>
+                      <div className="card-count">{p.count} event{p.count!==1?'s':''} →</div>
+                      <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ORGANIZATIONS */}
+            {activeTab === 'organizations' && (
+              <div className="grid">
+                {filteredOrganizations.length===0 ? <div className="empty-state"><div className="empty-state-icon">🏛️</div><p>No organizations match the current filters.</p></div> :
+                filteredOrganizations.map(o=>{
+                  const relEvents = filteredEvents.filter(e=>(e.organizations||[]).includes(o.name)).slice(0,3);
+                  return (
+                    <div key={o.name} className="card" onClick={()=>openEntityDetail('org',o.name)}>
+                      <div className="card-title">{o.name}</div>
+                      <div className="card-count">{o.count} event{o.count!==1?'s':''} →</div>
+                      <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* UPLOAD */}
+            {activeTab === 'upload' && (
+              <div>
+                <div className="upload-tabs">
+                  <div className={`upload-tab ${uploadTab==='new'?'active':''}`} onClick={()=>setUploadTab('new')}>📤 New Upload</div>
+                  <div className={`upload-tab ${uploadTab==='myuploads'?'active':''}`} onClick={()=>setUploadTab('myuploads')}>📂 My Uploads ({myUploads.length})</div>
+                </div>
+
+                {uploadTab === 'new' ? (
+                  <>
+                    <div className="url-input-section">
+                      <div className="url-input-header">🔗 Add Website or Video Link</div>
+                      <p style={{color:'#8b92b0',marginBottom:'1.5rem'}}>Paste any URL — YouTube videos are auto-detected for transcription</p>
+                      <div className="url-input-row">
+                        <div className="url-input-group">
+                          <label className="filter-label">URL</label>
+                          <input type="url" placeholder="https://..." value={urlInput} onChange={e=>setUrlInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleUrlSubmit();}} />
+                        </div>
+                        <button className="btn btn-primary" onClick={handleUrlSubmit}>Add URL</button>
+                      </div>
+                    </div>
+                    <input ref={fileInputRef} type="file" style={{display:'none'}} multiple accept=".xlsx,.xls,.csv,.txt,.pdf,.docx" onChange={handleFileUpload} />
+                    <div className="upload" onClick={()=>fileInputRef.current.click()}>
+                      <div className="upload-icon">🚀</div>
+                      <h2 style={{fontSize:'1.75rem',marginBottom:'1rem'}}>Upload Documents</h2>
+                      <p style={{fontSize:'1.125rem',marginBottom:'0.5rem',color:'#a78bfa'}}>AI-powered analysis & auto-tagging</p>
+                      <p style={{fontSize:'0.875rem',color:'#8b92b0'}}>Excel · CSV · TXT · PDF · Word (.docx)</p>
+                    </div>
+                    <div style={{background:'rgba(26,31,58,0.6)',padding:'2.5rem',borderRadius:'16px',border:'2px solid rgba(61,69,99,0.5)'}}>
+                      <h3 style={{marginBottom:'1.5rem',color:'#60a5fa',fontSize:'1.5rem'}}>🤖 AI Analysis Features</h3>
+                      <ul style={{color:'#8b92b0',lineHeight:2,listStyle:'none'}}>
+                        <li>✓ Auto-extract topics, people, organizations, dates</li>
+                        <li>✓ Generate AI summaries for every document</li>
+                        <li>✓ Video/audio transcription with chapter markers</li>
+                        <li>✓ Smart categorization across all file types</li>
+                      </ul>
+                    </div>
+                  </>
+                ) : (
+                  <UploadsContent />
+                )}
+              </div>
+            )}
+
+            {/* MY UPLOADS (standalone page) */}
+            {activeTab === 'my uploads' && <UploadsContent />}
+
+          </main>
+
+          {showModal && modalData && <ModalView />}
+
+          {isProcessing && (
+            <div className="processing-overlay">
+              <div className="processing-card">
+                <div className="processing-spinner"></div>
+                <h3 style={{marginBottom:'1rem',color:'#60a5fa'}}>Processing...</h3>
+                <p style={{marginBottom:'1.5rem',color:'#8b92b0'}}>Analyzing your files with AI</p>
+                <button className="btn btn-cancel" onClick={cancelProcessing}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
