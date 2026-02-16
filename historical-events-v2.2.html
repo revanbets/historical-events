@@ -668,9 +668,33 @@
       );
 
       // ── Modal ──
-      const ModalView = () => (
+      const ModalView = () => {
+        // Build breadcrumb path: Notion/ClickUp style — full path shown inside modal
+        const tabLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+        const modalCrumbs = selectedEntity
+          ? [
+              { label: '🏠 Home', action: () => { setShowModal(false); setSelectedEntity(null); setBreadcrumbs([]); setActiveTab('timeline'); } },
+              ...breadcrumbs.map((b, i) => ({ label: b.label, action: () => { setShowModal(false); goToBreadcrumb(i); } })),
+              { label: selectedEntity.name, action: () => setShowModal(false) }
+            ]
+          : [
+              { label: '🏠 Home', action: () => { setShowModal(false); navigateToTab('timeline'); } },
+              { label: tabLabel, action: () => setShowModal(false) }
+            ];
+        return (
         <div className="modal" onClick={()=>setShowModal(false)}>
           <div className="modal-content" onClick={e=>e.stopPropagation()}>
+            {/* Breadcrumb trail inside modal — always visible, Notion/ClickUp style */}
+            <div style={{display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'1.25rem',flexWrap:'wrap',borderBottom:'1px solid rgba(61,69,99,0.4)',paddingBottom:'0.75rem'}}>
+              {modalCrumbs.map((crumb, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span className="bc-sep">›</span>}
+                  <span className="bc-item" style={{fontSize:'0.8rem'}} onClick={crumb.action}>{crumb.label}</span>
+                </React.Fragment>
+              ))}
+              <span className="bc-sep">›</span>
+              <span className="bc-current" style={{fontSize:'0.8rem'}}>{isEditing ? 'Edit Event' : (modalData.title.length > 60 ? modalData.title.substring(0,60)+'…' : modalData.title)}</span>
+            </div>
             <div className="modal-header">
               <h2 className="modal-title">{isEditing ? 'Edit Event' : modalData.title}</h2>
               <div className="modal-actions">
@@ -733,7 +757,8 @@
             )}
           </div>
         </div>
-      );
+        );
+      };
 
       // ── Entity Detail page ──
       if (selectedEntity) {
