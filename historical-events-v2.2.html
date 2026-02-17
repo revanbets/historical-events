@@ -175,6 +175,17 @@
     .admin-table tr:hover td { background: rgba(37,43,74,0.3); }
     .role-select { background: rgba(10,14,39,0.8); border: 1px solid rgba(45,53,97,0.6); border-radius: 6px; color: #e0e6ed; padding: 0.3rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
     .status-select { background: rgba(10,14,39,0.8); border: 1px solid rgba(45,53,97,0.6); border-radius: 6px; color: #e0e6ed; padding: 0.4rem 0.6rem; font-size: 0.8rem; cursor: pointer; font-family: inherit; }
+    /* ── Account page ── */
+    .account-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #60a5fa, #a78bfa); display: flex; align-items: center; justify-content: center; font-size: 1.75rem; font-weight: 700; color: white; font-family: 'Space Mono', monospace; flex-shrink: 0; box-shadow: 0 4px 20px rgba(96,165,250,0.3); }
+    .account-profile-card { background: linear-gradient(135deg, rgba(26,31,58,0.8), rgba(45,53,97,0.6)); border: 2px solid rgba(61,69,99,0.5); border-radius: 20px; padding: 2.5rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; backdrop-filter: blur(10px); }
+    .account-tabs { display: flex; gap: 0; margin-bottom: 2rem; border-bottom: 2px solid rgba(61,69,99,0.4); }
+    .account-tab { padding: 0.875rem 1.75rem; background: none; border: none; border-bottom: 3px solid transparent; color: #8b92b0; font-weight: 700; cursor: pointer; font-size: 0.875rem; margin-bottom: -2px; transition: all 0.2s; font-family: inherit; }
+    .account-tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+    .account-tab.active-admin { color: #a78bfa; border-bottom-color: #a78bfa; }
+    .account-tab:hover { color: #e0e6ed; }
+    .user-chip-btn { display: flex; align-items: center; gap: 0.6rem; background: rgba(45,53,97,0.5); border: 1px solid rgba(96,165,250,0.2); border-radius: 10px; padding: 0.4rem 0.85rem; cursor: pointer; transition: all 0.2s; }
+    .user-chip-btn:hover { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.4); }
+    .user-chip-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #60a5fa, #a78bfa); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: white; font-family: 'Space Mono', monospace; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -417,11 +428,7 @@
       });
       const [authScreen, setAuthScreen] = useState('login');
 
-      const TABS = useMemo(() => {
-        const base = ['timeline','network','spreadsheet','topics','people','organizations','upload','my uploads'];
-        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'owner')) return [...base, 'admin panel'];
-        return base;
-      }, [currentUser]);
+      const TABS = ['timeline','network','spreadsheet','topics','people','organizations','upload'];
 
       const [activeTab, setActiveTab] = useState('timeline');
       const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
@@ -1001,6 +1008,57 @@
         );
       };
 
+      // ── Account Page ──
+      const AccountPage = () => {
+        const [accountTab, setAccountTab] = React.useState('uploads');
+        const isAdminOrOwner = currentUser.role === 'admin' || currentUser.role === 'owner';
+        const myEventsAll = data.events.filter(e => e.uploadedBy === currentUser.username);
+        const myPublicCount = myEventsAll.filter(e => e.isPublic).length;
+        const myPrivateCount = myEventsAll.length - myPublicCount;
+        const initials = currentUser.username.substring(0, 2).toUpperCase();
+        const regUser = getRegisteredUsers().find(u => u.username === currentUser.username);
+        const memberSince = regUser
+          ? new Date(regUser.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+          : 'Built-in account';
+        return (
+          <div>
+            <div className="account-profile-card">
+              <div className="account-avatar">{initials}</div>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'0.5rem',flexWrap:'wrap'}}>
+                  <h2 style={{fontSize:'1.75rem',fontFamily:"'Space Mono',monospace",color:'#e0e6ed',margin:0}}>{currentUser.username}</h2>
+                  <span className={`role-badge role-${currentUser.role}`} style={{fontSize:'0.8rem',padding:'0.3rem 0.75rem'}}>{currentUser.role}</span>
+                </div>
+                <div style={{color:'#8b92b0',fontSize:'0.875rem',marginBottom:'1.25rem'}}>Member since: {memberSince}</div>
+                <div style={{display:'flex',gap:'2rem',flexWrap:'wrap'}}>
+                  {[
+                    {label:'Total Uploads', value:myEventsAll.length, color:'#60a5fa'},
+                    {label:'Public',         value:myPublicCount,      color:'#10b981'},
+                    {label:'Private',        value:myPrivateCount,     color:'#9ca3af'},
+                  ].map(s=>(
+                    <div key={s.label} style={{textAlign:'center'}}>
+                      <div style={{fontSize:'1.5rem',fontWeight:700,color:s.color,fontFamily:"'Space Mono',monospace"}}>{s.value}</div>
+                      <div style={{fontSize:'0.7rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'0.5px'}}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button className="logout-btn" style={{alignSelf:'flex-start',padding:'0.5rem 1.25rem',fontSize:'0.875rem'}} onClick={logout}>Logout</button>
+            </div>
+            <div className="account-tabs">
+              <button className={`account-tab ${accountTab==='uploads'?'active':''}`} onClick={()=>setAccountTab('uploads')}>📂 My Uploads</button>
+              {isAdminOrOwner && (
+                <button className={`account-tab ${accountTab==='admin'?'active-admin':''}`} onClick={()=>setAccountTab('admin')}>
+                  🛡️ {currentUser.role==='owner'?'Owner Panel':'Admin Panel'}
+                </button>
+              )}
+            </div>
+            {accountTab === 'uploads' && <UploadsContent />}
+            {accountTab === 'admin' && isAdminOrOwner && <AdminPanel />}
+          </div>
+        );
+      };
+
       // ── Auth gate ──
       if (!currentUser) {
         if (authScreen === 'signup') return <SignupScreen onGoLogin={() => setAuthScreen('login')} />;
@@ -1111,7 +1169,17 @@
         return (
           <div className="app">
             <header className="header">
-              <h1>Historical Events Database</h1>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'1rem'}}>
+                <h1>Historical Events Database</h1>
+                <div className="user-chip">
+                  <div className="user-chip-btn" onClick={()=>{ setSelectedEntity(null); navigateToTab('account'); }}>
+                    <div className="user-chip-avatar">{currentUser.username.substring(0,2).toUpperCase()}</div>
+                    <span style={{color:'#e0e6ed',fontSize:'0.875rem',fontWeight:600}}>{currentUser.username}</span>
+                    <span className={`role-badge role-${currentUser.role}`}>{currentUser.role}</span>
+                  </div>
+                  <button className="logout-btn" onClick={logout}>Logout</button>
+                </div>
+              </div>
               <div className="stats">
                 <div className="stat"><span className="stat-label">Total Events</span><span className="stat-value">{data.events.length}</span></div>
                 <div className="stat"><span className="stat-label">People</span><span className="stat-value">{data.people.length}</span></div>
@@ -1162,8 +1230,11 @@
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'1rem'}}>
               <h1>Historical Events Database</h1>
               <div className="user-chip">
-                <span style={{color:'#e0e6ed',fontSize:'0.875rem',fontWeight:600}}>👤 {currentUser.username}</span>
-                <span className={`role-badge role-${currentUser.role}`}>{currentUser.role}</span>
+                <div className="user-chip-btn" onClick={()=>navigateToTab('account')}>
+                  <div className="user-chip-avatar">{currentUser.username.substring(0,2).toUpperCase()}</div>
+                  <span style={{color:'#e0e6ed',fontSize:'0.875rem',fontWeight:600}}>{currentUser.username}</span>
+                  <span className={`role-badge role-${currentUser.role}`}>{currentUser.role}</span>
+                </div>
                 <button className="logout-btn" onClick={logout}>Logout</button>
               </div>
             </div>
@@ -1180,7 +1251,7 @@
           <div className="breadcrumb-bar">
             <span className="bc-item" onClick={()=>navigateToTab('timeline')}>🏠 Home</span>
             <span className="bc-sep">›</span>
-            <span className="bc-current">{activeTab.charAt(0).toUpperCase()+activeTab.slice(1)}</span>
+            <span className="bc-current">{activeTab==='account'?`👤 ${currentUser.username}`:activeTab.charAt(0).toUpperCase()+activeTab.slice(1)}</span>
           </div>
 
           <div className="controls-bar">
@@ -1364,11 +1435,13 @@
               </div>
             )}
 
-            {/* MY UPLOADS (standalone page) */}
-            {activeTab === 'my uploads' && <UploadsContent />}
+            {/* MY UPLOADS moved to Account Page */}
 
-            {/* ADMIN PANEL */}
+            {/* ADMIN PANEL (kept for backward compat but hidden from nav) */}
             {activeTab === 'admin panel' && (currentUser.role === 'admin' || currentUser.role === 'owner') && <AdminPanel />}
+
+            {/* ACCOUNT PAGE */}
+            {activeTab === 'account' && <AccountPage />}
 
           </main>
 
