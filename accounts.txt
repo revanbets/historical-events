@@ -1,0 +1,37 @@
+HISTORICAL EVENTS DATABASE — ACCOUNTS
+======================================
+⚠  Change these passwords before sharing the app with anyone.
+
+HARDCODED ACCOUNTS (built into the code)
+-----------------------------------------
+Username : owner
+Password : owner123
+Role     : Owner — full access, can promote/demote anyone including admins
+
+Username : admin
+Password : admin123
+Role     : Admin — can see all events, manage basic users, edit event status
+
+Username : testuser
+Password : test123
+Role     : User — for testing the basic user experience
+
+USER ACCOUNTS (self-registered via signup form)
+------------------------------------------------
+None yet — users register themselves from the login screen.
+Registered accounts are saved in the browser's localStorage under the key "hdb_users".
+
+ROLE SUMMARY
+------------
+Owner  — everything, only role that can demote admins
+Admin  — see all events (public + private), change event status, delete events, promote/demote basic users
+User   — see public events + own private uploads, upload files/URLs, toggle own events public/private
+
+TO CHANGE PASSWORDS
+-------------------
+Open historical-events-v2.2.html and find:
+    const HARDCODED_USERS = [
+      { username: 'owner',    password: 'owner123', role: 'owner' },
+      { username: 'admin',    password: 'admin123', role: 'admin'  },
+      { username: 'testuser', password: 'test123',  role: 'user'   }
+    ];
