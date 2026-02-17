@@ -136,12 +136,159 @@
     .export-btns { display: flex; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
     .empty-state { text-align: center; padding: 4rem 2rem; color: #8b92b0; }
     .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
+    /* ── Auth screens ── */
+    .auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%); }
+    .auth-card { background: linear-gradient(135deg, rgba(26,31,58,0.98), rgba(45,53,97,0.98)); border-radius: 20px; padding: 3rem; width: 100%; max-width: 420px; border: 2px solid rgba(96,165,250,0.3); box-shadow: 0 24px 80px rgba(0,0,0,0.6); }
+    .auth-title { font-family: 'Space Mono', monospace; font-size: 1.75rem; font-weight: 700; color: #60a5fa; margin-bottom: 0.5rem; text-align: center; }
+    .auth-subtitle { color: #8b92b0; font-size: 0.875rem; margin-bottom: 2rem; text-align: center; }
+    .auth-field { margin-bottom: 1.25rem; }
+    .auth-label { display: block; font-size: 0.8rem; font-weight: 700; color: #8b92b0; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .auth-input { width: 100%; padding: 0.875rem; background: rgba(10,14,39,0.8); border: 2px solid rgba(45,53,97,0.5); border-radius: 10px; color: #e0e6ed; font-size: 0.9rem; font-family: inherit; transition: border-color 0.2s; }
+    .auth-input:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.1); }
+    .auth-btn { width: 100%; padding: 0.9rem; background: linear-gradient(135deg, #60a5fa, #3b82f6); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer; font-size: 1rem; margin-top: 0.5rem; transition: all 0.2s; font-family: 'Space Mono', monospace; letter-spacing: 0.5px; }
+    .auth-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(96,165,250,0.4); }
+    .auth-switch { text-align: center; margin-top: 1.5rem; color: #8b92b0; font-size: 0.875rem; }
+    .auth-switch span { color: #60a5fa; cursor: pointer; font-weight: 600; }
+    .auth-switch span:hover { text-decoration: underline; }
+    .auth-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+    .auth-success { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: #10b981; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+    /* ── User chip ── */
+    .user-chip { display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+    .role-badge { padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .role-owner { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+    .role-admin { background: linear-gradient(135deg, #a78bfa, #8b5cf6); color: white; }
+    .role-user { background: rgba(96,165,250,0.2); color: #60a5fa; border: 1px solid rgba(96,165,250,0.4); }
+    .logout-btn { padding: 0.35rem 0.875rem; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; color: #ef4444; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .logout-btn:hover { background: rgba(239,68,68,0.3); }
+    /* ── Event status badges (visible to all) ── */
+    .status-historical { background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.4); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; display: inline-block; }
+    .status-contested { background: rgba(245,158,11,0.2); color: #f59e0b; border: 1px solid rgba(245,158,11,0.4); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; display: inline-block; }
+    .status-unverified { background: rgba(107,114,128,0.2); color: #9ca3af; border: 1px solid rgba(107,114,128,0.4); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; display: inline-block; }
+    .vis-public { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; display: inline-block; }
+    .vis-private { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; display: inline-block; }
+    /* ── Admin panel ── */
+    .admin-section { background: rgba(26,31,58,0.6); border-radius: 16px; padding: 2rem; border: 2px solid rgba(167,139,250,0.2); margin-bottom: 2rem; backdrop-filter: blur(10px); }
+    .admin-section-title { font-size: 1.1rem; font-weight: 700; color: #a78bfa; margin-bottom: 1.25rem; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 0.5rem; }
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .admin-table th { background: rgba(37,43,74,0.8); padding: 0.875rem 1rem; text-align: left; color: #a78bfa; border-bottom: 2px solid rgba(167,139,250,0.3); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .admin-table td { padding: 0.875rem 1rem; border-bottom: 1px solid rgba(45,53,97,0.3); vertical-align: middle; }
+    .admin-table tr:hover td { background: rgba(37,43,74,0.3); }
+    .role-select { background: rgba(10,14,39,0.8); border: 1px solid rgba(45,53,97,0.6); border-radius: 6px; color: #e0e6ed; padding: 0.3rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
+    .status-select { background: rgba(10,14,39,0.8); border: 1px solid rgba(45,53,97,0.6); border-radius: 6px; color: #e0e6ed; padding: 0.4rem 0.6rem; font-size: 0.8rem; cursor: pointer; font-family: inherit; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // ─── HARDCODED ACCOUNTS (⚠ change passwords before sharing) ───
+    const HARDCODED_USERS = [
+      { username: 'owner', password: 'owner123', role: 'owner' },
+      { username: 'admin',  password: 'admin123', role: 'admin'  }
+    ];
+
+    // ─── AUTH HELPERS ───
+    const getRegisteredUsers = () => { try { return JSON.parse(localStorage.getItem('hdb_users')) || []; } catch { return []; } };
+    const saveRegisteredUsers = (users) => { localStorage.setItem('hdb_users', JSON.stringify(users)); };
+    const findUser = (username, password) => {
+      const hc = HARDCODED_USERS.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
+      if (hc) return hc;
+      return getRegisteredUsers().find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password) || null;
+    };
+
+    // ─── NORMALIZE DATA (adds auth fields to existing events) ───
+    const normalizeData = (raw) => ({
+      ...raw,
+      events: raw.events.map(e => ({
+        uploadedBy: 'system', isPublic: true, eventStatus: 'historical_record', ...e
+      }))
+    });
+
+    // ─── LOGIN SCREEN ───
+    const LoginScreen = ({ onLogin, onGoSignup }) => {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [error, setError] = useState('');
+      const submit = () => {
+        if (!username.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
+        const user = findUser(username.trim(), password.trim());
+        if (!user) { setError('Invalid username or password.'); return; }
+        onLogin(user);
+      };
+      return (
+        <div className="auth-screen">
+          <div className="auth-card">
+            <div style={{marginBottom:'2rem'}}>
+              <div className="auth-title">Historical Events DB</div>
+              <div className="auth-subtitle">Sign in to access the database</div>
+            </div>
+            {error && <div className="auth-error">{error}</div>}
+            <div className="auth-field">
+              <label className="auth-label">Username</label>
+              <input className="auth-input" type="text" placeholder="Enter username" value={username}
+                onChange={e=>setUsername(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} autoFocus />
+            </div>
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <input className="auth-input" type="password" placeholder="Enter password" value={password}
+                onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} />
+            </div>
+            <button className="auth-btn" onClick={submit}>Sign In →</button>
+            <div className="auth-switch">Don't have an account? <span onClick={onGoSignup}>Create one</span></div>
+          </div>
+        </div>
+      );
+    };
+
+    // ─── SIGNUP SCREEN ───
+    const SignupScreen = ({ onGoLogin }) => {
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [confirm, setConfirm] = useState('');
+      const [error, setError] = useState('');
+      const [success, setSuccess] = useState('');
+      const submit = () => {
+        if (!username.trim() || !password.trim() || !confirm.trim()) { setError('Please fill in all fields.'); return; }
+        if (username.trim().length < 3) { setError('Username must be at least 3 characters.'); return; }
+        if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+        if (password !== confirm) { setError('Passwords do not match.'); return; }
+        const allNames = [...HARDCODED_USERS, ...getRegisteredUsers()].map(u => u.username.toLowerCase());
+        if (allNames.includes(username.trim().toLowerCase())) { setError('Username already taken.'); return; }
+        saveRegisteredUsers([...getRegisteredUsers(), { username: username.trim(), password, role: 'user', createdAt: new Date().toISOString() }]);
+        setSuccess('Account created! Redirecting to sign in…'); setError('');
+        setTimeout(() => onGoLogin(), 1500);
+      };
+      return (
+        <div className="auth-screen">
+          <div className="auth-card">
+            <div style={{marginBottom:'2rem'}}>
+              <div className="auth-title">Create Account</div>
+              <div className="auth-subtitle">Join the Historical Events Database</div>
+            </div>
+            {error && <div className="auth-error">{error}</div>}
+            {success && <div className="auth-success">{success}</div>}
+            <div className="auth-field">
+              <label className="auth-label">Username</label>
+              <input className="auth-input" type="text" placeholder="Min. 3 characters" value={username}
+                onChange={e=>setUsername(e.target.value)} autoFocus />
+            </div>
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <input className="auth-input" type="password" placeholder="Min. 6 characters" value={password}
+                onChange={e=>setPassword(e.target.value)} />
+            </div>
+            <div className="auth-field">
+              <label className="auth-label">Confirm Password</label>
+              <input className="auth-input" type="password" placeholder="Re-enter password" value={confirm}
+                onChange={e=>setConfirm(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} />
+            </div>
+            <button className="auth-btn" onClick={submit}>Create Account</button>
+            <div className="auth-switch">Already have an account? <span onClick={onGoLogin}>Sign in</span></div>
+          </div>
+        </div>
+      );
+    };
 
     const EMBEDDED_DATA = {"events":[{"id":"EVT-0001","title":"Are we all breathing SMART dust?","description":"everything can be done with smart dust, eventually you'll breathe it, but because it isn't mass manufactured yet you prob aren't breathing it YET","date":null,"dateUploaded":"2026-02-12","topics":["Nano particles","smart dust","CYBORG","MERGING WITH MACHINES","micro particles"],"people":[],"organizations":["Brite Innovation"],"links":["https://brite.ikeinstitute.org/brite_innovation_review_issue_31_winter_2023/are_we_all_breathing_smart_dust"],"researchLevel":1,"sourceType":"Article","sourceSheet":"Sheet1","connections":[],"aiSummary":"Article discussing smart dust and nano particles technology. RAND developed microelectromechanical systems (MEMS) that can monitor anything anywhere."},{"id":"EVT-0002","title":"Chemtrails: What In The World Are They Spraying?","description":"documentary on chemtrails and geoengineering","date":"2010-01-01","dateUploaded":"2026-02-12","topics":["chemtrails","Geoengineering"],"people":[],"organizations":[],"links":["https://www.youtube.com/watch?v=jf0khstYDLA"],"researchLevel":2,"sourceType":"Documentary","sourceSheet":"Sheet1","connections":[],"aiSummary":"Documentary exploring chemtrails and geoengineering programs, examining what is being sprayed in the atmosphere."},{"id":"EVT-0003","title":"CIA Document 1035-960: Concerning Criticism of the Warren Report","description":"CIA coins the term 'conspiracy theory' to discredit critics of the Warren Commission","date":"1967-01-01","dateUploaded":"2026-02-12","topics":["CIA","conspiracy theory","Warren Commission","JFK"],"people":[],"organizations":["Central Intelligence Agency (CIA)"],"links":[],"researchLevel":3,"sourceType":"Declassified Document","sourceSheet":"Sheet1","connections":[],"aiSummary":"Declassified CIA document that is widely credited with popularizing the term 'conspiracy theory' as a way to discredit critics of the Warren Commission report on JFK's assassination."},{"id":"EVT-0004","title":"COVID-19 Lab Leak Theory","description":"Evidence suggests COVID-19 may have originated from a laboratory in Wuhan, China rather than natural transmission","date":"2020-01-01","dateUploaded":"2026-02-12","topics":["COVID-19","lab leak","Wuhan","biological weapons"],"people":[],"organizations":[],"links":[],"researchLevel":2,"sourceType":"Article","sourceSheet":"Covid","connections":[],"aiSummary":"Analysis of COVID-19 origins and the lab leak hypothesis. Multiple intelligence agencies now assess this as the likely origin."},{"id":"EVT-0005","title":"Direct Energy Weapon Patent","description":"Patent for directed energy weapon technology used by military","date":"1990-01-01","dateUploaded":"2026-02-12","topics":["Directed Energy Weapons (DEW)","military technology","weapons"],"people":[],"organizations":[],"links":[],"researchLevel":2,"sourceType":"Patent","sourceSheet":"Direct energy weapon","connections":[],"aiSummary":"Patent covering directed energy weapon systems including microwave and laser-based weapons."},{"id":"EVT-0006","title":"Election of President Abraham Lincoln","description":"Abraham Lincoln served as the 16th President of the United States from 1861-03-04 to 1865-04-15.","date":"1861-03-04","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Abraham Lincoln"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Abraham Lincoln as the 16th President. Led the country through the Civil War and issued the Emancipation Proclamation.","isMajorEvent":true},{"id":"EVT-0007","title":"Election of President Barack Obama","description":"Barack Obama served as the 44th President of the United States from 2009-01-20 to 2017-01-20.","date":"2009-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Barack Obama"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Barack Obama as the 44th President and first African-American president of the United States.","isMajorEvent":true},{"id":"EVT-0008","title":"Election of President Bill Clinton","description":"Bill Clinton served as the 42nd President of the United States from 1993-01-20 to 2001-01-20.","date":"1993-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Bill Clinton"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Bill Clinton as the 42nd President of the United States.","isMajorEvent":true},{"id":"EVT-0009","title":"Election of President Donald Trump","description":"Donald Trump served as the 45th President of the United States from 2017-01-20 to 2021-01-20, and was elected again as the 47th President in 2024.","date":"2017-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Donald Trump"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Donald Trump as the 45th President.","isMajorEvent":true},{"id":"EVT-0010","title":"Election of President Dwight D. Eisenhower","description":"Dwight D. Eisenhower served as the 34th President of the United States from 1953-01-20 to 1961-01-20.","date":"1953-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Dwight D. Eisenhower"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Dwight D. Eisenhower. Famously warned about the military-industrial complex in his farewell address.","isMajorEvent":true},{"id":"EVT-0011","title":"Election of President Franklin D. Roosevelt","description":"Franklin D. Roosevelt served as the 32nd President of the United States from 1933-03-04 to 1945-04-12.","date":"1933-03-04","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Franklin D. Roosevelt"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Franklin D. Roosevelt. Led the country through the Great Depression and World War II.","isMajorEvent":true},{"id":"EVT-0012","title":"Election of President George W. Bush","description":"George W. Bush served as the 43rd President of the United States from 2001-01-20 to 2009-01-20.","date":"2001-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics","9/11"],"people":["George W. Bush"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of George W. Bush. His presidency was defined by the 9/11 attacks and subsequent War on Terror.","isMajorEvent":true},{"id":"EVT-0013","title":"Election of President George Washington","description":"George Washington served as the 1st President of the United States from 1789-04-30 to 1797-03-04.","date":"1789-04-30","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics","Founding Fathers"],"people":["George Washington"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Inauguration of George Washington as the first President of the United States and Founding Father.","isMajorEvent":true},{"id":"EVT-0014","title":"Election of President Harry S. Truman","description":"Harry S. Truman served as the 33rd President of the United States from 1945-04-12 to 1953-01-20.","date":"1945-04-12","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Harry S. Truman"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Harry S. Truman became President after FDR's death. Authorized use of atomic bombs on Japan and oversaw end of WWII.","isMajorEvent":true},{"id":"EVT-0015","title":"Election of President Joe Biden","description":"Joe Biden served as the 46th President of the United States from 2021-01-20 to 2025-01-20.","date":"2021-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics"],"people":["Joe Biden"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of Joe Biden as the 46th President.","isMajorEvent":true},{"id":"EVT-0016","title":"Election of President John F. Kennedy","description":"John F. Kennedy served as the 35th President of the United States from 1961-01-20 to 1963-11-22.","date":"1961-01-20","dateUploaded":"2026-02-14","topics":["US President","Presidential Election","American History","Politics","JFK","assassination"],"people":["John F. Kennedy"],"organizations":["United States Government"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Presidents","connections":[],"aiSummary":"Presidential inauguration of JFK. His assassination in 1963 remains one of history's most debated events.","isMajorEvent":true},{"id":"EVT-0017","title":"Gulf War","description":"Gulf War was a major military conflict involving the United States and coalition forces against Iraq, lasting from 1991-01-17 to 1991-02-28.","date":"1991-01-17","dateUploaded":"2026-02-14","topics":["War","Military Conflict","American History","Gulf War","Middle East"],"people":[],"organizations":["United States Armed Forces"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Wars","connections":[],"aiSummary":"Major military conflict: Gulf War (Operation Desert Storm). Coalition forces expelled Iraq from Kuwait.","isMajorEvent":true},{"id":"EVT-0018","title":"Iraq War","description":"Iraq War was a major military conflict involving the United States, lasting from 2003-03-20 to 2011-12-15. Launched after claims of weapons of mass destruction.","date":"2003-03-20","dateUploaded":"2026-02-14","topics":["War","Military Conflict","American History","Iraq War","Middle East","weapons of mass destruction"],"people":[],"organizations":["United States Armed Forces","Central Intelligence Agency (CIA)"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Wars","connections":[],"aiSummary":"Major military conflict: Iraq War. Launched based on disputed WMD claims. No WMDs were found.","isMajorEvent":true},{"id":"EVT-0019","title":"Korean War","description":"Korean War was a major military conflict involving the United States, lasting from 1950-06-25 to 1953-07-27.","date":"1950-06-25","dateUploaded":"2026-02-14","topics":["War","Military Conflict","American History","Korean War"],"people":[],"organizations":["United States Armed Forces"],"links":[],"researchLevel":1,"sourceType":"Historical Record","sourceSheet":"US Wars","connections":[],"aiSummary":"Major military conflict: Korean War, often called 'The Forgotten War'. Ended in armistice, not a peace treaty.","isMajorEvent":true},{"id":"EVT-0020","title":"October Surprise: A Four-Decade Secret","description":"Media now admits October Surprise is real — proof that the CIA and intelligence agencies will interfere with elections","date":"2023-03-28","dateUploaded":"2026-02-12","topics":["October Surprise","CIA","Ronald Reagan","Jimmy Carter","election fraud","election interference"],"people":["Jimmy Carter","Ronald Reagan"],"organizations":["New York Times (NYT)","The Intercept","Central Intelligence Agency (CIA)"],"links":["https://www.nytimes.com/2023/03/18/us/politics/jimmy-carter-october-surprise-iran-hostages.html","https://theintercept.com/2023/03/24/october-surprise-ben-barnes/"],"researchLevel":1,"sourceType":"Article","sourceSheet":"Sheet1","connections":[],"aiSummary":"Article in NYT confirming the October Surprise — that Reagan's 1980 campaign secretly negotiated with Iran to delay hostage release to undermine Carter's re-election."}],"people":["Abraham Lincoln","Barack Obama","Bill Clinton","Donald Trump","Dwight D. Eisenhower","Franklin D. Roosevelt","George W. Bush","George Washington","Harry S. Truman","Jimmy Carter","Joe Biden","John F. Kennedy","Ronald Reagan"],"organizations":["Brite Innovation","Central Intelligence Agency (CIA)","New York Times (NYT)","The Intercept","United States Armed Forces","United States Government"],"topics":["9/11","American History","CYBORG","CIA","COVID-19","Directed Energy Weapons (DEW)","Founding Fathers","Geoengineering","Gulf War","Iraq War","JFK","Jimmy Carter","Korean War","MERGING WITH MACHINES","Middle East","Military Conflict","Nano particles","October Surprise","Politics","Presidential Election","Ronald Reagan","US President","War","Warren Commission","Wuhan","assassination","biological weapons","chemtrails","conspiracy theory","election fraud","election interference","lab leak","micro particles","military technology","smart dust","weapons of mass destruction"],"metadata":{"totalEvents":20,"totalPeople":13,"totalOrganizations":6,"totalTopics":36,"lastUpdated":"2026-02-16T12:00:00.000Z"}};
 
@@ -261,11 +408,20 @@
       const [data, setData] = useState(() => {
         try {
           const saved = localStorage.getItem('historicalEventsDB');
-          return saved ? JSON.parse(saved) : EMBEDDED_DATA;
-        } catch (e) { return EMBEDDED_DATA; }
+          return normalizeData(saved ? JSON.parse(saved) : EMBEDDED_DATA);
+        } catch (e) { return normalizeData(EMBEDDED_DATA); }
       });
 
-      const TABS = ['timeline','network','spreadsheet','topics','people','organizations','upload','my uploads'];
+      const [currentUser, setCurrentUser] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('hdb_session')); } catch { return null; }
+      });
+      const [authScreen, setAuthScreen] = useState('login');
+
+      const TABS = useMemo(() => {
+        const base = ['timeline','network','spreadsheet','topics','people','organizations','upload','my uploads'];
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'owner')) return [...base, 'admin panel'];
+        return base;
+      }, [currentUser]);
 
       const [activeTab, setActiveTab] = useState('timeline');
       const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
@@ -322,13 +478,69 @@
         setBreadcrumbs([{ label: tab.charAt(0).toUpperCase() + tab.slice(1), action: () => { setActiveTab(tab); setSelectedEntity(null); } }]);
       };
 
+      // ── Auth functions ──
+      const login = (user) => {
+        const session = { username: user.username, role: user.role };
+        localStorage.setItem('hdb_session', JSON.stringify(session));
+        setCurrentUser(session);
+      };
+      const logout = () => {
+        localStorage.removeItem('hdb_session');
+        setCurrentUser(null);
+        setAuthScreen('login');
+      };
+
+      // ── Visibility: what the current user can see ──
+      const visibleEvents = useMemo(() => {
+        if (!currentUser) return [];
+        if (currentUser.role === 'admin' || currentUser.role === 'owner') return data.events;
+        return data.events.filter(e => e.isPublic || e.uploadedBy === currentUser.username);
+      }, [data.events, currentUser]);
+
+      // ── Event management ──
+      const toggleEventPublic = (eventId) => {
+        setData(prev => ({ ...prev, events: prev.events.map(e => e.id === eventId ? { ...e, isPublic: !e.isPublic } : e) }));
+      };
+      const updateEventStatus = (eventId, status) => {
+        setData(prev => ({ ...prev, events: prev.events.map(e => e.id === eventId ? { ...e, eventStatus: status } : e) }));
+      };
+      const deleteEvent = (eventId) => {
+        setData(prev => {
+          const updated = prev.events.filter(e => e.id !== eventId);
+          const allP = new Set(), allO = new Set(), allT = new Set();
+          updated.forEach(e => { (e.people||[]).forEach(p=>allP.add(p)); (e.organizations||[]).forEach(o=>allO.add(o)); (e.topics||[]).forEach(t=>allT.add(t)); });
+          return { ...prev, events: updated, people:[...allP].sort(), organizations:[...allO].sort(), topics:[...allT].sort(), metadata:{...prev.metadata, totalEvents:updated.length} };
+        });
+        setShowModal(false);
+      };
+
+      // ── User management (admin panel) ──
+      const [adminUsers, setAdminUsers] = useState([]);
+      const refreshAdminUsers = () => setAdminUsers(getRegisteredUsers());
+      const updateUserRole = (username, newRole) => {
+        const updated = getRegisteredUsers().map(u => u.username === username ? { ...u, role: newRole } : u);
+        saveRegisteredUsers(updated);
+        setAdminUsers(updated);
+        // update session if changing self
+        if (currentUser.username === username) {
+          const session = { ...currentUser, role: newRole };
+          localStorage.setItem('hdb_session', JSON.stringify(session));
+          setCurrentUser(session);
+        }
+      };
+      const deleteUserAccount = (username) => {
+        const updated = getRegisteredUsers().filter(u => u.username !== username);
+        saveRegisteredUsers(updated);
+        setAdminUsers(updated);
+      };
+
       // ── Filters ──
       const applySearch = () => setFilters(prev => ({ ...prev, appliedSearch: prev.search }));
 
       const clearAllFilters = () => setFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
 
       const filteredEvents = useMemo(() => {
-        return data.events.filter(e => {
+        return visibleEvents.filter(e => {
           if (filters.showMajorOnly && !e.isMajorEvent) return false;
           if (filters.appliedSearch) {
             const s = filters.appliedSearch.toLowerCase();
@@ -372,8 +584,8 @@
       , [data.organizations, filteredEvents]);
 
       const myUploads = useMemo(() =>
-        data.events.filter(e => ['Uploaded Excel','Uploaded CSV','Uploaded Text','Uploaded PDF','Uploaded Word','Video URL','Web URL'].includes(e.sourceType))
-      , [data.events]);
+        data.events.filter(e => e.uploadedBy === (currentUser ? currentUser.username : '__none__'))
+      , [data.events, currentUser]);
 
       const filteredMyUploads = useMemo(() => {
         return myUploads.filter(e => {
@@ -471,7 +683,8 @@
                           organizations: (row.publisher||row.company||row.organization||'').toString().split(/[,;/]/).map(o=>o.trim()).filter(o=>o),
                           links: [row['link main']||row.link||''].filter(l=>l),
                           researchLevel: parseInt(row['srch lvl']||row['My search lvl']||1)||1,
-                          sourceType:'Uploaded Excel', sourceSheet:sheetName, connections:[], aiSummary:'', isMajorEvent:false
+                          sourceType:'Uploaded Excel', sourceSheet:sheetName, connections:[], aiSummary:'', isMajorEvent:false,
+                          uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified'
                         });
                         eventId++;
                       });
@@ -491,19 +704,19 @@
                   const vals = lines[i].split(',');
                   const row = {};
                   headers.forEach((h,idx)=>{ row[h]=vals[idx]?.trim()||''; });
-                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString().split('T')[0], topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false });
+                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString().split('T')[0], topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
                   eventId++;
                 }
               }
             } else if (file.name.endsWith('.txt')) {
               extractedText = await file.text();
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false });
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
               eventId++;
             } else if (file.name.endsWith('.pdf')) {
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.pdf',''), description:`PDF document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['PDF Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded PDF', sourceSheet:file.name, connections:[], aiSummary:'PDF document uploaded - text extraction pending.', isMajorEvent:false });
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.pdf',''), description:`PDF document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['PDF Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded PDF', sourceSheet:file.name, connections:[], aiSummary:'PDF document uploaded - text extraction pending.', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
               eventId++;
             } else if (file.name.endsWith('.docx')) {
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.docx',''), description:`Word document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Word Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Word', sourceSheet:file.name, connections:[], aiSummary:'Word document uploaded - text extraction pending.', isMajorEvent:false });
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.docx',''), description:`Word document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Word Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Word', sourceSheet:file.name, connections:[], aiSummary:'Word document uploaded - text extraction pending.', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
               eventId++;
             }
             if (extractedText && newEvents.length > 0) {
@@ -553,6 +766,7 @@
             sourceSheet:'URL Import', connections:[],
             aiSummary:`${isVideo?'Video':'Web'} content from ${urlInput}. AI would extract metadata, identify key topics and entities, and generate a full summary.`,
             isMajorEvent:false, isVideo,
+            uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified',
             transcription: isVideo ? { chapters:[{timestamp:'0:00',title:'Introduction',text:'AI transcription would appear here'},{timestamp:'5:30',title:'Main Content',text:'Full video transcription with chapter markers'}] } : null
           };
           const updated = {
@@ -648,16 +862,21 @@
           ) : (
             <div className="spreadsheet">
               <table className="table">
-                <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Date Uploaded</th><th>Topics</th><th>AI Summary</th></tr></thead>
+                <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Visibility</th><th>Type</th><th>Date</th><th>Topics</th></tr></thead>
                 <tbody>
                   {filteredMyUploads.map(e => (
-                    <tr key={e.id} onClick={()=>openEventModal(e,'my uploads')} style={{cursor:'pointer'}}>
-                      <td>{e.id}</td>
-                      <td>{e.title}</td>
+                    <tr key={e.id} style={{cursor:'pointer'}}>
+                      <td onClick={()=>openEventModal(e,'my uploads')}>{e.id}</td>
+                      <td onClick={()=>openEventModal(e,'my uploads')} style={{fontWeight:600}}>{e.title}</td>
+                      <td><span className={`status-${e.eventStatus||'unverified'}`}>{e.eventStatus==='historical_record'?'Historical Record':e.eventStatus==='contested'?'Contested':'Unverified'}</span></td>
+                      <td>
+                        <button onClick={()=>toggleEventPublic(e.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0}}>
+                          <span className={e.isPublic ? 'vis-public' : 'vis-private'}>{e.isPublic ? '🌐 Public' : '🔒 Private'}</span>
+                        </button>
+                      </td>
                       <td><span style={{padding:'0.25rem 0.6rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',fontSize:'0.75rem',color:'#60a5fa'}}>{e.sourceType}</span></td>
                       <td>{e.dateUploaded||'—'}</td>
                       <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
-                      <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{(e.aiSummary||'—').substring(0,60)}...</td>
                     </tr>
                   ))}
                 </tbody>
@@ -711,7 +930,29 @@
                   <strong>ID:</strong> {modalData.id}<br/>
                   <strong>Date:</strong> {modalData.date||'Unknown'}<br/>
                   <strong>Source:</strong> {modalData.sourceType}<br/>
-                  <strong>Research Level:</strong> <span className={`level-${modalData.researchLevel}`}>Level {modalData.researchLevel}</span>
+                  <strong>Research Level:</strong> <span className={`level-${modalData.researchLevel}`}>Level {modalData.researchLevel}</span><br/>
+                  <strong>Status:</strong>{' '}
+                  {(currentUser.role === 'admin' || currentUser.role === 'owner') ? (
+                    <select className="status-select" style={{marginLeft:'0.5rem'}} value={modalData.eventStatus||'unverified'}
+                      onChange={ev=>{updateEventStatus(modalData.id, ev.target.value); setModalData({...modalData, eventStatus:ev.target.value});}}>
+                      <option value="historical_record">Historical Record</option>
+                      <option value="contested">Contested</option>
+                      <option value="unverified">Unverified</option>
+                    </select>
+                  ) : (
+                    <span style={{marginLeft:'0.5rem'}}><span className={`status-${modalData.eventStatus||'unverified'}`}>{modalData.eventStatus==='historical_record'?'Historical Record':modalData.eventStatus==='contested'?'Contested':'Unverified'}</span></span>
+                  )}<br/>
+                  <strong>Visibility:</strong>{' '}
+                  {(modalData.uploadedBy === currentUser.username || currentUser.role === 'admin' || currentUser.role === 'owner') ? (
+                    <button onClick={()=>{toggleEventPublic(modalData.id); setModalData({...modalData, isPublic:!modalData.isPublic});}} style={{background:'none',border:'none',cursor:'pointer',padding:0,marginLeft:'0.5rem'}}>
+                      <span className={modalData.isPublic ? 'vis-public' : 'vis-private'}>{modalData.isPublic ? '🌐 Public — click to make private' : '🔒 Private — click to make public'}</span>
+                    </button>
+                  ) : (
+                    <span style={{marginLeft:'0.5rem'}}><span className={modalData.isPublic ? 'vis-public' : 'vis-private'}>{modalData.isPublic ? '🌐 Public' : '🔒 Private'}</span></span>
+                  )}
+                  {(currentUser.role === 'admin' || currentUser.role === 'owner') && (
+                    <><br/><button className="btn btn-danger" style={{marginTop:'0.75rem',padding:'0.3rem 0.75rem',fontSize:'0.8rem'}} onClick={()=>{if(window.confirm('Delete this event permanently?'))deleteEvent(modalData.id);}}>🗑️ Delete Event</button></>
+                  )}
                 </div>
                 <div className="form-group"><label className="form-label">Description</label><p style={{color:'#e0e6ed',lineHeight:1.6}}>{modalData.description}</p></div>
                 {modalData.transcription && (
@@ -757,6 +998,111 @@
             )}
           </div>
         </div>
+        );
+      };
+
+      // ── Auth gate ──
+      if (!currentUser) {
+        if (authScreen === 'signup') return <SignupScreen onGoLogin={() => setAuthScreen('login')} />;
+        return <LoginScreen onLogin={login} onGoSignup={() => setAuthScreen('signup')} />;
+      }
+
+      // ── Admin Panel ──
+      const AdminPanel = () => {
+        const [users, setUsers] = React.useState(getRegisteredUsers());
+        const isOwner = currentUser.role === 'owner';
+        const refresh = () => setUsers(getRegisteredUsers());
+        const handleRoleChange = (username, newRole) => {
+          updateUserRole(username, newRole);
+          refresh();
+        };
+        const handleDelete = (username) => {
+          deleteUserAccount(username);
+          refresh();
+        };
+        const allUsers = [
+          ...HARDCODED_USERS.map(u => ({ ...u, isHardcoded: true })),
+          ...users
+        ];
+        const publicCount = data.events.filter(e => e.isPublic).length;
+        const privateCount = data.events.filter(e => !e.isPublic).length;
+        return (
+          <div>
+            <div style={{display:'flex',gap:'1.5rem',marginBottom:'2rem',flexWrap:'wrap'}}>
+              {[
+                { label:'Total Users', value: allUsers.length, color:'#60a5fa' },
+                { label:'Public Events', value: publicCount, color:'#10b981' },
+                { label:'Private Events', value: privateCount, color:'#9ca3af' },
+                { label:'Total Events', value: data.events.length, color:'#a78bfa' }
+              ].map(s=>(
+                <div key={s.label} className="stat" style={{background:'rgba(26,31,58,0.6)',padding:'1.25rem 1.75rem',borderRadius:'12px',border:'2px solid rgba(61,69,99,0.5)'}}>
+                  <span className="stat-label">{s.label}</span>
+                  <span className="stat-value" style={{color:s.color,fontSize:'1.5rem'}}>{s.value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="admin-section">
+              <div className="admin-section-title">👥 User Management</div>
+              <table className="admin-table">
+                <thead><tr><th>Username</th><th>Role</th><th>Type</th><th>Joined</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {allUsers.map(u => {
+                    const isSelf = u.username === currentUser.username;
+                    const isHardcodedOwner = u.role === 'owner';
+                    // Admin can only change basic users; owner can change admins too (but not other owners)
+                    const canChange = !u.isHardcoded && !isSelf && (isOwner ? u.role !== 'owner' : u.role === 'user');
+                    return (
+                      <tr key={u.username}>
+                        <td style={{fontWeight:600}}>{u.username}{isSelf ? <span style={{color:'#8b92b0',fontWeight:400,marginLeft:'0.5rem'}}>(you)</span> : ''}</td>
+                        <td><span className={`role-badge role-${u.role}`}>{u.role}</span></td>
+                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{u.isHardcoded ? 'Built-in' : 'Registered'}</td>
+                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
+                        <td>
+                          {canChange && (
+                            <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>
+                              {u.role === 'user' && <button className="btn btn-secondary" style={{padding:'0.3rem 0.75rem',fontSize:'0.75rem'}} onClick={()=>handleRoleChange(u.username,'admin')}>↑ Make Admin</button>}
+                              {u.role === 'admin' && isOwner && <button className="btn btn-secondary" style={{padding:'0.3rem 0.75rem',fontSize:'0.75rem'}} onClick={()=>handleRoleChange(u.username,'user')}>↓ Demote</button>}
+                              <button className="btn btn-danger" style={{padding:'0.3rem 0.75rem',fontSize:'0.75rem'}} onClick={()=>{if(window.confirm(`Delete account "${u.username}"?`))handleDelete(u.username);}}>🗑 Delete</button>
+                            </div>
+                          )}
+                          {!canChange && <span style={{color:'#3d4563',fontSize:'0.8rem'}}>—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="admin-section">
+              <div className="admin-section-title">📋 All Events</div>
+              <table className="admin-table">
+                <thead><tr><th>ID</th><th>Title</th><th>Uploaded By</th><th>Status</th><th>Visibility</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {data.events.slice().reverse().map(e => (
+                    <tr key={e.id}>
+                      <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{e.id}</td>
+                      <td style={{fontWeight:600,cursor:'pointer',color:'#60a5fa'}} onClick={()=>openEventModal(e,'admin panel')}>{(e.title||'').substring(0,50)}{e.title&&e.title.length>50?'…':''}</td>
+                      <td style={{color:'#8b92b0'}}>{e.uploadedBy||'system'}</td>
+                      <td>
+                        <select className="status-select" value={e.eventStatus||'unverified'} onChange={ev=>updateEventStatus(e.id, ev.target.value)}>
+                          <option value="historical_record">Historical Record</option>
+                          <option value="contested">Contested</option>
+                          <option value="unverified">Unverified</option>
+                        </select>
+                      </td>
+                      <td><span className={e.isPublic ? 'vis-public' : 'vis-private'}>{e.isPublic ? '🌐 Public' : '🔒 Private'}</span></td>
+                      <td>
+                        <div style={{display:'flex',gap:'0.4rem'}}>
+                          <button className="btn btn-secondary" style={{padding:'0.25rem 0.6rem',fontSize:'0.75rem'}} onClick={()=>toggleEventPublic(e.id)}>{e.isPublic ? 'Make Private' : 'Make Public'}</button>
+                          <button className="btn btn-danger" style={{padding:'0.25rem 0.6rem',fontSize:'0.75rem'}} onClick={()=>{if(window.confirm('Delete this event?'))deleteEvent(e.id);}}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         );
       };
 
@@ -813,10 +1159,17 @@
       return (
         <div className="app">
           <header className="header">
-            <h1>Historical Events Database</h1>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'1rem'}}>
+              <h1>Historical Events Database</h1>
+              <div className="user-chip">
+                <span style={{color:'#e0e6ed',fontSize:'0.875rem',fontWeight:600}}>👤 {currentUser.username}</span>
+                <span className={`role-badge role-${currentUser.role}`}>{currentUser.role}</span>
+                <button className="logout-btn" onClick={logout}>Logout</button>
+              </div>
+            </div>
             <div className="stats">
               <div className="stat"><span className="stat-label">Total Events</span><span className="stat-value">{data.events.length}</span></div>
-              <div className="stat"><span className="stat-label">Filtered</span><span className="stat-value">{filteredEvents.length}</span></div>
+              <div className="stat"><span className="stat-label">Visible</span><span className="stat-value">{filteredEvents.length}</span></div>
               <div className="stat"><span className="stat-label">People</span><span className="stat-value">{data.people.length}</span></div>
               <div className="stat"><span className="stat-label">Organizations</span><span className="stat-value">{data.organizations.length}</span></div>
               <div className="stat"><span className="stat-label">Topics</span><span className="stat-value">{data.topics.length}</span></div>
@@ -1013,6 +1366,9 @@
 
             {/* MY UPLOADS (standalone page) */}
             {activeTab === 'my uploads' && <UploadsContent />}
+
+            {/* ADMIN PANEL */}
+            {activeTab === 'admin panel' && (currentUser.role === 'admin' || currentUser.role === 'owner') && <AdminPanel />}
 
           </main>
 
