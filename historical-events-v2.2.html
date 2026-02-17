@@ -1015,6 +1015,8 @@
       // NOTE: accountTab state lives in App scope (not here) to prevent reset on re-render
       const AccountPage = () => {
         const [uploadSearch, setUploadSearch] = React.useState('');
+        const [uploadFilterTab, setUploadFilterTab] = React.useState('all');
+        const [uploadFilterValue, setUploadFilterValue] = React.useState('');
         const isAdminOrOwner = currentUser.role === 'admin' || currentUser.role === 'owner';
         const myEventsAll = data.events.filter(e => e.uploadedBy === currentUser.username);
         const myPublicCount = myEventsAll.filter(e => e.isPublic).length;
@@ -1024,9 +1026,18 @@
         const memberSince = regUser
           ? new Date(regUser.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
           : 'Built-in account';
-        const myFiltered = uploadSearch.trim()
-          ? myEventsAll.filter(e => (e.title||'').toLowerCase().includes(uploadSearch.toLowerCase()) || (e.description||'').toLowerCase().includes(uploadSearch.toLowerCase()))
-          : myEventsAll;
+        const myFiltered = myEventsAll.filter(e => {
+          if (uploadSearch.trim()) {
+            const s = uploadSearch.toLowerCase();
+            if (!(e.title||'').toLowerCase().includes(s) && !(e.description||'').toLowerCase().includes(s)) return false;
+          }
+          if (uploadFilterValue) {
+            if (uploadFilterTab==='topics' && !(e.topics||[]).includes(uploadFilterValue)) return false;
+            if (uploadFilterTab==='people' && !(e.people||[]).includes(uploadFilterValue)) return false;
+            if (uploadFilterTab==='organizations' && !(e.organizations||[]).includes(uploadFilterValue)) return false;
+          }
+          return true;
+        });
         const statusLabel = s => s==='historical_record'?'Historical Record':s==='contested'?'Contested':'Unverified';
         return (
           <div>
@@ -1063,36 +1074,73 @@
                 </button>
               )}
             </div>
-            {/* My Uploads — clean table, no global filter bar */}
+            {/* My Uploads — search + topic/people/org filter tabs */}
             {accountTab === 'uploads' && (
               <div>
-                <div style={{marginBottom:'1.25rem',display:'flex',gap:'0.75rem',alignItems:'center'}}>
-                  <input
-                    type="text"
-                    placeholder="Search your uploads…"
-                    value={uploadSearch}
-                    onChange={e=>setUploadSearch(e.target.value)}
-                    style={{maxWidth:'360px',padding:'0.7rem 1rem',background:'rgba(10,14,39,0.8)',border:'2px solid rgba(45,53,97,0.5)',borderRadius:'10px',color:'#e0e6ed',fontSize:'0.875rem',fontFamily:'inherit'}}
-                  />
-                  {uploadSearch && <button onClick={()=>setUploadSearch('')} style={{background:'none',border:'none',color:'#8b92b0',cursor:'pointer',fontSize:'0.875rem'}}>✕ Clear</button>}
+                {/* Filter bar */}
+                <div style={{background:'rgba(26,31,58,0.6)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'14px',padding:'1.25rem 1.5rem',marginBottom:'1.5rem',backdropFilter:'blur(10px)'}}>
+                  {/* Search row */}
+                  <div style={{display:'flex',gap:'0.75rem',alignItems:'center',marginBottom:'1rem'}}>
+                    <input
+                      type="text"
+                      placeholder="Search your uploads…"
+                      value={uploadSearch}
+                      onChange={e=>setUploadSearch(e.target.value)}
+                      style={{flex:1,maxWidth:'400px',padding:'0.7rem 1rem',background:'rgba(10,14,39,0.8)',border:'2px solid rgba(45,53,97,0.5)',borderRadius:'10px',color:'#e0e6ed',fontSize:'0.875rem',fontFamily:'inherit',outline:'none'}}
+                    />
+                    {(uploadSearch||uploadFilterValue) && (
+                      <button onClick={()=>{setUploadSearch('');setUploadFilterValue('');}} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#ef4444',cursor:'pointer',padding:'0.4rem 0.8rem',fontSize:'0.8rem',fontWeight:600}}>✕ Clear</button>
+                    )}
+                  </div>
+                  {/* Filter category tabs */}
+                  <div style={{display:'flex',gap:'0.5rem',marginBottom: uploadFilterTab!=='all' ? '1rem' : '0',flexWrap:'wrap'}}>
+                    {['all','topics','people','organizations'].map(t=>(
+                      <button key={t} onClick={()=>{setUploadFilterTab(t);setUploadFilterValue('');}}
+                        style={{padding:'0.4rem 1rem',borderRadius:'8px',border:'none',cursor:'pointer',fontWeight:600,fontSize:'0.8rem',fontFamily:'inherit',
+                          background: uploadFilterTab===t ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)',
+                          color: uploadFilterTab===t ? '#0a0e27' : '#8b92b0',
+                          boxShadow: uploadFilterTab===t ? '0 2px 8px rgba(96,165,250,0.3)' : 'none',
+                          transition:'all 0.2s'}}>
+                        {t==='all'?'All':t.charAt(0).toUpperCase()+t.slice(1)}
+                        {t!=='all' && <span style={{marginLeft:'0.4rem',opacity:0.7,fontSize:'0.75rem'}}>
+                          ({t==='topics'?[...new Set(myEventsAll.flatMap(e=>e.topics||[]))].length:t==='people'?[...new Set(myEventsAll.flatMap(e=>e.people||[]))].length:[...new Set(myEventsAll.flatMap(e=>e.organizations||[]))].length})
+                        </span>}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Chips for selected filter category */}
+                  {uploadFilterTab !== 'all' && (() => {
+                    const items = uploadFilterTab==='topics'
+                      ? [...new Set(myEventsAll.flatMap(e=>e.topics||[]))].sort()
+                      : uploadFilterTab==='people'
+                      ? [...new Set(myEventsAll.flatMap(e=>e.people||[]))].sort()
+                      : [...new Set(myEventsAll.flatMap(e=>e.organizations||[]))].sort();
+                    return items.length > 0 ? (
+                      <div style={{display:'flex',flexWrap:'wrap',gap:'0.5rem'}}>
+                        {items.map(item=>(
+                          <button key={item} onClick={()=>setUploadFilterValue(uploadFilterValue===item?'':item)}
+                            style={{padding:'0.3rem 0.8rem',borderRadius:'20px',border:'2px solid',cursor:'pointer',fontSize:'0.8rem',fontWeight:600,fontFamily:'inherit',transition:'all 0.2s',
+                              borderColor: uploadFilterValue===item ? '#60a5fa' : 'rgba(61,69,99,0.6)',
+                              background: uploadFilterValue===item ? 'rgba(96,165,250,0.2)' : 'rgba(45,53,97,0.3)',
+                              color: uploadFilterValue===item ? '#60a5fa' : '#8b92b0'}}>
+                            {item}
+                          </button>
+                        ))}
+                      </div>
+                    ) : <div style={{color:'#8b92b0',fontSize:'0.85rem',fontStyle:'italic'}}>None found in your uploads.</div>;
+                  })()}
                 </div>
+                {/* Results table */}
                 {myFiltered.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-state-icon">📂</div>
-                    <p>{myEventsAll.length === 0 ? 'No uploads yet — go to the Upload tab to add files or URLs.' : 'No uploads match your search.'}</p>
+                    <p>{myEventsAll.length === 0 ? 'No uploads yet — go to the Upload tab to add files or URLs.' : 'No uploads match your filters.'}</p>
                   </div>
                 ) : (
                   <div className="spreadsheet">
                     <table className="table">
                       <thead>
-                        <tr>
-                          <th>Title</th>
-                          <th>Status</th>
-                          <th>Visibility</th>
-                          <th>Type</th>
-                          <th>Date Uploaded</th>
-                          <th>Topics</th>
-                        </tr>
+                        <tr><th>Title</th><th>Status</th><th>Visibility</th><th>Type</th><th>Date</th><th>Topics</th></tr>
                       </thead>
                       <tbody>
                         {myFiltered.slice().reverse().map(e=>(
@@ -1332,8 +1380,8 @@
           <main className="content">
             {uploadMessage && <div className={uploadMessage.includes('❌')||uploadMessage.includes('⚠️')?'error-msg':'success-msg'}>{uploadMessage}</div>}
 
-            {/* Show filters on all tabs except upload */}
-            {activeTab !== 'upload' && <FiltersComponent {...filterProps} />}
+            {/* Show filters on all tabs except upload and account */}
+            {activeTab !== 'upload' && activeTab !== 'account' && <FiltersComponent {...filterProps} />}
 
             {/* TIMELINE */}
             {activeTab === 'timeline' && (
