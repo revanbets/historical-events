@@ -430,7 +430,8 @@
       });
       const [authScreen, setAuthScreen] = useState('login');
       const [accountTab, setAccountTab] = useState('uploads');
-      const [accFilters, setAccFilters] = useState({ search: '', topics: [], people: [], organizations: [] });
+      const [myFilters, setMyFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const [myPageTab, setMyPageTab] = useState('timeline');
 
       const TABS = ['timeline','network','spreadsheet','topics','people','organizations','upload'];
 
@@ -549,6 +550,8 @@
       const applySearch = () => setFilters(prev => ({ ...prev, appliedSearch: prev.search }));
 
       const clearAllFilters = () => setFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const applyMySearch = () => setMyFilters(prev => ({...prev, appliedSearch: prev.search}));
+      const clearMyFilters = () => setMyFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
 
       const filteredEvents = useMemo(() => {
         return visibleEvents.filter(e => {
@@ -611,6 +614,51 @@
         });
       }, [myUploads, filters]);
 
+      // ── My Uploads scoped memos (for Account page) ──
+      const myFiltered = useMemo(() => {
+        return myUploads.filter(e => {
+          if (myFilters.showMajorOnly && !e.isMajorEvent) return false;
+          if (myFilters.appliedSearch) {
+            const s = myFilters.appliedSearch.toLowerCase();
+            if (!(e.title||'').toLowerCase().includes(s) && !(e.description||'').toLowerCase().includes(s) &&
+                !(e.topics||[]).some(t=>t.toLowerCase().includes(s)) &&
+                !(e.people||[]).some(p=>p.toLowerCase().includes(s)) &&
+                !(e.organizations||[]).some(o=>o.toLowerCase().includes(s))) return false;
+          }
+          if (myFilters.topics.length > 0 && !(e.topics||[]).some(t => myFilters.topics.includes(t))) return false;
+          if (myFilters.researchLevels.length > 0 && !myFilters.researchLevels.includes(String(e.researchLevel))) return false;
+          if (myFilters.people.length > 0 && !(e.people||[]).some(p => myFilters.people.includes(p))) return false;
+          if (myFilters.organizations.length > 0 && !(e.organizations||[]).some(o => myFilters.organizations.includes(o))) return false;
+          if (myFilters.dateFrom && e.date && new Date(e.date) < new Date(myFilters.dateFrom)) return false;
+          if (myFilters.dateTo && e.date && new Date(e.date) > new Date(myFilters.dateTo)) return false;
+          return true;
+        });
+      }, [myUploads, myFilters]);
+
+      const mySortedEvents = useMemo(() => [...myFiltered].sort((a,b) => {
+        if (!a.date && !b.date) return 0; if (!a.date) return 1; if (!b.date) return -1;
+        return new Date(b.date) - new Date(a.date);
+      }), [myFiltered]);
+
+      const myTimelineEvents = useMemo(() =>
+        myFiltered.filter(e => e.date).sort((a,b) => new Date(a.date) - new Date(b.date))
+      , [myFiltered]);
+
+      const myFilteredTopics = useMemo(() => {
+        const all = [...new Set(myUploads.flatMap(e => e.topics||[]))].sort();
+        return all.map(t => ({ name:t, count: myFiltered.filter(e => (e.topics||[]).includes(t)).length })).filter(t => t.count > 0);
+      }, [myUploads, myFiltered]);
+
+      const myFilteredPeople = useMemo(() => {
+        const all = [...new Set(myUploads.flatMap(e => e.people||[]))].sort();
+        return all.map(p => ({ name:p, count: myFiltered.filter(e => (e.people||[]).includes(p)).length })).filter(p => p.count > 0);
+      }, [myUploads, myFiltered]);
+
+      const myFilteredOrgs = useMemo(() => {
+        const all = [...new Set(myUploads.flatMap(e => e.organizations||[]))].sort();
+        return all.map(o => ({ name:o, count: myFiltered.filter(e => (e.organizations||[]).includes(o)).length })).filter(o => o.count > 0);
+      }, [myUploads, myFiltered]);
+
       // ── Network ──
       useEffect(() => {
         if (activeTab === 'network' && filteredEvents.length > 0) setTimeout(initNetwork, 100);
@@ -646,6 +694,43 @@
             }
           });
         }
+      };
+
+      // ── My Network (Account page) ──
+      useEffect(() => {
+        if (activeTab === 'account' && accountTab === 'uploads' && myPageTab === 'network' && myFiltered.length > 0)
+          setTimeout(initMyNetwork, 100);
+      }, [activeTab, accountTab, myPageTab, myFiltered]);
+
+      const initMyNetwork = () => {
+        const container = document.getElementById('my-network-graph');
+        if (!container) return;
+        const nodes = new vis.DataSet();
+        const edges = new vis.DataSet();
+        const eventsToShow = myFiltered.slice(0, 50);
+        eventsToShow.forEach(e => {
+          nodes.add({ id: e.id, label: (e.title||'Untitled').substring(0,40)+'...', color:{ background:'#60a5fa', border:'#3b82f6' }, title: e.title||'Untitled' });
+          (e.people||[]).forEach(p => {
+            if (!nodes.get('p-'+p)) nodes.add({ id:'p-'+p, label:p, shape:'box', color:{ background:'#a78bfa', border:'#8b5cf6' } });
+            edges.add({ from:e.id, to:'p-'+p, color:{ color:'#8b92b0' } });
+          });
+          (e.organizations||[]).forEach(o => {
+            if (!nodes.get('o-'+o)) nodes.add({ id:'o-'+o, label:o, shape:'diamond', color:{ background:'#10b981', border:'#059669' } });
+            edges.add({ from:e.id, to:'o-'+o, color:{ color:'#8b92b0' } });
+          });
+        });
+        const net = new vis.Network(container, { nodes, edges }, {
+          physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 } },
+          interaction:{ hover:true }
+        });
+        net.on('click', params => {
+          if (params.nodes.length > 0) {
+            const id = params.nodes[0];
+            if (id.startsWith('p-')) openEntityDetail('person', id.substring(2));
+            else if (id.startsWith('o-')) openEntityDetail('org', id.substring(2));
+            else { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, 'account'); }
+          }
+        });
       };
 
       // ── AI doc analysis ──
@@ -858,6 +943,22 @@
         a.click();
       };
 
+      const myExportCSV = () => {
+        const headers = ['ID','Title','Description','AI Summary','Date','Topics','People','Organizations','Research Level','Source'];
+        const rows = myFiltered.map(e => [e.id,e.title,e.description,e.aiSummary||'',e.date||'',(e.topics||[]).join('; '),(e.people||[]).join('; '),(e.organizations||[]).join('; '),e.researchLevel,e.sourceType]);
+        const csv = [headers,...rows].map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+        a.download = `my-uploads-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+      };
+      const myExportJSON = () => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify({events:myFiltered,metadata:data.metadata},null,2)],{type:'application/json'}));
+        a.download = `my-uploads-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      };
+
       // ── Shared filter props ──
       const filterProps = { filters, setFilters, data, activeTab, onSearch:applySearch, onClear:clearAllFilters, onExportCSV:exportToCSV, onExportJSON:exportToJSON };
 
@@ -1013,33 +1114,23 @@
       };
 
       // ── Account Page ──
-      // NOTE: accountTab + accFilters state lives in App scope to prevent reset on re-render
+      // NOTE: accountTab, myFilters, myPageTab all live in App scope to prevent reset on re-render
       const AccountPage = () => {
         const isAdminOrOwner = currentUser.role === 'admin' || currentUser.role === 'owner';
-        const myEventsAll = data.events.filter(e => e.uploadedBy === currentUser.username);
-        const myPublicCount = myEventsAll.filter(e => e.isPublic).length;
-        const myPrivateCount = myEventsAll.length - myPublicCount;
+        const myPublicCount = myUploads.filter(e => e.isPublic).length;
+        const myPrivateCount = myUploads.length - myPublicCount;
         const initials = currentUser.username.substring(0, 2).toUpperCase();
         const regUser = getRegisteredUsers().find(u => u.username === currentUser.username);
         const memberSince = regUser
           ? new Date(regUser.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
           : 'Built-in account';
-        const userTopics = [...new Set(myEventsAll.flatMap(e => e.topics||[]))].sort();
-        const userPeople = [...new Set(myEventsAll.flatMap(e => e.people||[]))].sort();
-        const userOrgs   = [...new Set(myEventsAll.flatMap(e => e.organizations||[]))].sort();
-        const myFiltered = myEventsAll.filter(e => {
-          if (accFilters.search) {
-            const s = accFilters.search.toLowerCase();
-            if (!(e.title||'').toLowerCase().includes(s) && !(e.description||'').toLowerCase().includes(s)) return false;
-          }
-          if (accFilters.topics.length > 0 && !(e.topics||[]).some(t => accFilters.topics.includes(t))) return false;
-          if (accFilters.people.length > 0 && !(e.people||[]).some(p => accFilters.people.includes(p))) return false;
-          if (accFilters.organizations.length > 0 && !(e.organizations||[]).some(o => accFilters.organizations.includes(o))) return false;
-          return true;
-        });
+        // Scoped data: only user's own topics/people/orgs appear in FiltersComponent checkboxes
+        const userTopics = [...new Set(myUploads.flatMap(e => e.topics||[]))].sort();
+        const userPeople = [...new Set(myUploads.flatMap(e => e.people||[]))].sort();
+        const userOrgs   = [...new Set(myUploads.flatMap(e => e.organizations||[]))].sort();
+        const accountScopedData = { ...data, topics: userTopics, people: userPeople, organizations: userOrgs };
+        const myFilterProps = { filters: myFilters, setFilters: setMyFilters, data: accountScopedData, activeTab: myPageTab, onSearch: applyMySearch, onClear: clearMyFilters, onExportCSV: myExportCSV, onExportJSON: myExportJSON };
         const statusLabel = s => s==='historical_record'?'Historical Record':s==='contested'?'Contested':'Unverified';
-        const hasFilters = accFilters.search || accFilters.topics.length || accFilters.people.length || accFilters.organizations.length;
-        const clearAccFilters = () => setAccFilters({ search: '', topics: [], people: [], organizations: [] });
         return (
           <div>
             {/* Profile card */}
@@ -1053,9 +1144,9 @@
                 <div style={{color:'#8b92b0',fontSize:'0.875rem',marginBottom:'1.25rem'}}>Member since: {memberSince}</div>
                 <div style={{display:'flex',gap:'2rem',flexWrap:'wrap'}}>
                   {[
-                    {label:'Total Uploads', value:myEventsAll.length, color:'#60a5fa'},
-                    {label:'Public',        value:myPublicCount,      color:'#10b981'},
-                    {label:'Private',       value:myPrivateCount,     color:'#9ca3af'},
+                    {label:'Total Uploads', value:myUploads.length, color:'#60a5fa'},
+                    {label:'Public',        value:myPublicCount,     color:'#10b981'},
+                    {label:'Private',       value:myPrivateCount,    color:'#9ca3af'},
                   ].map(s=>(
                     <div key={s.label} style={{textAlign:'center'}}>
                       <div style={{fontSize:'1.5rem',fontWeight:700,color:s.color,fontFamily:"'Space Mono',monospace"}}>{s.value}</div>
@@ -1075,101 +1166,138 @@
                 </button>
               )}
             </div>
-            {/* My Uploads — full filter panel scoped to user's own uploads */}
+            {/* My Uploads — Pages nav + FiltersComponent + page content, scoped to user's own uploads */}
             {accountTab === 'uploads' && (
               <div>
-                <div className="filters">
-                  <div className="filters-header">
-                    <div className="filters-title">Filters</div>
-                    {hasFilters && (
-                      <button className="btn btn-secondary" onClick={clearAccFilters} style={{padding:'0.5rem 1rem',fontSize:'0.8rem'}}>
-                        🗑️ Clear Filters
+                {/* Pages section */}
+                <div style={{marginBottom:'0'}}>
+                  <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600,marginBottom:'0.5rem',paddingLeft:'3rem'}}>Pages</div>
+                  <nav className="nav">
+                    {['timeline','network','spreadsheet','topics','people','organizations'].map(tab => (
+                      <button key={tab} className={`nav-btn ${myPageTab===tab?'active':''}`}
+                        onClick={() => setMyPageTab(tab)}>
+                        {tab==='timeline'?'📅':tab==='network'?'🔗':tab==='spreadsheet'?'📊':tab==='topics'?'🏷️':tab==='people'?'👤':'🏛️'}{' '}{tab.charAt(0).toUpperCase()+tab.slice(1)}
                       </button>
-                    )}
-                  </div>
-                  <div className="filter-row">
-                    <div className="filter-group">
-                      <label className="filter-label">Search</label>
-                      <input type="text" placeholder="Search your uploads…"
-                        value={accFilters.search}
-                        onChange={e => setAccFilters(prev => ({...prev, search: e.target.value}))} />
-                    </div>
-                  </div>
-                  {(userTopics.length > 0 || userPeople.length > 0 || userOrgs.length > 0) && (
-                    <div className="filter-row">
-                      {userTopics.length > 0 && (
-                        <div className="filter-group">
-                          <label className="filter-label">Topics</label>
-                          <div className="checkbox-grid">
-                            {userTopics.map(t => (
-                              <label key={t} className={`checkbox-label ${accFilters.topics.includes(t)?'checked':''}`}>
-                                <input type="checkbox" checked={accFilters.topics.includes(t)}
-                                  onChange={e => setAccFilters(prev => ({...prev, topics: e.target.checked ? [...prev.topics,t] : prev.topics.filter(x=>x!==t)}))} />
-                                {t}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {userPeople.length > 0 && (
-                        <div className="filter-group">
-                          <label className="filter-label">People</label>
-                          <div className="checkbox-grid">
-                            {userPeople.map(p => (
-                              <label key={p} className={`checkbox-label ${accFilters.people.includes(p)?'checked':''}`}>
-                                <input type="checkbox" checked={accFilters.people.includes(p)}
-                                  onChange={e => setAccFilters(prev => ({...prev, people: e.target.checked ? [...prev.people,p] : prev.people.filter(x=>x!==p)}))} />
-                                {p}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {userOrgs.length > 0 && (
-                        <div className="filter-group">
-                          <label className="filter-label">Organizations</label>
-                          <div className="checkbox-grid">
-                            {userOrgs.map(o => (
-                              <label key={o} className={`checkbox-label ${accFilters.organizations.includes(o)?'checked':''}`}>
-                                <input type="checkbox" checked={accFilters.organizations.includes(o)}
-                                  onChange={e => setAccFilters(prev => ({...prev, organizations: e.target.checked ? [...prev.organizations,o] : prev.organizations.filter(x=>x!==o)}))} />
-                                {o}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    ))}
+                    <button className="nav-btn" onClick={() => setActiveTab('upload')}>
+                      📤 Upload
+                    </button>
+                  </nav>
                 </div>
-                {myFiltered.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-state-icon">📂</div>
-                    <p>{myEventsAll.length === 0 ? 'No uploads yet — go to the Upload tab to add files or URLs.' : 'No uploads match your filters.'}</p>
+
+                {/* Full FiltersComponent scoped to user's uploads */}
+                <FiltersComponent {...myFilterProps} />
+
+                {/* Timeline */}
+                {myPageTab === 'timeline' && (
+                  <div className="timeline-wrapper">
+                    <div className="timeline-container">
+                      <div className="timeline-line"></div>
+                      <div className="timeline-events">
+                        {myTimelineEvents.length === 0 ? (
+                          <div className="empty-state"><div className="empty-state-icon">📅</div><p>{myUploads.length===0?'No uploads yet — go to Upload to add events.':'No dated events match your filters.'}</p></div>
+                        ) : myTimelineEvents.map((e,index) => {
+                          const dateStr = String(e.date||'');
+                          const year = dateStr.length>=4 ? dateStr.substring(0,4) : '?';
+                          const prevYear = index>0 ? String(myTimelineEvents[index-1].date||'').substring(0,4) : null;
+                          const showYear = index===0 || year!==prevYear;
+                          return (
+                            <div key={e.id} className={`timeline-event ${e.isMajorEvent?'major':''}`} onClick={()=>openEventModal(e,'account')}>
+                              {showYear && <div className="timeline-year">{year}</div>}
+                              <div className="timeline-icon">{e.isMajorEvent?'⭐':'📌'}</div>
+                              <div className="timeline-label">{(e.title||'').substring(0,28)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                ) : (
+                )}
+
+                {/* Network */}
+                {myPageTab === 'network' && (
+                  <div className="network">
+                    <div id="my-network-graph" style={{width:'100%',height:'100%',borderRadius:'16px'}}></div>
+                  </div>
+                )}
+
+                {/* Spreadsheet */}
+                {myPageTab === 'spreadsheet' && (
                   <div className="spreadsheet">
                     <table className="table">
-                      <thead>
-                        <tr><th>Title</th><th>Status</th><th>Visibility</th><th>Type</th><th>Date</th><th>Topics</th></tr>
-                      </thead>
+                      <thead><tr><th>ID</th><th>Title</th><th>AI Summary</th><th>Topics</th><th>Level</th><th>Date</th><th>Status</th><th>Visibility</th></tr></thead>
                       <tbody>
-                        {myFiltered.slice().reverse().map(e=>(
-                          <tr key={e.id} style={{cursor:'pointer'}}>
-                            <td onClick={()=>openEventModal(e,'account')} style={{fontWeight:600,color:'#e0e6ed'}}>{e.title}</td>
+                        {mySortedEvents.length === 0 ? (
+                          <tr><td colSpan="8" style={{textAlign:'center',padding:'2rem',color:'#8b92b0'}}>No events match your filters.</td></tr>
+                        ) : mySortedEvents.map(e=>(
+                          <tr key={e.id} onClick={()=>openEventModal(e,'account')} style={{cursor:'pointer'}}>
+                            <td>{e.id}</td>
+                            <td style={{fontWeight:600}}>{e.title}</td>
+                            <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{e.aiSummary?(e.aiSummary.substring(0,80)+'...'):'—'}</td>
+                            <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
+                            <td><span className={`level-${e.researchLevel}`}>L{e.researchLevel}</span></td>
+                            <td>{e.date||'—'}</td>
                             <td><span className={`status-${e.eventStatus||'unverified'}`}>{statusLabel(e.eventStatus)}</span></td>
                             <td>
-                              <button onClick={()=>toggleEventPublic(e.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0}}>
+                              <button onClick={ev=>{ev.stopPropagation();toggleEventPublic(e.id);}} style={{background:'none',border:'none',cursor:'pointer',padding:0}}>
                                 <span className={e.isPublic?'vis-public':'vis-private'}>{e.isPublic?'🌐 Public':'🔒 Private'}</span>
                               </button>
                             </td>
-                            <td><span style={{padding:'0.2rem 0.55rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',fontSize:'0.75rem',color:'#60a5fa'}}>{e.sourceType}</span></td>
-                            <td style={{color:'#8b92b0',fontSize:'0.85rem'}}>{e.dateUploaded||'—'}</td>
-                            <td style={{color:'#8b92b0',fontSize:'0.85rem'}}>{(e.topics||[]).slice(0,2).join(', ')}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {/* Topics */}
+                {myPageTab === 'topics' && (
+                  <div className="grid">
+                    {myFilteredTopics.length===0 ? <div className="empty-state"><div className="empty-state-icon">🏷️</div><p>No topics in your uploads yet.</p></div> :
+                    myFilteredTopics.map(t=>{
+                      const relEvents = myFiltered.filter(e=>(e.topics||[]).includes(t.name)).slice(0,3);
+                      return (
+                        <div key={t.name} className="card" onClick={()=>openEntityDetail('topic',t.name)}>
+                          <div className="card-title">{t.name}</div>
+                          <div className="card-count">{t.count} event{t.count!==1?'s':''} →</div>
+                          <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* People */}
+                {myPageTab === 'people' && (
+                  <div className="grid">
+                    {myFilteredPeople.length===0 ? <div className="empty-state"><div className="empty-state-icon">👤</div><p>No people in your uploads yet.</p></div> :
+                    myFilteredPeople.map(p=>{
+                      const relEvents = myFiltered.filter(e=>(e.people||[]).includes(p.name)).slice(0,3);
+                      return (
+                        <div key={p.name} className="card" onClick={()=>openEntityDetail('person',p.name)}>
+                          <div className="card-title">{p.name}</div>
+                          <div className="card-count">{p.count} event{p.count!==1?'s':''} →</div>
+                          <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Organizations */}
+                {myPageTab === 'organizations' && (
+                  <div className="grid">
+                    {myFilteredOrgs.length===0 ? <div className="empty-state"><div className="empty-state-icon">🏛️</div><p>No organizations in your uploads yet.</p></div> :
+                    myFilteredOrgs.map(o=>{
+                      const relEvents = myFiltered.filter(e=>(e.organizations||[]).includes(o.name)).slice(0,3);
+                      return (
+                        <div key={o.name} className="card" onClick={()=>openEntityDetail('org',o.name)}>
+                          <div className="card-title">{o.name}</div>
+                          <div className="card-count">{o.count} event{o.count!==1?'s':''} →</div>
+                          <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1410,13 +1538,16 @@
             <span className="save-status">{saveStatus}</span>
           </div>
 
-          <nav className="nav">
-            {TABS.map(tab=>(
-              <button key={tab} className={`nav-btn ${activeTab===tab?'active':''}`} onClick={()=>navigateToTab(tab)}>
-                {tab.charAt(0).toUpperCase()+tab.slice(1)}
-              </button>
-            ))}
-          </nav>
+          <div style={{marginBottom:'0'}}>
+            <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600,marginBottom:'0.5rem',paddingLeft:'3rem',paddingTop:'1rem',background:'rgba(21,25,50,0.4)'}}>Pages</div>
+            <nav className="nav" style={{paddingTop:'0.75rem'}}>
+              {TABS.map(tab=>(
+                <button key={tab} className={`nav-btn ${activeTab===tab?'active':''}`} onClick={()=>navigateToTab(tab)}>
+                  {tab.charAt(0).toUpperCase()+tab.slice(1)}
+                </button>
+              ))}
+            </nav>
+          </div>
 
           <main className="content">
             {uploadMessage && <div className={uploadMessage.includes('❌')||uploadMessage.includes('⚠️')?'error-msg':'success-msg'}>{uploadMessage}</div>}
