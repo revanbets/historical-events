@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+sqlalchemy
+pdfplumber
+python-docx
+pandas
+openpyxl
+Pillow
+pytesseract
+anthropic
+python-dotenv

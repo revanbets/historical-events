@@ -808,12 +808,51 @@
               extractedText = await file.text();
               newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
               eventId++;
-            } else if (file.name.endsWith('.pdf')) {
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.pdf',''), description:`PDF document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['PDF Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded PDF', sourceSheet:file.name, connections:[], aiSummary:'PDF document uploaded - text extraction pending.', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
-              eventId++;
-            } else if (file.name.endsWith('.docx')) {
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.docx',''), description:`Word document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Word Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Word', sourceSheet:file.name, connections:[], aiSummary:'Word document uploaded - text extraction pending.', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
-              eventId++;
+            } else if (/\.(pdf|docx?|png|jpe?g|gif|bmp|tiff|webp)$/i.test(file.name)) {
+              // Send to backend for real text extraction
+              try {
+                const formData = new FormData();
+                formData.append('files', file);
+                const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+                if (resp.ok) {
+                  const result = await resp.json();
+                  for (const rec of (result.records || [])) {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    const typeLabel = {pdf:'PDF',doc:'Word',docx:'Word',png:'Image',jpg:'Image',jpeg:'Image',gif:'Image',bmp:'Image',tiff:'Image',webp:'Image'}[ext] || 'Document';
+                    extractedText = rec.extracted_text || '';
+                    newEvents.push({
+                      id:`EVT-${String(eventId).padStart(4,'0')}`,
+                      title: file.name.replace(/\.[^.]+$/, ''),
+                      description: (rec.extracted_text || '').substring(0, 500),
+                      date: new Date().toISOString().split('T')[0],
+                      dateUploaded: new Date().toISOString().split('T')[0],
+                      topics: [typeLabel + ' Document'],
+                      people: [], organizations: [], links: [],
+                      researchLevel: 1,
+                      sourceType: 'Uploaded ' + typeLabel,
+                      sourceSheet: file.name,
+                      connections: [],
+                      aiSummary: rec.status === 'pending' ? 'Text extracted — click Analyze to run AI analysis.' : (rec.summary || ''),
+                      isMajorEvent: false,
+                      uploadedBy: currentUser ? currentUser.username : 'unknown',
+                      isPublic: false, eventStatus: 'unverified',
+                      _backendId: rec.id
+                    });
+                    eventId++;
+                  }
+                } else {
+                  // Fallback: create stub event if backend is unavailable
+                  const ext = file.name.split('.').pop().toLowerCase();
+                  const typeLabel = ext === 'pdf' ? 'PDF' : ext.startsWith('doc') ? 'Word' : 'Image';
+                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - backend unavailable for extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+                  eventId++;
+                }
+              } catch(fetchErr) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                const typeLabel = ext === 'pdf' ? 'PDF' : ext.startsWith('doc') ? 'Word' : 'Image';
+                newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - server not running. Start the backend to enable extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+                eventId++;
+              }
             }
             if (extractedText && newEvents.length > 0) {
               const analysis = analyzeDocument(extractedText);
@@ -999,10 +1038,8 @@
       );
 
       // ── Modal ──
-      const ModalView = () => {
-        // Build breadcrumb path: Notion/ClickUp style — full path shown inside modal
-        const tabLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
-        const modalCrumbs = selectedEntity
+      const modalTabLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+      const modalCrumbs = selectedEntity
           ? [
               { label: '🏠 Home', action: () => { setShowModal(false); setSelectedEntity(null); setBreadcrumbs([]); setActiveTab('timeline'); } },
               ...breadcrumbs.map((b, i) => ({ label: b.label, action: () => { setShowModal(false); goToBreadcrumb(i); } })),
@@ -1010,9 +1047,9 @@
             ]
           : [
               { label: '🏠 Home', action: () => { setShowModal(false); navigateToTab('timeline'); } },
-              { label: tabLabel, action: () => setShowModal(false) }
+              { label: modalTabLabel, action: () => setShowModal(false) }
             ];
-        return (
+      const modalViewJSX = (!showModal || !modalData || !currentUser) ? null : (
         <div className="modal" onClick={()=>setShowModal(false)}>
           <div className="modal-content" onClick={e=>e.stopPropagation()}>
             {/* Breadcrumb trail inside modal — always visible, Notion/ClickUp style */}
@@ -1110,8 +1147,7 @@
             )}
           </div>
         </div>
-        );
-      };
+      );
 
       // ── Account Page ──
       // NOTE: accountTab, myFilters, myPageTab all live in App scope to prevent reset on re-render
@@ -1438,7 +1474,7 @@
             <main className="content">
               <AccountPage />
             </main>
-            {showModal && modalData && <ModalView />}
+            {showModal && modalData && modalViewJSX}
           </div>
         );
       }
@@ -1497,7 +1533,7 @@
                 ))}
               </div>
             </main>
-            {showModal && modalData && <ModalView />}
+            {showModal && modalData && modalViewJSX}
           </div>
         );
       }
@@ -1694,12 +1730,15 @@
                         <button className="btn btn-primary" onClick={handleUrlSubmit}>Add URL</button>
                       </div>
                     </div>
-                    <input ref={fileInputRef} type="file" style={{display:'none'}} multiple accept=".xlsx,.xls,.csv,.txt,.pdf,.docx" onChange={handleFileUpload} />
+                    <input ref={fileInputRef} type="file" style={{display:'none'}} multiple accept=".xlsx,.xls,.csv,.txt,.pdf,.docx,.doc,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" onChange={handleFileUpload} />
                     <div className="upload" onClick={()=>fileInputRef.current.click()}>
                       <div className="upload-icon">🚀</div>
                       <h2 style={{fontSize:'1.75rem',marginBottom:'1rem'}}>Upload Documents</h2>
                       <p style={{fontSize:'1.125rem',marginBottom:'0.5rem',color:'#a78bfa'}}>AI-powered analysis & auto-tagging</p>
                       <p style={{fontSize:'0.875rem',color:'#8b92b0'}}>Excel · CSV · TXT · PDF · Word (.docx)</p>
+                    </div>
+                    <div style={{margin:'1rem 0'}}>
+                      <button onClick={()=>{ fetch('/api/analyze-all').then(r=>r.json()).then(d=>alert('Analysis Started — '+d.analyzed+' document(s) analyzed, '+d.errors+' error(s)')).catch(()=>alert('Analysis Started — server may be offline')); }} style={{width:'100%',padding:'1rem 2rem',fontSize:'1.125rem',fontWeight:700,color:'#fff',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'12px',cursor:'pointer',fontFamily:'inherit'}}>🧠 Start AI Analysis</button>
                     </div>
                     <div style={{background:'rgba(26,31,58,0.6)',padding:'2.5rem',borderRadius:'16px',border:'2px solid rgba(61,69,99,0.5)'}}>
                       <h3 style={{marginBottom:'1.5rem',color:'#60a5fa',fontSize:'1.5rem'}}>🤖 AI Analysis Features</h3>
@@ -1724,7 +1763,7 @@
 
           </main>
 
-          {showModal && modalData && <ModalView />}
+          {showModal && modalData && modalViewJSX}
 
           {isProcessing && (
             <div className="processing-overlay">

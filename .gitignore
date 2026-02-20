@@ -1,0 +1,16 @@
+# Environment & secrets
+analysis/.env
+
+# Uploaded files & extracted text
+analysis/uploads/
+analysis/pending_analysis/
+
+# Database
+analysis/knowledge_base.db
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
