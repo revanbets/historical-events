@@ -449,6 +449,9 @@
       const [isNetworkFullscreen, setIsNetworkFullscreen] = useState(false);
       const [isProcessing, setIsProcessing] = useState(false);
       const [uploadTab, setUploadTab] = useState('new');
+      const [selectedForAnalysis, setSelectedForAnalysis] = useState(new Set());
+      const [recentHoursFilter, setRecentHoursFilter] = useState(24);
+      const [autoAnalysis, setAutoAnalysis] = useState(false);
       // Breadcrumb: array of {label, action}
       const [breadcrumbs, setBreadcrumbs] = useState([]);
       const fileInputRef = useRef(null);
@@ -596,6 +599,13 @@
       const filteredOrganizations = useMemo(() =>
         (data.organizations||[]).map(o => ({ name:o, count: filteredEvents.filter(e => (e.organizations||[]).includes(o)).length })).filter(o => o.count > 0)
       , [data.organizations, filteredEvents]);
+
+      const recentUploads = useMemo(() => {
+        const cutoff = new Date(Date.now() - recentHoursFilter * 60 * 60 * 1000);
+        return visibleEvents
+          .filter(e => e.dateUploaded && new Date(e.dateUploaded) >= cutoff)
+          .sort((a, b) => new Date(b.dateUploaded) - new Date(a.dateUploaded));
+      }, [visibleEvents, recentHoursFilter]);
 
       const myUploads = useMemo(() =>
         data.events.filter(e => e.uploadedBy === (currentUser ? currentUser.username : '__none__'))
@@ -773,7 +783,7 @@
                           title: row.title||row.Title||row.TITLE||`Uploaded: ${file.name}`,
                           description: row.description||row.Description||row.Abstract||'',
                           date: row.date||row.Date||row.year||null,
-                          dateUploaded: new Date().toISOString().split('T')[0],
+                          dateUploaded: new Date().toISOString(),
                           topics: (row.topics||row.Topics||sheetName).toString().split(/[,;/]/).map(t=>t.trim()).filter(t=>t),
                           people: (row.writer||row.inventor||row.people||'').toString().split(/[,;]/).map(p=>p.trim()).filter(p=>p),
                           organizations: (row.publisher||row.company||row.organization||'').toString().split(/[,;/]/).map(o=>o.trim()).filter(o=>o),
@@ -800,13 +810,13 @@
                   const vals = lines[i].split(',');
                   const row = {};
                   headers.forEach((h,idx)=>{ row[h]=vals[idx]?.trim()||''; });
-                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString().split('T')[0], topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString(), topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
                   eventId++;
                 }
               }
             } else if (file.name.endsWith('.txt')) {
               extractedText = await file.text();
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
               eventId++;
             } else if (/\.(pdf|docx?|png|jpe?g|gif|bmp|tiff|webp)$/i.test(file.name)) {
               // Send to backend for real text extraction
@@ -819,24 +829,31 @@
                   for (const rec of (result.records || [])) {
                     const ext = file.name.split('.').pop().toLowerCase();
                     const typeLabel = {pdf:'PDF',doc:'Word',docx:'Word',png:'Image',jpg:'Image',jpeg:'Image',gif:'Image',bmp:'Image',tiff:'Image',webp:'Image'}[ext] || 'Document';
-                    extractedText = rec.extracted_text || '';
+                    // Clean description: skip URLs, nav junk, take first meaningful sentences
+                    const rawText = rec.extracted_text || '';
+                    const cleanLines = rawText.split('\n').filter(l => {
+                      const t = l.trim();
+                      return t.length > 20 && !t.startsWith('http') && !/^(Share|Save|Click here|Recommended Stories|list of|list \d|end of list)/i.test(t);
+                    });
+                    const cleanDesc = cleanLines.slice(0, 3).join(' ').substring(0, 500);
                     newEvents.push({
                       id:`EVT-${String(eventId).padStart(4,'0')}`,
                       title: file.name.replace(/\.[^.]+$/, ''),
-                      description: (rec.extracted_text || '').substring(0, 500),
+                      description: cleanDesc || `${typeLabel} document uploaded: ${file.name}`,
                       date: new Date().toISOString().split('T')[0],
-                      dateUploaded: new Date().toISOString().split('T')[0],
+                      dateUploaded: new Date().toISOString(),
                       topics: [typeLabel + ' Document'],
                       people: [], organizations: [], links: [],
                       researchLevel: 1,
                       sourceType: 'Uploaded ' + typeLabel,
                       sourceSheet: file.name,
                       connections: [],
-                      aiSummary: rec.status === 'pending' ? 'Text extracted — click Analyze to run AI analysis.' : (rec.summary || ''),
+                      aiSummary: 'Text extracted — select and click "Analyze Selected" for AI analysis.',
                       isMajorEvent: false,
                       uploadedBy: currentUser ? currentUser.username : 'unknown',
                       isPublic: false, eventStatus: 'unverified',
-                      _backendId: rec.id
+                      _backendId: rec.id,
+                      _hasBackend: true
                     });
                     eventId++;
                   }
@@ -844,17 +861,18 @@
                   // Fallback: create stub event if backend is unavailable
                   const ext = file.name.split('.').pop().toLowerCase();
                   const typeLabel = ext === 'pdf' ? 'PDF' : ext.startsWith('doc') ? 'Word' : 'Image';
-                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - backend unavailable for extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - backend unavailable for extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
                   eventId++;
                 }
               } catch(fetchErr) {
                 const ext = file.name.split('.').pop().toLowerCase();
                 const typeLabel = ext === 'pdf' ? 'PDF' : ext.startsWith('doc') ? 'Word' : 'Image';
-                newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString().split('T')[0], topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - server not running. Start the backend to enable extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+                newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - server not running. Start the backend to enable extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
                 eventId++;
               }
             }
-            if (extractedText && newEvents.length > 0) {
+            if (extractedText && newEvents.length > 0 && !newEvents[newEvents.length-1]._hasBackend) {
+              // Only run client-side analysis for non-backend files (Excel, CSV, TXT)
               const analysis = analyzeDocument(extractedText);
               const last = newEvents[newEvents.length-1];
               last.aiSummary = analysis.summary;
@@ -873,8 +891,44 @@
               metadata:{...data.metadata, totalEvents:data.events.length+newEvents.length, lastUpdated:new Date().toISOString()}
             };
             setData(updated);
+            // Auto AI Analysis: trigger backend analysis and sync results back
+            if (autoAnalysis) {
+              const toAnalyze = newEvents.filter(e => e._backendId);
+              if (toAnalyze.length > 0) {
+                setUploadMessage(`✓ Uploaded ${newEvents.length} event(s) — analyzing ${toAnalyze.length} with AI...`);
+                (async () => {
+                  for (const evt of toAnalyze) {
+                    try {
+                      const resp = await fetch(`/api/analyze/${evt._backendId}`, { method: 'POST' });
+                      if (resp.ok) {
+                        const result = await resp.json();
+                        const rec = result.record;
+                        if (rec) {
+                          setData(prev => ({
+                            ...prev,
+                            events: prev.events.map(e => e.id === evt.id ? {
+                              ...e,
+                              aiSummary: rec.summary || e.aiSummary,
+                              description: rec.summary || e.description,
+                              topics: rec.topics && rec.topics.length > 0 ? rec.topics : e.topics,
+                              people: rec.people && rec.people.length > 0 ? rec.people : e.people,
+                              organizations: rec.organizations && rec.organizations.length > 0 ? rec.organizations : e.organizations,
+                            } : e),
+                            people: Array.from(new Set([...prev.people, ...(rec.people||[])])).sort(),
+                            organizations: Array.from(new Set([...prev.organizations, ...(rec.organizations||[])])).sort(),
+                            topics: Array.from(new Set([...prev.topics, ...(rec.topics||[])])).sort(),
+                          }));
+                        }
+                      }
+                    } catch(err) {}
+                  }
+                  setUploadMessage(`✓ AI Analysis complete for ${toAnalyze.length} document(s).`);
+                  setTimeout(()=>setUploadMessage(''),5000);
+                })();
+              }
+            }
             setIsProcessing(false);
-            setUploadMessage(`✓ Successfully uploaded ${newEvents.length} event(s)!`);
+            if (!autoAnalysis) setUploadMessage(`✓ Successfully uploaded ${newEvents.length} event(s)!`);
             openEventModal(newEvents[0], 'upload');
             setTimeout(()=>setUploadMessage(''),5000);
           } else { setIsProcessing(false); setUploadMessage('⚠️ No valid data found'); setTimeout(()=>setUploadMessage(''),3000); }
@@ -893,7 +947,7 @@
             title:`${isVideo?'Video':'Web'} Link: ${urlInput}`,
             description:`Content from ${urlInput}`,
             date:new Date().toISOString().split('T')[0],
-            dateUploaded:new Date().toISOString().split('T')[0],
+            dateUploaded:new Date().toISOString(),
             topics:[isVideo?'Video Content':'Web Link'],
             people:[], organizations:[],
             links:[urlInput], researchLevel:1,
@@ -1026,7 +1080,7 @@
                         </button>
                       </td>
                       <td><span style={{padding:'0.25rem 0.6rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',fontSize:'0.75rem',color:'#60a5fa'}}>{e.sourceType}</span></td>
-                      <td>{e.dateUploaded||'—'}</td>
+                      <td>{e.dateUploaded ? new Date(e.dateUploaded).toLocaleDateString() : '—'}</td>
                       <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
                     </tr>
                   ))}
@@ -1737,17 +1791,109 @@
                       <p style={{fontSize:'1.125rem',marginBottom:'0.5rem',color:'#a78bfa'}}>AI-powered analysis & auto-tagging</p>
                       <p style={{fontSize:'0.875rem',color:'#8b92b0'}}>Excel · CSV · TXT · PDF · Word (.docx)</p>
                     </div>
-                    <div style={{margin:'1rem 0'}}>
-                      <button onClick={()=>{ fetch('/api/analyze-all').then(r=>r.json()).then(d=>alert('Analysis Started — '+d.analyzed+' document(s) analyzed, '+d.errors+' error(s)')).catch(()=>alert('Analysis Started — server may be offline')); }} style={{width:'100%',padding:'1rem 2rem',fontSize:'1.125rem',fontWeight:700,color:'#fff',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'12px',cursor:'pointer',fontFamily:'inherit'}}>🧠 Start AI Analysis</button>
+                    {/* ── AI Analysis Controls ── */}
+                    <div style={{display:'flex',gap:'0.75rem',margin:'1rem 0',flexWrap:'wrap',alignItems:'center'}}>
+                      <button onClick={()=>setAutoAnalysis(!autoAnalysis)} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:autoAnalysis?'linear-gradient(135deg,#10b981,#059669)':'rgba(61,69,99,0.5)',border:autoAnalysis?'2px solid #10b981':'2px solid rgba(61,69,99,0.5)',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit',transition:'all 0.2s'}}>
+                        {autoAnalysis ? '✓ Auto AI Analysis: ON' : '⚡ Auto AI Analysis: OFF'}
+                      </button>
+                      <button onClick={async ()=>{
+                        const selected = [...selectedForAnalysis].map(evtId => {
+                          const evt = recentUploads.find(e => e.id === evtId);
+                          return evt ? { evtId, backendId: evt._backendId } : null;
+                        }).filter(x => x && x.backendId);
+                        if (selected.length === 0) { alert('Select documents with backend records first (PDF, Word, or Image uploads).'); return; }
+                        setUploadMessage(`Analyzing ${selected.length} document(s) with AI...`);
+                        let successCount = 0;
+                        for (const { evtId, backendId } of selected) {
+                          try {
+                            const resp = await fetch(`/api/analyze/${backendId}`, { method: 'POST' });
+                            if (resp.ok) {
+                              const result = await resp.json();
+                              const rec = result.record;
+                              if (rec) {
+                                setData(prev => ({
+                                  ...prev,
+                                  events: prev.events.map(e => e.id === evtId ? {
+                                    ...e,
+                                    aiSummary: rec.summary || e.aiSummary,
+                                    description: rec.summary || e.description,
+                                    topics: rec.topics && rec.topics.length > 0 ? rec.topics : e.topics,
+                                    people: rec.people && rec.people.length > 0 ? rec.people : e.people,
+                                    organizations: rec.organizations && rec.organizations.length > 0 ? rec.organizations : e.organizations,
+                                  } : e),
+                                  people: Array.from(new Set([...prev.people, ...(rec.people||[])])).sort(),
+                                  organizations: Array.from(new Set([...prev.organizations, ...(rec.organizations||[])])).sort(),
+                                  topics: Array.from(new Set([...prev.topics, ...(rec.topics||[])])).sort(),
+                                }));
+                                successCount++;
+                              }
+                            }
+                          } catch(err) {}
+                        }
+                        setSelectedForAnalysis(new Set());
+                        setUploadMessage(`✓ AI Analysis complete: ${successCount} of ${selected.length} document(s) analyzed.`);
+                        setTimeout(()=>setUploadMessage(''),5000);
+                      }} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit'}}>
+                        🧠 Analyze Selected ({selectedForAnalysis.size})
+                      </button>
                     </div>
-                    <div style={{background:'rgba(26,31,58,0.6)',padding:'2.5rem',borderRadius:'16px',border:'2px solid rgba(61,69,99,0.5)'}}>
-                      <h3 style={{marginBottom:'1.5rem',color:'#60a5fa',fontSize:'1.5rem'}}>🤖 AI Analysis Features</h3>
-                      <ul style={{color:'#8b92b0',lineHeight:2,listStyle:'none'}}>
-                        <li>✓ Auto-extract topics, people, organizations, dates</li>
-                        <li>✓ Generate AI summaries for every document</li>
-                        <li>✓ Video/audio transcription with chapter markers</li>
-                        <li>✓ Smart categorization across all file types</li>
-                      </ul>
+
+                    {/* ── Recent Uploads Section ── */}
+                    <div style={{background:'rgba(26,31,58,0.6)',padding:'1.5rem',borderRadius:'16px',border:'2px solid rgba(61,69,99,0.5)',marginTop:'0.5rem'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem',flexWrap:'wrap',gap:'0.75rem'}}>
+                        <h3 style={{color:'#60a5fa',fontSize:'1.25rem',margin:0}}>📋 Recent Uploads</h3>
+                        <div style={{display:'flex',gap:'0.75rem',alignItems:'center'}}>
+                          <label style={{color:'#8b92b0',fontSize:'0.85rem'}}>Last</label>
+                          <select value={recentHoursFilter} onChange={e=>setRecentHoursFilter(Number(e.target.value))} style={{background:'rgba(16,20,40,0.8)',color:'#e0e6ed',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',padding:'0.4rem 0.6rem',fontSize:'0.85rem',fontFamily:'inherit'}}>
+                            <option value={1}>1 hour</option>
+                            <option value={3}>3 hours</option>
+                            <option value={12}>12 hours</option>
+                            <option value={24}>24 hours</option>
+                          </select>
+                          <button onClick={()=>{
+                            if (selectedForAnalysis.size === recentUploads.length) setSelectedForAnalysis(new Set());
+                            else setSelectedForAnalysis(new Set(recentUploads.map(e=>e.id)));
+                          }} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#a78bfa',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit'}}>
+                            {selectedForAnalysis.size === recentUploads.length && recentUploads.length > 0 ? 'Deselect All' : 'Select All'}
+                          </button>
+                        </div>
+                      </div>
+                      {recentUploads.length === 0 ? (
+                        <div style={{textAlign:'center',padding:'2rem',color:'#8b92b0'}}>No uploads in the last {recentHoursFilter} hour{recentHoursFilter!==1?'s':''}.</div>
+                      ) : (
+                        <div className="spreadsheet" style={{maxHeight:'400px',overflowY:'auto'}}>
+                          <table className="table">
+                            <thead><tr>
+                              <th style={{width:'40px'}}></th>
+                              <th>ID</th>
+                              <th>Title</th>
+                              <th>AI Summary</th>
+                              <th>Topics</th>
+                              <th>Level</th>
+                              <th>Uploaded</th>
+                              <th>Source</th>
+                            </tr></thead>
+                            <tbody>
+                              {recentUploads.map(e=>(
+                                <tr key={e.id} style={{cursor:'pointer'}} onClick={()=>openEventModal(e,'upload')}>
+                                  <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
+                                    <input type="checkbox" checked={selectedForAnalysis.has(e.id)} onChange={()=>{
+                                      setSelectedForAnalysis(prev=>{const n=new Set(prev); n.has(e.id)?n.delete(e.id):n.add(e.id); return n;});
+                                    }} style={{width:'16px',height:'16px',cursor:'pointer',accentColor:'#7c3aed'}} />
+                                  </td>
+                                  <td>{e.id}</td>
+                                  <td style={{fontWeight:600}}>{e.title}</td>
+                                  <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{e.aiSummary?(e.aiSummary.substring(0,80)+'...'):'—'}</td>
+                                  <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
+                                  <td><span className={`level-${e.researchLevel}`}>L{e.researchLevel}</span></td>
+                                  <td style={{fontSize:'0.8rem'}}>{e.dateUploaded ? new Date(e.dateUploaded).toLocaleString() : '—'}</td>
+                                  <td>{e.sourceType}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : (
