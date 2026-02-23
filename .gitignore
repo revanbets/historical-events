@@ -1,5 +1,7 @@
 # Environment & secrets
-analysis/.env
+.env
+*.env
+.env.*
 
 # Uploaded files & extracted text
 analysis/uploads/
