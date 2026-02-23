@@ -10,3 +10,10 @@ Pillow
 pytesseract
 anthropic
 python-dotenv
+yt-dlp
+youtube-transcript-api
+opencv-python
+trafilatura
+beautifulsoup4
+requests
+openai-whisper

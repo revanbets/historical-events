@@ -24,8 +24,24 @@ class AnalyzedContent(Base):
     topics = Column(Text, default="[]")          # JSON array
     people = Column(Text, default="[]")          # JSON array
     organizations = Column(Text, default="[]")   # JSON array
+    description = Column(Text, default="")         # AI bullet points
+    source = Column(Text, default="")              # Publisher/outlet
+    primary_source = Column(Text, default="")      # Original source of info
+    main_link = Column(Text, default="")           # Canonical URL
+    saved_filename = Column(Text, default="")      # Filename in uploads/ dir
     timestamp = Column(Text, default="")
-    status = Column(Text, default="pending")     # pending | analyzed | error
+    status = Column(Text, default="pending")       # pending | analyzed | error
+    # URL/Video fields
+    source_url = Column(Text, default="")            # Original URL submitted
+    content_type = Column(Text, default="file")      # file | video | web
+    transcript = Column(Text, default="")             # Video transcript text
+    visual_content = Column(Text, default="")         # AI description of visual frames
+    video_metadata = Column(Text, default="{}")       # JSON: title, channel, duration, etc.
+    frames_data = Column(Text, default="[]")          # JSON: list of saved frame filenames
+    attachments = Column(Text, default="[]")           # JSON: user-uploaded attachments
+    transcript_file = Column(Text, default="")         # Saved transcript filename
+    analysis_mode = Column(Text, default="")           # fast|quick|short|long
+    has_frames = Column(Integer, default=0)            # 1 if frames were captured
 
     def to_dict(self):
         return {
@@ -34,11 +50,26 @@ class AnalyzedContent(Base):
             "file_type": self.file_type,
             "summary": self.summary,
             "extracted_text": self.extracted_text,
+            "description": self.description,
             "topics": json.loads(self.topics) if self.topics else [],
             "people": json.loads(self.people) if self.people else [],
             "organizations": json.loads(self.organizations) if self.organizations else [],
+            "source": self.source,
+            "primary_source": self.primary_source,
+            "main_link": self.main_link,
+            "saved_filename": self.saved_filename,
             "timestamp": self.timestamp,
             "status": self.status,
+            "source_url": self.source_url or "",
+            "content_type": self.content_type or "file",
+            "transcript": self.transcript or "",
+            "visual_content": self.visual_content or "",
+            "video_metadata": json.loads(self.video_metadata) if self.video_metadata else {},
+            "frames_data": json.loads(self.frames_data) if self.frames_data else [],
+            "attachments": json.loads(self.attachments) if self.attachments else [],
+            "transcript_file": self.transcript_file or "",
+            "analysis_mode": self.analysis_mode or "",
+            "has_frames": bool(self.has_frames) if self.has_frames else False,
         }
 
 
@@ -46,13 +77,14 @@ def init_db():
     Base.metadata.create_all(engine)
 
 
-def insert_record(file_name: str, file_type: str, extracted_text: str) -> int:
+def insert_record(file_name: str, file_type: str, extracted_text: str, saved_filename: str = "") -> int:
     session = SessionLocal()
     try:
         record = AnalyzedContent(
             file_name=file_name,
             file_type=file_type,
             extracted_text=extracted_text,
+            saved_filename=saved_filename,
             timestamp=datetime.now(timezone.utc).isoformat(),
             status="pending",
         )
@@ -71,7 +103,9 @@ def update_record(record_id: int, **kwargs):
         if not record:
             return None
         for key, value in kwargs.items():
-            if key in ("topics", "people", "organizations") and isinstance(value, list):
+            if key in ("topics", "people", "organizations", "frames_data", "attachments") and isinstance(value, list):
+                value = json.dumps(value)
+            if key in ("video_metadata",) and isinstance(value, dict):
                 value = json.dumps(value)
             setattr(record, key, value)
         session.commit()

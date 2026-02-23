@@ -14,3 +14,21 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Downloads (user-generated content)
+downloads/
+
+# Claude Code config
+.claude/
+
+# Old versions (backup files)
+old-versions/
+
+# Misc documents & screenshots
+*.png
+*.docx
+*.pdf
+*.webp
+
+# Database backups
+db 1/
