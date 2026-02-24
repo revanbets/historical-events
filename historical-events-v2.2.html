@@ -246,21 +246,16 @@
       return { people:[...allP].sort(), organizations:[...allO].sort(), topics:[...allT].sort() };
     };
 
-    // ─── HARDCODED ACCOUNTS (⚠ change passwords before sharing) ───
-    // ⚠ Change passwords before sharing publicly
-    const HARDCODED_USERS = [
-      { username: 'owner',    password: 'owner123', role: 'owner' },
-      { username: 'admin',    password: 'admin123', role: 'admin'  },
-      { username: 'testuser', password: 'test123',  role: 'user'   }
-    ];
-
-    // ─── AUTH HELPERS ───
-    const getRegisteredUsers = () => { try { return JSON.parse(localStorage.getItem('hdb_users')) || []; } catch { return []; } };
-    const saveRegisteredUsers = (users) => { localStorage.setItem('hdb_users', JSON.stringify(users)); };
-    const findUser = (username, password) => {
-      const hc = HARDCODED_USERS.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
-      if (hc) return hc;
-      return getRegisteredUsers().find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password) || null;
+    // ─── AUTH HELPERS (Supabase-backed) ───
+    const findUser = async (username, password) => {
+      const { data, error } = await supabaseClient
+        .from('users').select('username, role').eq('username', username.toLowerCase()).eq('password', password).single();
+      if (error || !data) return null;
+      return { username: data.username, role: data.role };
+    };
+    const getAllUsers = async () => {
+      const { data, error } = await supabaseClient.from('users').select('username, role, created_at').order('created_at');
+      return error ? [] : data;
     };
 
     // ─── NORMALIZE DATA (adds auth fields to existing events) ───
@@ -276,9 +271,12 @@
       const [username, setUsername] = useState('');
       const [password, setPassword] = useState('');
       const [error, setError] = useState('');
-      const submit = () => {
+      const [loading, setLoading] = useState(false);
+      const submit = async () => {
         if (!username.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
-        const user = findUser(username.trim(), password.trim());
+        setLoading(true); setError('');
+        const user = await findUser(username.trim(), password.trim());
+        setLoading(false);
         if (!user) { setError('Invalid username or password.'); return; }
         onLogin(user);
       };
@@ -300,7 +298,7 @@
               <input className="auth-input" type="password" placeholder="Enter password" value={password}
                 onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} />
             </div>
-            <button className="auth-btn" onClick={submit}>Sign In →</button>
+            <button className="auth-btn" onClick={submit} disabled={loading}>{loading ? 'Signing in...' : 'Sign In →'}</button>
             <div className="auth-switch">Don't have an account? <span onClick={onGoSignup}>Create one</span></div>
           </div>
         </div>
@@ -314,14 +312,20 @@
       const [confirm, setConfirm] = useState('');
       const [error, setError] = useState('');
       const [success, setSuccess] = useState('');
-      const submit = () => {
+      const [loading, setLoading] = useState(false);
+      const submit = async () => {
         if (!username.trim() || !password.trim() || !confirm.trim()) { setError('Please fill in all fields.'); return; }
         if (username.trim().length < 3) { setError('Username must be at least 3 characters.'); return; }
         if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
         if (password !== confirm) { setError('Passwords do not match.'); return; }
-        const allNames = [...HARDCODED_USERS, ...getRegisteredUsers()].map(u => u.username.toLowerCase());
-        if (allNames.includes(username.trim().toLowerCase())) { setError('Username already taken.'); return; }
-        saveRegisteredUsers([...getRegisteredUsers(), { username: username.trim(), password, role: 'user', createdAt: new Date().toISOString() }]);
+        setLoading(true); setError('');
+        // Check if username already exists
+        const { data: existing } = await supabaseClient.from('users').select('username').eq('username', username.trim().toLowerCase()).single();
+        if (existing) { setLoading(false); setError('Username already taken.'); return; }
+        // Insert new user
+        const { error: insertErr } = await supabaseClient.from('users').insert([{ username: username.trim().toLowerCase(), password, role: 'user' }]);
+        setLoading(false);
+        if (insertErr) { setError('Registration failed: ' + insertErr.message); return; }
         setSuccess('Account created! Redirecting to sign in…'); setError('');
         setTimeout(() => onGoLogin(), 1500);
       };
@@ -349,7 +353,7 @@
               <input className="auth-input" type="password" placeholder="Re-enter password" value={confirm}
                 onChange={e=>setConfirm(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} />
             </div>
-            <button className="auth-btn" onClick={submit}>Create Account</button>
+            <button className="auth-btn" onClick={submit} disabled={loading}>{loading ? 'Creating...' : 'Create Account'}</button>
             <div className="auth-switch">Already have an account? <span onClick={onGoLogin}>Sign in</span></div>
           </div>
         </div>
@@ -694,24 +698,24 @@
         setShowModal(false);
       };
 
-      // ── User management (admin panel) ──
+      // ── User management (admin panel, Supabase-backed) ──
       const [adminUsers, setAdminUsers] = useState([]);
-      const refreshAdminUsers = () => setAdminUsers(getRegisteredUsers());
-      const updateUserRole = (username, newRole) => {
-        const updated = getRegisteredUsers().map(u => u.username === username ? { ...u, role: newRole } : u);
-        saveRegisteredUsers(updated);
-        setAdminUsers(updated);
-        // update session if changing self
+      const refreshAdminUsers = async () => { const users = await getAllUsers(); setAdminUsers(users); };
+      useEffect(() => { refreshAdminUsers(); }, []);
+      const updateUserRole = async (username, newRole) => {
+        const { error } = await supabaseClient.from('users').update({ role: newRole }).eq('username', username);
+        if (error) { console.error('Update role error:', error); return; }
+        setAdminUsers(prev => prev.map(u => u.username === username ? { ...u, role: newRole } : u));
         if (currentUser.username === username) {
           const session = { ...currentUser, role: newRole };
           localStorage.setItem('hdb_session', JSON.stringify(session));
           setCurrentUser(session);
         }
       };
-      const deleteUserAccount = (username) => {
-        const updated = getRegisteredUsers().filter(u => u.username !== username);
-        saveRegisteredUsers(updated);
-        setAdminUsers(updated);
+      const deleteUserAccount = async (username) => {
+        const { error } = await supabaseClient.from('users').delete().eq('username', username);
+        if (error) { console.error('Delete user error:', error); return; }
+        setAdminUsers(prev => prev.filter(u => u.username !== username));
       };
 
       // ── Filters ──
@@ -1766,10 +1770,10 @@
         const myPublicCount = myUploads.filter(e => e.isPublic).length;
         const myPrivateCount = myUploads.length - myPublicCount;
         const initials = currentUser.username.substring(0, 2).toUpperCase();
-        const regUser = getRegisteredUsers().find(u => u.username === currentUser.username);
-        const memberSince = regUser
-          ? new Date(regUser.createdAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
-          : 'Built-in account';
+        const matchedUser = adminUsers.find(u => u.username === currentUser.username);
+        const memberSince = matchedUser && matchedUser.created_at
+          ? new Date(matchedUser.created_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
+          : 'Member';
         // Scoped data: only user's own topics/people/orgs appear in FiltersComponent checkboxes
         const userTopics = [...new Set(myUploads.flatMap(e => e.topics||[]))].sort();
         const userPeople = [...new Set(myUploads.flatMap(e => e.people||[]))].sort();
@@ -1977,21 +1981,20 @@
 
       // ── Admin Panel ──
       const AdminPanel = () => {
-        const [users, setUsers] = React.useState(getRegisteredUsers());
+        const [users, setUsers] = React.useState([]);
         const isOwner = currentUser.role === 'owner';
-        const refresh = () => setUsers(getRegisteredUsers());
-        const handleRoleChange = (username, newRole) => {
-          updateUserRole(username, newRole);
-          refresh();
+        React.useEffect(() => { getAllUsers().then(u => setUsers(u)); }, []);
+        const handleRoleChange = async (username, newRole) => {
+          await updateUserRole(username, newRole);
+          const updated = await getAllUsers();
+          setUsers(updated);
         };
-        const handleDelete = (username) => {
-          deleteUserAccount(username);
-          refresh();
+        const handleDelete = async (username) => {
+          await deleteUserAccount(username);
+          const updated = await getAllUsers();
+          setUsers(updated);
         };
-        const allUsers = [
-          ...HARDCODED_USERS.map(u => ({ ...u, isHardcoded: true })),
-          ...users
-        ];
+        const allUsers = users;
         const publicCount = data.events.filter(e => e.isPublic).length;
         const privateCount = data.events.filter(e => !e.isPublic).length;
         return (
@@ -2016,15 +2019,13 @@
                 <tbody>
                   {allUsers.map(u => {
                     const isSelf = u.username === currentUser.username;
-                    const isHardcodedOwner = u.role === 'owner';
-                    // Admin can only change basic users; owner can change admins too (but not other owners)
-                    const canChange = !u.isHardcoded && !isSelf && (isOwner ? u.role !== 'owner' : u.role === 'user');
+                    const canChange = !isSelf && (isOwner ? u.role !== 'owner' : u.role === 'user');
                     return (
                       <tr key={u.username}>
                         <td style={{fontWeight:600}}>{u.username}{isSelf ? <span style={{color:'#8b92b0',fontWeight:400,marginLeft:'0.5rem'}}>(you)</span> : ''}</td>
                         <td><span className={`role-badge role-${u.role}`}>{u.role}</span></td>
-                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{u.isHardcoded ? 'Built-in' : 'Registered'}</td>
-                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
+                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>Registered</td>
+                        <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                         <td>
                           {canChange && (
                             <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>
