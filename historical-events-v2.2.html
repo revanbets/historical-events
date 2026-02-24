@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/dist/vis-network.min.css" rel="stylesheet">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;600;700&display=swap');
@@ -196,6 +197,54 @@
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // ─── SUPABASE CLIENT ───
+    const SUPABASE_URL = 'https://dfkxdbkjrfarjudlpqbw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRma3hkYmtqcmZhcmp1ZGxwcWJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NDQzMzIsImV4cCI6MjA4NzUyMDMzMn0.A5XuY5C9X5Il6EizS84tKY1Ls3Jyl6Xmi0hKbqQg2qo';
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ─── FIELD MAPPING: JS camelCase ↔ Postgres snake_case ───
+    const toDbRow = (e) => ({
+      id: e.id, title: e.title, description: e.description, date: e.date,
+      date_uploaded: e.dateUploaded, topics: e.topics || [], people: e.people || [],
+      organizations: e.organizations || [], links: e.links || [],
+      research_level: e.researchLevel, source_type: e.sourceType || '',
+      source: e.source || '', primary_source: e.primarySource || '',
+      source_sheet: e.sourceSheet || '', main_link: e.mainLink || '',
+      connections: e.connections || [], ai_summary: e.aiSummary || '',
+      is_major_event: e.isMajorEvent || false, uploaded_by: e.uploadedBy || 'system',
+      is_public: e.isPublic !== undefined ? e.isPublic : true,
+      event_status: e.eventStatus || 'unverified',
+      backend_id: e._backendId || null, ai_analyzed: e._aiAnalyzed || false,
+      analysis_mode: e._analysisMode || '', has_frames: e._hasFrames || false,
+      visual_content: e._visualContent || '', frames_data: e._framesData || [],
+      transcript_file: e._transcriptFile || '', attachments: e._attachments || [],
+      backend_file_name: e._backendFileName || '', is_video: e.isVideo || false,
+      transcription: e.transcription || null,
+    });
+    const fromDbRow = (r) => ({
+      id: r.id, title: r.title, description: r.description, date: r.date,
+      dateUploaded: r.date_uploaded, topics: r.topics || [], people: r.people || [],
+      organizations: r.organizations || [], links: r.links || [],
+      researchLevel: r.research_level, sourceType: r.source_type,
+      source: r.source, primarySource: r.primary_source,
+      sourceSheet: r.source_sheet, mainLink: r.main_link,
+      connections: r.connections || [], aiSummary: r.ai_summary,
+      isMajorEvent: r.is_major_event, uploadedBy: r.uploaded_by,
+      isPublic: r.is_public, eventStatus: r.event_status,
+      _backendId: r.backend_id, _aiAnalyzed: r.ai_analyzed,
+      _analysisMode: r.analysis_mode, _hasFrames: r.has_frames,
+      _visualContent: r.visual_content, _framesData: r.frames_data || [],
+      _transcriptFile: r.transcript_file, _attachments: r.attachments || [],
+      _backendFileName: r.backend_file_name, isVideo: r.is_video,
+      transcription: r.transcription,
+    });
+    const generateEventId = () => 'EVT-' + crypto.randomUUID().substring(0, 8);
+    const rebuildAggregates = (events) => {
+      const allP = new Set(), allO = new Set(), allT = new Set();
+      events.forEach(e => { (e.people||[]).forEach(p=>allP.add(p)); (e.organizations||[]).forEach(o=>allO.add(o)); (e.topics||[]).forEach(t=>allT.add(t)); });
+      return { people:[...allP].sort(), organizations:[...allO].sort(), topics:[...allT].sort() };
+    };
 
     // ─── HARDCODED ACCOUNTS (⚠ change passwords before sharing) ───
     // ⚠ Change passwords before sharing publicly
@@ -482,12 +531,8 @@
 
     // ─── MAIN APP ───
     function App() {
-      const [data, setData] = useState(() => {
-        try {
-          const saved = localStorage.getItem('historicalEventsDB');
-          return normalizeData(saved ? JSON.parse(saved) : EMBEDDED_DATA);
-        } catch (e) { return normalizeData(EMBEDDED_DATA); }
-      });
+      const [data, setData] = useState(() => normalizeData(EMBEDDED_DATA));
+      const [dbReady, setDbReady] = useState(false);
 
       const [currentUser, setCurrentUser] = useState(() => {
         try { return JSON.parse(localStorage.getItem('hdb_session')); } catch { return null; }
@@ -531,25 +576,62 @@
       const [breadcrumbs, setBreadcrumbs] = useState([]);
       const fileInputRef = useRef(null);
 
-      // ── Auto-save every 30s ──
+      // ── Load from Supabase on mount ──
       useEffect(() => {
-        const timer = setInterval(() => {
+        const loadEvents = async () => {
           try {
-            localStorage.setItem('historicalEventsDB', JSON.stringify(data));
-            setSaveStatus('Auto-saved ✓');
-            setTimeout(() => setSaveStatus(''), 2000);
-          } catch (e) {}
-        }, 30000);
-        return () => clearInterval(timer);
-      }, [data]);
+            const { data: rows, error } = await supabaseClient
+              .from('events').select('*').order('date_uploaded', { ascending: false });
+            if (error) throw error;
+            if (rows && rows.length > 0) {
+              const events = rows.map(fromDbRow);
+              const agg = rebuildAggregates(events);
+              setData({ events, ...agg, metadata: { totalEvents: events.length, lastUpdated: new Date().toISOString() } });
+            } else {
+              // First time: seed embedded data to Supabase
+              const seedEvents = normalizeData(EMBEDDED_DATA).events;
+              const { error: seedErr } = await supabaseClient.from('events').insert(seedEvents.map(toDbRow));
+              if (seedErr) console.error('Seed error:', seedErr);
+              else {
+                const agg = rebuildAggregates(seedEvents);
+                setData({ events: seedEvents, ...agg, metadata: { totalEvents: seedEvents.length, lastUpdated: new Date().toISOString() } });
+              }
+            }
+          } catch (err) {
+            console.error('Supabase load failed, using localStorage fallback:', err);
+            try {
+              const saved = localStorage.getItem('historicalEventsDB');
+              if (saved) setData(normalizeData(JSON.parse(saved)));
+            } catch (e) {}
+          }
+          setDbReady(true);
+        };
+        loadEvents();
+      }, []);
 
-      const saveState = useCallback(() => {
+      // ── Cache to localStorage as offline fallback ──
+      useEffect(() => {
+        if (dbReady) {
+          try { localStorage.setItem('historicalEventsDB', JSON.stringify(data)); } catch(e) {}
+        }
+      }, [data, dbReady]);
+
+      // ── Refresh from server ──
+      const refreshFromServer = useCallback(async () => {
+        setSaveStatus('Refreshing...');
         try {
-          localStorage.setItem('historicalEventsDB', JSON.stringify(data));
-          setSaveStatus('Saved ✓');
-          setTimeout(() => setSaveStatus(''), 3000);
-        } catch (e) { setSaveStatus('Save Error'); }
-      }, [data]);
+          const { data: rows, error } = await supabaseClient
+            .from('events').select('*').order('date_uploaded', { ascending: false });
+          if (error) throw error;
+          const events = rows.map(fromDbRow);
+          const agg = rebuildAggregates(events);
+          setData({ events, ...agg, metadata: { totalEvents: events.length, lastUpdated: new Date().toISOString() } });
+          setSaveStatus('Refreshed ✓');
+        } catch(err) {
+          setSaveStatus('Refresh failed');
+        }
+        setTimeout(() => setSaveStatus(''), 3000);
+      }, []);
 
       // ── Breadcrumb helpers ──
       const pushBreadcrumb = (label, action) => {
@@ -588,18 +670,26 @@
       }, [data.events, currentUser]);
 
       // ── Event management ──
-      const toggleEventPublic = (eventId) => {
-        setData(prev => ({ ...prev, events: prev.events.map(e => e.id === eventId ? { ...e, isPublic: !e.isPublic } : e) }));
+      const toggleEventPublic = async (eventId) => {
+        const event = data.events.find(e => e.id === eventId);
+        if (!event) return;
+        const newVal = !event.isPublic;
+        const { error } = await supabaseClient.from('events').update({ is_public: newVal }).eq('id', eventId);
+        if (error) console.error('Toggle public error:', error);
+        setData(prev => ({ ...prev, events: prev.events.map(e => e.id === eventId ? { ...e, isPublic: newVal } : e) }));
       };
-      const updateEventStatus = (eventId, status) => {
+      const updateEventStatus = async (eventId, status) => {
+        const { error } = await supabaseClient.from('events').update({ event_status: status }).eq('id', eventId);
+        if (error) console.error('Update status error:', error);
         setData(prev => ({ ...prev, events: prev.events.map(e => e.id === eventId ? { ...e, eventStatus: status } : e) }));
       };
-      const deleteEvent = (eventId) => {
+      const deleteEvent = async (eventId) => {
+        const { error } = await supabaseClient.from('events').delete().eq('id', eventId);
+        if (error) { console.error('Delete error:', error); return; }
         setData(prev => {
           const updated = prev.events.filter(e => e.id !== eventId);
-          const allP = new Set(), allO = new Set(), allT = new Set();
-          updated.forEach(e => { (e.people||[]).forEach(p=>allP.add(p)); (e.organizations||[]).forEach(o=>allO.add(o)); (e.topics||[]).forEach(t=>allT.add(t)); });
-          return { ...prev, events: updated, people:[...allP].sort(), organizations:[...allO].sort(), topics:[...allT].sort(), metadata:{...prev.metadata, totalEvents:updated.length} };
+          const agg = rebuildAggregates(updated);
+          return { ...prev, events: updated, ...agg, metadata:{...prev.metadata, totalEvents:updated.length} };
         });
         setShowModal(false);
       };
@@ -838,7 +928,6 @@
         setIsProcessing(true);
         setUploadMessage('Processing files...');
         const newEvents = [];
-        let eventId = data.events.length + 1;
         const timeout = setTimeout(() => { setIsProcessing(false); setUploadMessage('⚠️ Timeout - file may be too large'); setTimeout(()=>setUploadMessage(''),3000); }, 60000);
         try {
           for (const file of files) {
@@ -854,7 +943,7 @@
                       rows.forEach(row => {
                         extractedText += JSON.stringify(row)+' ';
                         newEvents.push({
-                          id:`EVT-${String(eventId).padStart(4,'0')}`,
+                          id:generateEventId(),
                           title: row.title||row.Title||row.TITLE||`Uploaded: ${file.name}`,
                           description: row.description||row.Description||row.Abstract||'',
                           date: row.date||row.Date||row.year||null,
@@ -867,7 +956,7 @@
                           sourceType:'Uploaded Excel', sourceSheet:sheetName, connections:[], aiSummary:'', isMajorEvent:false,
                           uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified'
                         });
-                        eventId++;
+
                       });
                     });
                   } catch(err) {}
@@ -885,14 +974,12 @@
                   const vals = lines[i].split(',');
                   const row = {};
                   headers.forEach((h,idx)=>{ row[h]=vals[idx]?.trim()||''; });
-                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString(), topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
-                  eventId++;
+                  newEvents.push({ id:generateEventId(), title:row.title||row.Title||`CSV Entry ${i}`, description:row.description||row.Description||'', date:row.date||row.Date||null, dateUploaded:new Date().toISOString(), topics:(row.topics||'CSV Import').split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:(row.people||'').split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:(row.organization||'').split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[row.link||''].filter(l=>l), researchLevel:1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
                 }
               }
             } else if (file.name.endsWith('.txt')) {
               extractedText = await file.text();
-              newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
-              eventId++;
+              newEvents.push({ id:generateEventId(), title:file.name.replace('.txt',''), description:extractedText.substring(0,500), date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:['Text Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded Text', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
             } else if (/\.(pdf|docx?|png|jpe?g|gif|bmp|tiff|webp)$/i.test(file.name)) {
               // Send to backend for real text extraction
               try {
@@ -912,7 +999,7 @@
                     });
                     const cleanDesc = cleanLines.slice(0, 3).join(' ').substring(0, 500);
                     newEvents.push({
-                      id:`EVT-${String(eventId).padStart(4,'0')}`,
+                      id:generateEventId(),
                       title: file.name.replace(/\.[^.]+$/, ''),
                       description: cleanDesc || `${typeLabel} document uploaded: ${file.name}`,
                       date: new Date().toISOString().split('T')[0],
@@ -934,21 +1021,18 @@
                       source: '',
                       primarySource: ''
                     });
-                    eventId++;
-                  }
+                    }
                 } else {
                   // Fallback: create stub event if backend is unavailable
                   const ext = file.name.split('.').pop().toLowerCase();
                   const typeLabel = ext === 'pdf' ? 'PDF' : ext.startsWith('doc') ? 'Word' : 'Image';
-                  newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - backend unavailable for extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
-                  eventId++;
+                  newEvents.push({ id:generateEventId(), title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - backend unavailable for extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
                 }
               } catch(fetchErr) {
                 const ext = file.name.split('.').pop().toLowerCase();
                 const typeLabel = ext === 'pdf' ? 'PDF' : ext.startsWith('doc') ? 'Word' : 'Image';
-                newEvents.push({ id:`EVT-${String(eventId).padStart(4,'0')}`, title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - server not running. Start the backend to enable extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
-                eventId++;
-              }
+                newEvents.push({ id:generateEventId(), title:file.name.replace(/\.[^.]+$/, ''), description:`${typeLabel} document uploaded: ${file.name}`, date:new Date().toISOString().split('T')[0], dateUploaded:new Date().toISOString(), topics:[typeLabel + ' Document'], people:[], organizations:[], links:[], researchLevel:1, sourceType:'Uploaded ' + typeLabel, sourceSheet:file.name, connections:[], aiSummary:`${typeLabel} uploaded - server not running. Start the backend to enable extraction.`, isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified' });
+                }
             }
             if (extractedText && newEvents.length > 0 && !newEvents[newEvents.length-1]._hasBackend) {
               // Only run client-side analysis for non-backend files (Excel, CSV, TXT)
@@ -962,6 +1046,9 @@
           }
           clearTimeout(timeout);
           if (newEvents.length > 0) {
+            // Insert to Supabase
+            const { error: sbErr } = await supabaseClient.from('events').insert(newEvents.map(toDbRow));
+            if (sbErr) console.error('Supabase insert error:', sbErr);
             const updated = {
               events:[...data.events,...newEvents],
               people:Array.from(new Set([...data.people,...newEvents.flatMap(e=>e.people)])).sort(),
@@ -983,6 +1070,13 @@
                         const result = await resp.json();
                         const rec = result.record;
                         if (rec) {
+                          // Sync to Supabase
+                          await supabaseClient.from('events').update({
+                            ai_summary: rec.summary || '', description: rec.description || rec.summary || '',
+                            topics: rec.topics || [], people: rec.people || [], organizations: rec.organizations || [],
+                            source: rec.source || '', primary_source: rec.primary_source || '', main_link: rec.main_link || '',
+                            ai_analyzed: true, analysis_mode: rec.analysis_mode || '', has_frames: rec.has_frames || false,
+                          }).eq('id', evt.id);
                           setData(prev => ({
                             ...prev,
                             events: prev.events.map(e => e.id === evt.id ? {
@@ -1079,7 +1173,7 @@
           }
 
           const newEvent = {
-            id: `EVT-${String(data.events.length+1).padStart(4,'0')}`,
+            id: generateEventId(),
             title: rec.file_name || urlInput,
             description: rec.description || (result.metadata_only && rec.video_metadata?.description ? rec.video_metadata.description.substring(0, 500) : ''),
             aiSummary: rec.summary || (result.metadata_only ? 'Not yet analyzed — select and click "Analyze Selected" for AI analysis.' : ''),
@@ -1112,6 +1206,10 @@
             _attachments: rec.attachments || [],
             transcription,
           };
+
+          // Insert to Supabase
+          const { error: sbErr } = await supabaseClient.from('events').insert([toDbRow(newEvent)]);
+          if (sbErr) console.error('Supabase insert error:', sbErr);
 
           setData(prev => ({
             events: [...prev.events, newEvent],
@@ -1163,12 +1261,13 @@
         setBreadcrumbs(prev => prev.slice(0,-1));
       };
 
-      const saveEditedEvent = () => {
+      const saveEditedEvent = async () => {
         const cleaned = {...editedEvent, links: (editedEvent.links||[]).filter(l=>l.trim())};
+        const { error } = await supabaseClient.from('events').update(toDbRow(cleaned)).eq('id', cleaned.id);
+        if (error) { setUploadMessage('❌ Save failed: ' + error.message); setTimeout(()=>setUploadMessage(''),5000); return; }
         const updatedEvents = data.events.map(e => e.id === cleaned.id ? cleaned : e);
-        const allP=new Set(), allO=new Set(), allT=new Set();
-        updatedEvents.forEach(e => { (e.people||[]).forEach(p=>allP.add(p)); (e.organizations||[]).forEach(o=>allO.add(o)); (e.topics||[]).forEach(t=>allT.add(t)); });
-        setData({...data, events:updatedEvents, people:[...allP].sort(), organizations:[...allO].sort(), topics:[...allT].sort()});
+        const agg = rebuildAggregates(updatedEvents);
+        setData({...data, events:updatedEvents, ...agg});
         setModalData(cleaned);
         setIsEditing(false);
         setUploadMessage('✓ Event updated!');
@@ -2096,7 +2195,7 @@
           </div>
 
           <div className="controls-bar">
-            <button className="save-btn" onClick={saveState}>💾 Save Now</button>
+            <button className="save-btn" onClick={refreshFromServer}>🔄 Refresh</button>
             <span className="save-status">{saveStatus}</span>
           </div>
 
