@@ -201,7 +201,8 @@
     // ─── SUPABASE CLIENT ───
     const SUPABASE_URL = 'https://dfkxdbkjrfarjudlpqbw.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRma3hkYmtqcmZhcmp1ZGxwcWJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NDQzMzIsImV4cCI6MjA4NzUyMDMzMn0.A5XuY5C9X5Il6EizS84tKY1Ls3Jyl6Xmi0hKbqQg2qo';
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+    if (!supabaseClient) console.error('Supabase JS failed to load from CDN');
 
     // ─── FIELD MAPPING: JS camelCase ↔ Postgres snake_case ───
     const toDbRow = (e) => ({
@@ -627,10 +628,10 @@
           const { data: rows, error } = await supabaseClient
             .from('events').select('*').order('date_uploaded', { ascending: false });
           if (error) throw error;
-          const events = rows.map(fromDbRow);
+          const events = (rows || []).map(fromDbRow);
           const agg = rebuildAggregates(events);
           setData({ events, ...agg, metadata: { totalEvents: events.length, lastUpdated: new Date().toISOString() } });
-          setSaveStatus('Refreshed ✓');
+          setSaveStatus(`Refreshed ✓ (${events.length} events)`);
         } catch(err) {
           setSaveStatus('Refresh failed');
         }
@@ -703,7 +704,7 @@
       const refreshAdminUsers = async () => { const users = await getAllUsers(); setAdminUsers(users); };
       useEffect(() => { refreshAdminUsers(); }, []);
       const updateUserRole = async (username, newRole) => {
-        const { error } = await supabaseClient.from('users').update({ role: newRole }).eq('username', username);
+        const { error } = await supabaseClient.from('users').update({ role: newRole }).eq('username', username.toLowerCase());
         if (error) { console.error('Update role error:', error); return; }
         setAdminUsers(prev => prev.map(u => u.username === username ? { ...u, role: newRole } : u));
         if (currentUser.username === username) {
@@ -713,7 +714,7 @@
         }
       };
       const deleteUserAccount = async (username) => {
-        const { error } = await supabaseClient.from('users').delete().eq('username', username);
+        const { error } = await supabaseClient.from('users').delete().eq('username', username.toLowerCase());
         if (error) { console.error('Delete user error:', error); return; }
         setAdminUsers(prev => prev.filter(u => u.username !== username));
       };
