@@ -22,6 +22,9 @@ if "/opt/homebrew/bin" not in os.environ.get("PATH", ""):
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
+# YouTube requires android client to avoid SABR streaming 403 errors
+YT_EXTRACTOR_ARGS = {"youtube": {"player_client": ["android"]}}
+
 # Paths — downloads go to project-level downloads/ folder
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOWNLOADS_DIR = os.path.join(PROJECT_DIR, "downloads")
@@ -66,6 +69,7 @@ def get_video_metadata(url):
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
+        "extractor_args": YT_EXTRACTOR_ARGS,
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -119,6 +123,7 @@ def get_stream_url(url, max_height=720):
             "format": f"best[height<={max_height}][ext=mp4]/best[height<={max_height}]",
             "quiet": True,
             "no_warnings": True,
+            "extractor_args": YT_EXTRACTOR_ARGS,
         }
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -135,6 +140,7 @@ def get_stream_url(url, max_height=720):
             "format": f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]",
             "quiet": True,
             "no_warnings": True,
+            "extractor_args": YT_EXTRACTOR_ARGS,
         }
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -162,6 +168,7 @@ def download_video(url, max_height=720):
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
+        "extractor_args": YT_EXTRACTOR_ARGS,
     }
 
     for attempt in range(2):
@@ -477,7 +484,7 @@ def save_frames_to_disk(frames, record_id, title=""):
         img_bytes = base64.standard_b64decode(frame["base64"])
         with open(filepath, "wb") as f:
             f.write(img_bytes)
-        saved.append({"filename": filename, "timestamp": frame["label"]})
+        saved.append({"filename": filename, "timestamp": frame["label"], "base64": frame["base64"]})
     return saved
 
 

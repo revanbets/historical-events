@@ -204,6 +204,11 @@
     const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
     if (!supabaseClient) console.error('Supabase JS failed to load from CDN');
 
+    // ─── ANALYSIS BACKEND URL ───
+    // When running locally: '' (uses relative /api/ paths)
+    // When deployed: points to Render backend
+    const API_BASE = window.location.hostname === 'localhost' ? '' : 'https://historical-events-api.onrender.com';
+
     // ─── FIELD MAPPING: JS camelCase ↔ Postgres snake_case ───
     const toDbRow = (e) => ({
       id: e.id, title: e.title, description: e.description, date: e.date,
@@ -990,7 +995,7 @@
               try {
                 const formData = new FormData();
                 formData.append('files', file);
-                const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+                const resp = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
                 if (resp.ok) {
                   const result = await resp.json();
                   for (const rec of (result.records || [])) {
@@ -1070,7 +1075,7 @@
                 (async () => {
                   for (const evt of toAnalyze) {
                     try {
-                      const resp = await fetch(`/api/analyze/${evt._backendId}?mode=${analysisMode}`, { method: 'POST' });
+                      const resp = await fetch(`${API_BASE}/api/analyze/${evt._backendId}?mode=${analysisMode}`, { method: 'POST' });
                       if (resp.ok) {
                         const result = await resp.json();
                         const rec = result.record;
@@ -1141,7 +1146,7 @@
           setUploadMessage(isVideo ? 'Fetching video info (no AI analysis)...' : 'Fetching page info (no AI analysis)...');
         }
         try {
-          const resp = await fetch('/api/analyze-url', {
+          const resp = await fetch(`${API_BASE}/api/analyze-url`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ url: urlInput, mode: analysisMode, skip_frames: skipFrames, skip_analysis: !doAnalysis }),
@@ -1518,7 +1523,7 @@
                       <div style={{display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.6rem 0.75rem',background:'rgba(26,31,58,0.5)',borderRadius:'8px',marginBottom:'0.75rem',border:'1px solid rgba(245,158,11,0.2)'}}>
                         <span style={{fontSize:'1.2rem'}}>📝</span>
                         <span style={{color:'#e0e6ed',flex:1,fontSize:'0.85rem'}}>Transcript</span>
-                        <a href={`/api/transcripts/${modalData._transcriptFile}`} download style={{padding:'0.3rem 0.6rem',background:'rgba(245,158,11,0.2)',border:'1px solid rgba(245,158,11,0.4)',borderRadius:'6px',color:'#f59e0b',fontSize:'0.75rem',textDecoration:'none',fontWeight:600}}>Download</a>
+                        <a href={`${API_BASE}/api/transcripts/${modalData._transcriptFile}`} download style={{padding:'0.3rem 0.6rem',background:'rgba(245,158,11,0.2)',border:'1px solid rgba(245,158,11,0.4)',borderRadius:'6px',color:'#f59e0b',fontSize:'0.75rem',textDecoration:'none',fontWeight:600}}>Download</a>
                       </div>
                     )}
                     {(modalData._framesData||[]).length > 0 && (
@@ -1527,7 +1532,7 @@
                         <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>
                           {modalData._framesData.map((f,i) => (
                             <div key={i} style={{position:'relative'}}>
-                              <img src={`/api/frames/${f.filename}`} alt={`Frame at ${f.timestamp}`} style={{width:'120px',height:'68px',objectFit:'cover',borderRadius:'6px',border:'1px solid rgba(245,158,11,0.3)',cursor:'pointer'}} onClick={()=>window.open(`/api/frames/${f.filename}`,'_blank')} />
+                              <img src={f.base64 ? `data:image/jpeg;base64,${f.base64}` : `${API_BASE}/api/frames/${f.filename}`} alt={`Frame at ${f.timestamp}`} style={{width:'120px',height:'68px',objectFit:'cover',borderRadius:'6px',border:'1px solid rgba(245,158,11,0.3)',cursor:'pointer'}} onClick={()=>window.open(f.base64 ? `data:image/jpeg;base64,${f.base64}` : `${API_BASE}/api/frames/${f.filename}`,'_blank')} />
                               <span style={{position:'absolute',bottom:'2px',left:'2px',fontSize:'0.6rem',color:'#fff',background:'rgba(0,0,0,0.7)',padding:'1px 4px',borderRadius:'3px'}}>{f.timestamp}</span>
                             </div>
                           ))}
@@ -1549,7 +1554,7 @@
                           const formData = new FormData();
                           for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
                           try {
-                            const resp = await fetch(`/api/attachments/${modalData._backendId}`, {method:'POST',body:formData});
+                            const resp = await fetch(`${API_BASE}/api/attachments/${modalData._backendId}`, {method:'POST',body:formData});
                             if (resp.ok) {
                               const result = await resp.json();
                               const updatedAttachments = result.record.attachments || [];
@@ -1577,7 +1582,7 @@
                             <button onClick={async ()=>{
                               if (!window.confirm('Remove this attachment?')) return;
                               try {
-                                const resp = await fetch(`/api/attachments/${modalData._backendId}/${att.filename}`, {method:'DELETE'});
+                                const resp = await fetch(`${API_BASE}/api/attachments/${modalData._backendId}/${att.filename}`, {method:'DELETE'});
                                 if (resp.ok) {
                                   const result = await resp.json();
                                   const updatedAttachments = result.record.attachments || [];
@@ -1659,7 +1664,7 @@
                           if (!editedEvent.aiSummary) return;
                           setIsCondensing(true);
                           try {
-                            const resp = await fetch('/api/condense', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:editedEvent.aiSummary})});
+                            const resp = await fetch(`${API_BASE}/api/condense`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:editedEvent.aiSummary})});
                             if (resp.ok) { const r = await resp.json(); setEditedEvent({...editedEvent, aiSummary: r.condensed}); }
                           } catch(e) {}
                           setIsCondensing(false);
@@ -1723,7 +1728,7 @@
                         <button onClick={async ()=>{
                           if (!window.confirm('Remove this attachment?')) return;
                           try {
-                            const resp = await fetch(`/api/attachments/${editedEvent._backendId}/${att.filename}`, {method:'DELETE'});
+                            const resp = await fetch(`${API_BASE}/api/attachments/${editedEvent._backendId}/${att.filename}`, {method:'DELETE'});
                             if (resp.ok) {
                               const result = await resp.json();
                               const updatedAttachments = result.record.attachments || [];
@@ -1743,7 +1748,7 @@
                         const formData = new FormData();
                         for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
                         try {
-                          const resp = await fetch(`/api/attachments/${editedEvent._backendId}`, {method:'POST',body:formData});
+                          const resp = await fetch(`${API_BASE}/api/attachments/${editedEvent._backendId}`, {method:'POST',body:formData});
                           if (resp.ok) {
                             const result = await resp.json();
                             const updatedAttachments = result.record.attachments || [];
@@ -2426,7 +2431,7 @@
                         for (const { evtId, backendId } of selected) {
                           try {
                             setUploadMessage(`Analyzing document ${successCount + 1} of ${selected.length}...`);
-                            const resp = await fetch(`/api/analyze/${backendId}?mode=${analysisMode}`, { method: 'POST' });
+                            const resp = await fetch(`${API_BASE}/api/analyze/${backendId}?mode=${analysisMode}`, { method: 'POST' });
                             if (resp.ok) {
                               const result = await resp.json();
                               const rec = result.record;

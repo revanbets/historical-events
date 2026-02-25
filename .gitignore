@@ -6,6 +6,8 @@
 # Uploaded files & extracted text
 analysis/uploads/
 analysis/pending_analysis/
+analysis/downloads/
+analysis/frames/
 
 # Database
 analysis/knowledge_base.db
