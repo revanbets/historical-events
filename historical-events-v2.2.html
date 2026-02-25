@@ -2445,15 +2445,15 @@
                       <button onClick={()=>setAutoAnalysis(!autoAnalysis)} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:autoAnalysis?'linear-gradient(135deg,#10b981,#059669)':'rgba(61,69,99,0.5)',border:autoAnalysis?'2px solid #10b981':'2px solid rgba(61,69,99,0.5)',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit',transition:'all 0.2s'}}>
                         {autoAnalysis ? '✓ Auto AI Analysis: ON' : '⚡ Auto AI Analysis: OFF'}
                       </button>
-                      <div style={{position:'relative',display:'inline-flex',alignItems:'center',gap:'0.25rem'}}>
-                        <input
-                          type="text"
+                      <div style={{position:'relative',display:'inline-flex',alignItems:'flex-start',gap:'0.25rem'}}>
+                        <textarea
                           placeholder="🔍 Analysis focus (optional)"
                           value={analysisSearch}
                           onChange={e=>setAnalysisSearch(e.target.value)}
-                          style={{padding:'0.72rem 0.9rem',fontSize:'0.88rem',color:'#e0e6ed',background:'rgba(26,31,58,0.8)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'10px',fontFamily:'inherit',width:'220px',outline:'none'}}
-                        />
-                        <div className="tooltip-wrapper" style={{display:'inline-flex',alignItems:'center'}}>
+                          rows={1}
+                          style={{padding:'0.72rem 0.9rem',fontSize:'0.88rem',color:'#e0e6ed',background:'rgba(26,31,58,0.8)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'10px',fontFamily:'inherit',width:'220px',outline:'none',resize:'vertical',minHeight:'42px',lineHeight:1.5}}
+                        ></textarea>
+                        <div className="tooltip-wrapper" style={{display:'inline-flex',alignItems:'center',marginTop:'0.6rem'}}>
                           <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help',flexShrink:0}}>i</span>
                           <div className="tooltip-content" style={{position:'absolute',bottom:'100%',left:0,marginBottom:'8px',background:'rgba(15,18,35,0.97)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',padding:'0.75rem 1rem',width:'270px',zIndex:9999,pointerEvents:'none',opacity:0,transition:'opacity 0.15s',fontSize:'0.78rem',lineHeight:1.6,color:'#c0c7d8',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
                             <b style={{color:'#60a5fa'}}>Analysis focus (optional)</b><br/>
