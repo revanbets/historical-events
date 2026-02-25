@@ -554,7 +554,7 @@
       const [myPageTab, _setMyPageTab] = useState(() => sessionStorage.getItem('hdb_myPageTab') || 'timeline');
       const setMyPageTab = (t) => { sessionStorage.setItem('hdb_myPageTab', t); _setMyPageTab(t); };
 
-      const TABS = ['timeline','network','spreadsheet','topics','people','organizations','upload'];
+      const TABS = ['timeline','network','spreadsheet','presentations','topics','people','organizations','upload'];
 
       const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'timeline');
       const setActiveTab = (t) => { sessionStorage.setItem('hdb_activeTab', t); _setActiveTab(t); };
@@ -590,6 +590,19 @@
       // Breadcrumb: array of {label, action}
       const [breadcrumbs, setBreadcrumbs] = useState([]);
       const fileInputRef = useRef(null);
+
+      // ── Presentations state ──
+      const [presentations, setPresentations] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('hdb_presentations') || '[]'); } catch { return []; }
+      });
+      const [activePresentationId, setActivePresentationId] = useState(null);
+      const [presentationMode, setPresentationMode] = useState(null); // { pId, idx }
+      const [presentationTheme, setPresentationTheme] = useState('dark');
+      const [showSlideEventPicker, setShowSlideEventPicker] = useState(false);
+      const [slidePickerSearch, setSlidePickerSearch] = useState('');
+      const [editingSlide, setEditingSlide] = useState(null); // { pId, slide, localTitle, localDate, localContent, localTopics, localNotes }
+      const [showNewPresentationModal, setShowNewPresentationModal] = useState(false);
+      const [newPresentationName, setNewPresentationName] = useState('');
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -631,6 +644,26 @@
         }
       }, [data, dbReady]);
 
+      // ── Keyboard navigation for fullscreen presentation mode ──
+      useEffect(() => {
+        if (!presentationMode) return;
+        const handleKey = (e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            setPresentationMode(prev => {
+              const pres = presentations.find(p => p.id === prev.pId);
+              if (!pres) return prev;
+              return { ...prev, idx: Math.min(pres.slides.length - 1, prev.idx + 1) };
+            });
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            setPresentationMode(prev => ({ ...prev, idx: Math.max(0, prev.idx - 1) }));
+          } else if (e.key === 'Escape') {
+            setPresentationMode(null);
+          }
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+      }, [presentationMode, presentations]);
+
       // ── Refresh from server ──
       const refreshFromServer = useCallback(async () => {
         setSaveStatus('Refreshing...');
@@ -663,6 +696,44 @@
         setActiveTab(tab);
         setSelectedEntity(null);
         setBreadcrumbs([{ label: tab.charAt(0).toUpperCase() + tab.slice(1), action: () => { setActiveTab(tab); setSelectedEntity(null); } }]);
+      };
+
+      // ── Presentation helper functions ──
+      const savePresns = (pArr) => { localStorage.setItem('hdb_presentations', JSON.stringify(pArr)); setPresentations(pArr); };
+      const createPresentation = (name) => {
+        const p = { id: Date.now().toString(), name: name.trim(), userId: currentUser?.username || 'anon', isPublic: false, slides: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        savePresns([p, ...presentations]);
+        setActivePresentationId(p.id);
+      };
+      const deletePresentationById = (id) => {
+        if (!window.confirm('Delete this presentation?')) return;
+        savePresns(presentations.filter(p => p.id !== id));
+        if (activePresentationId === id) setActivePresentationId(null);
+      };
+      const togglePresentationPublic = (id) => {
+        savePresns(presentations.map(p => p.id === id ? { ...p, isPublic: !p.isPublic, updatedAt: new Date().toISOString() } : p));
+      };
+      const addSlideToPresentation = (pId, event) => {
+        const slide = { id: Date.now().toString() + Math.random().toString(36).slice(2), type: 'event', eventId: event.id, customTitle: '', customDate: '', customContent: '', customTopics: '', customNotes: '' };
+        savePresns(presentations.map(p => p.id === pId ? { ...p, slides: [...p.slides, slide], updatedAt: new Date().toISOString() } : p));
+      };
+      const removeSlideFromPresentation = (pId, sId) => {
+        savePresns(presentations.map(p => p.id === pId ? { ...p, slides: p.slides.filter(s => s.id !== sId), updatedAt: new Date().toISOString() } : p));
+      };
+      const moveSlideInPresentation = (pId, sId, dir) => {
+        savePresns(presentations.map(p => {
+          if (p.id !== pId) return p;
+          const slides = [...p.slides];
+          const idx = slides.findIndex(s => s.id === sId);
+          const newIdx = dir === 'up' ? idx - 1 : idx + 1;
+          if (newIdx < 0 || newIdx >= slides.length) return p;
+          [slides[idx], slides[newIdx]] = [slides[newIdx], slides[idx]];
+          return { ...p, slides, updatedAt: new Date().toISOString() };
+        }));
+      };
+      const saveSlideEdits = (pId, sId, changes) => {
+        savePresns(presentations.map(p => p.id !== pId ? p : { ...p, slides: p.slides.map(s => s.id !== sId ? s : { ...s, ...changes }), updatedAt: new Date().toISOString() }));
+        setEditingSlide(null);
       };
 
       // ── Auth functions ──
@@ -1914,10 +1985,10 @@
                 <div style={{marginBottom:'0'}}>
                   <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600,marginBottom:'0.5rem',paddingLeft:'3rem'}}>Pages</div>
                   <nav className="nav">
-                    {['timeline','network','spreadsheet','topics','people','organizations'].map(tab => (
+                    {['timeline','network','spreadsheet','presentations','topics','people','organizations'].map(tab => (
                       <button key={tab} className={`nav-btn ${myPageTab===tab?'active':''}`}
                         onClick={() => setMyPageTab(tab)}>
-                        {tab==='timeline'?'📅':tab==='network'?'🔗':tab==='spreadsheet'?'📊':tab==='topics'?'🏷️':tab==='people'?'👤':'🏛️'}{' '}{tab.charAt(0).toUpperCase()+tab.slice(1)}
+                        {tab==='timeline'?'📅':tab==='network'?'🔗':tab==='spreadsheet'?'📊':tab==='presentations'?'🎞️':tab==='topics'?'🏷️':tab==='people'?'👤':'🏛️'}{' '}{tab.charAt(0).toUpperCase()+tab.slice(1)}
                       </button>
                     ))}
                     <button className="nav-btn" onClick={() => setActiveTab('upload')}>
@@ -2056,6 +2127,117 @@
                     })}
                   </div>
                 )}
+
+                {/* My Uploads — Presentations */}
+                {myPageTab === 'presentations' && (() => {
+                  const activePres = activePresentationId ? presentations.find(p => p.id === activePresentationId) : null;
+                  const isPresOwner = activePres && activePres.userId === currentUser?.username;
+                  if (activePres) {
+                    return (
+                      <div>
+                        <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'2rem',flexWrap:'wrap'}}>
+                          <button onClick={()=>setActivePresentationId(null)} style={{padding:'0.4rem 0.8rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',flexShrink:0}}>← Back</button>
+                          <h2 style={{flex:1,fontSize:'1.4rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePres.name}</h2>
+                          {isPresOwner && (
+                            <button onClick={()=>togglePresentationPublic(activePres.id)} style={{padding:'0.3rem 0.8rem',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',flexShrink:0,background:activePres.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:activePres.isPublic?'#10b981':'#8b92b0',border:`1px solid ${activePres.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
+                              {activePres.isPublic?'🌐 Public':'🔒 Private'}
+                            </button>
+                          )}
+                          {activePres.slides.length > 0 && (
+                            <button onClick={()=>setPresentationMode({pId:activePres.id,idx:0})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>▶ Present</button>
+                          )}
+                        </div>
+                        {activePres.slides.length === 0 ? (
+                          <div className="empty-state" style={{marginBottom:'1.5rem'}}><div className="empty-state-icon">🎞️</div><p>No slides yet. Add an event from the database below.</p></div>
+                        ) : (
+                          <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'1.5rem'}}>
+                            {activePres.slides.map((slide, idx) => {
+                              const evt = data.events.find(e => e.id === slide.eventId);
+                              const slideTitle = slide.customTitle || evt?.title || '(Unknown Event)';
+                              const slideContent = slide.customContent || evt?.aiSummary || evt?.description || '';
+                              const slideDate = slide.customDate || evt?.date || '';
+                              return (
+                                <div key={slide.id} style={{display:'flex',alignItems:'flex-start',gap:'0.75rem',padding:'0.9rem 1.1rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px'}}>
+                                  <div style={{fontSize:'0.75rem',color:'#8b92b0',fontWeight:700,minWidth:'22px',paddingTop:'0.15rem',fontFamily:"'Space Mono',monospace",textAlign:'right',flexShrink:0}}>{idx+1}</div>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideTitle}</div>
+                                    {slideDate && <div style={{fontSize:'0.75rem',color:'#60a5fa',marginBottom:'0.2rem'}}>{slideDate}</div>}
+                                    <div style={{fontSize:'0.8rem',color:'#8b92b0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideContent.substring(0,100)}{slideContent.length>100?'…':''}</div>
+                                  </div>
+                                  <div style={{display:'flex',gap:'0.4rem',flexShrink:0,alignItems:'center'}}>
+                                    {isPresOwner && <button onClick={()=>setEditingSlide({pId:activePres.id,slide,localTitle:slide.customTitle,localDate:slide.customDate,localContent:slide.customContent,localTopics:slide.customTopics,localNotes:slide.customNotes})} style={{padding:'0.3rem 0.6rem',background:'rgba(96,165,250,0.12)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit'}}>Edit</button>}
+                                    {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'up')} disabled={idx===0} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===0?'#3d4563':'#8b92b0',cursor:idx===0?'not-allowed':'pointer',fontSize:'0.78rem'}}>↑</button>}
+                                    {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'down')} disabled={idx===activePres.slides.length-1} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===activePres.slides.length-1?'#3d4563':'#8b92b0',cursor:idx===activePres.slides.length-1?'not-allowed':'pointer',fontSize:'0.78rem'}}>↓</button>}
+                                    {isPresOwner && <button onClick={()=>removeSlideFromPresentation(activePres.id,slide.id)} style={{padding:'0.3rem 0.45rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'0.78rem'}}>✕</button>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {isPresOwner && (
+                          <button onClick={()=>{setSlidePickerSearch('');setShowSlideEventPicker(activePres.id);}} style={{padding:'0.6rem 1.2rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>+ Add Slide from Database</button>
+                        )}
+                      </div>
+                    );
+                  }
+                  const myPresns2 = presentations.filter(p => p.userId === currentUser?.username);
+                  const publicGallery2 = presentations.filter(p => p.isPublic && p.userId !== currentUser?.username);
+                  return (
+                    <div>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'2rem',gap:'1rem',flexWrap:'wrap'}}>
+                        <div>
+                          <h2 style={{fontSize:'1.6rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",marginBottom:'0.25rem',marginTop:0}}>Presentations</h2>
+                          <p style={{color:'#8b92b0',fontSize:'0.85rem',margin:0}}>Build slide-based presentations from your research</p>
+                        </div>
+                        <button onClick={()=>setShowNewPresentationModal(true)} style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0,alignSelf:'flex-start'}}>+ New Presentation</button>
+                      </div>
+                      <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>My Presentations</div>
+                      {myPresns2.length === 0 ? (
+                        <div className="empty-state" style={{marginBottom:'2rem'}}><div className="empty-state-icon">🎞️</div><p>No presentations yet. Hit "+ New Presentation" to get started.</p></div>
+                      ) : (
+                        <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'2rem'}}>
+                          {myPresns2.map(p=>(
+                            <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
+                              onClick={()=>setActivePresentationId(p.id)}
+                              onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.4)'}
+                              onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                              <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                                <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                              </div>
+                              <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:p.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.isPublic?'#10b981':'#8b92b0',border:`1px solid ${p.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
+                                {p.isPublic?'🌐 Public':'🔒 Private'}
+                              </span>
+                              <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.3rem 0.7rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'7px',color:'#f87171',cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {publicGallery2.length > 0 && (
+                        <>
+                          <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>Public Gallery</div>
+                          <div style={{display:'flex',flexDirection:'column',gap:'0.75rem'}}>
+                            {publicGallery2.map(p=>(
+                              <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
+                                onClick={()=>setActivePresentationId(p.id)}
+                                onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(16,185,129,0.4)'}
+                                onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                                <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                                  <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · by {p.userId} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                                </div>
+                                <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {/* Admin / Owner Panel */}
@@ -2347,8 +2529,8 @@
               </div>
             )}
 
-            {/* Show filters on all tabs except upload and account */}
-            {activeTab !== 'upload' && activeTab !== 'account' && <FiltersComponent {...filterProps} />}
+            {/* Show filters on all tabs except upload, account, and presentations */}
+            {activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && <FiltersComponent {...filterProps} />}
 
             {/* TIMELINE */}
             {activeTab === 'timeline' && (
@@ -2482,6 +2664,117 @@
                 })}
               </div>
             )}
+
+            {/* PRESENTATIONS */}
+            {activeTab === 'presentations' && (() => {
+              const activePres = activePresentationId ? presentations.find(p => p.id === activePresentationId) : null;
+              const isPresOwner = activePres && activePres.userId === currentUser?.username;
+              if (activePres) {
+                return (
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'2rem',flexWrap:'wrap'}}>
+                      <button onClick={()=>setActivePresentationId(null)} style={{padding:'0.4rem 0.8rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',flexShrink:0}}>← Back</button>
+                      <h2 style={{flex:1,fontSize:'1.4rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePres.name}</h2>
+                      {isPresOwner && (
+                        <button onClick={()=>togglePresentationPublic(activePres.id)} style={{padding:'0.3rem 0.8rem',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',flexShrink:0,background:activePres.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:activePres.isPublic?'#10b981':'#8b92b0',border:`1px solid ${activePres.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
+                          {activePres.isPublic?'🌐 Public':'🔒 Private'}
+                        </button>
+                      )}
+                      {activePres.slides.length > 0 && (
+                        <button onClick={()=>setPresentationMode({pId:activePres.id,idx:0})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>▶ Present</button>
+                      )}
+                    </div>
+                    {activePres.slides.length === 0 ? (
+                      <div className="empty-state" style={{marginBottom:'1.5rem'}}><div className="empty-state-icon">🎞️</div><p>No slides yet. Add an event from the database below.</p></div>
+                    ) : (
+                      <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'1.5rem'}}>
+                        {activePres.slides.map((slide, idx) => {
+                          const evt = data.events.find(e => e.id === slide.eventId);
+                          const slideTitle = slide.customTitle || evt?.title || '(Unknown Event)';
+                          const slideContent = slide.customContent || evt?.aiSummary || evt?.description || '';
+                          const slideDate = slide.customDate || evt?.date || '';
+                          return (
+                            <div key={slide.id} style={{display:'flex',alignItems:'flex-start',gap:'0.75rem',padding:'0.9rem 1.1rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px'}}>
+                              <div style={{fontSize:'0.75rem',color:'#8b92b0',fontWeight:700,minWidth:'22px',paddingTop:'0.15rem',fontFamily:"'Space Mono',monospace",textAlign:'right',flexShrink:0}}>{idx+1}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideTitle}</div>
+                                {slideDate && <div style={{fontSize:'0.75rem',color:'#60a5fa',marginBottom:'0.2rem'}}>{slideDate}</div>}
+                                <div style={{fontSize:'0.8rem',color:'#8b92b0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideContent.substring(0,100)}{slideContent.length>100?'…':''}</div>
+                              </div>
+                              <div style={{display:'flex',gap:'0.4rem',flexShrink:0,alignItems:'center'}}>
+                                {isPresOwner && <button onClick={()=>setEditingSlide({pId:activePres.id,slide,localTitle:slide.customTitle,localDate:slide.customDate,localContent:slide.customContent,localTopics:slide.customTopics,localNotes:slide.customNotes})} style={{padding:'0.3rem 0.6rem',background:'rgba(96,165,250,0.12)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit'}}>Edit</button>}
+                                {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'up')} disabled={idx===0} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===0?'#3d4563':'#8b92b0',cursor:idx===0?'not-allowed':'pointer',fontSize:'0.78rem'}}>↑</button>}
+                                {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'down')} disabled={idx===activePres.slides.length-1} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===activePres.slides.length-1?'#3d4563':'#8b92b0',cursor:idx===activePres.slides.length-1?'not-allowed':'pointer',fontSize:'0.78rem'}}>↓</button>}
+                                {isPresOwner && <button onClick={()=>removeSlideFromPresentation(activePres.id,slide.id)} style={{padding:'0.3rem 0.45rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'0.78rem'}}>✕</button>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {isPresOwner && (
+                      <button onClick={()=>{setSlidePickerSearch('');setShowSlideEventPicker(activePres.id);}} style={{padding:'0.6rem 1.2rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>+ Add Slide from Database</button>
+                    )}
+                  </div>
+                );
+              }
+              const myPresns = presentations.filter(p => p.userId === currentUser?.username);
+              const publicGallery = presentations.filter(p => p.isPublic && p.userId !== currentUser?.username);
+              return (
+                <div>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'2rem',gap:'1rem',flexWrap:'wrap'}}>
+                    <div>
+                      <h2 style={{fontSize:'1.6rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",marginBottom:'0.25rem',marginTop:0}}>Presentations</h2>
+                      <p style={{color:'#8b92b0',fontSize:'0.85rem',margin:0}}>Build slide-based presentations from your research</p>
+                    </div>
+                    <button onClick={()=>setShowNewPresentationModal(true)} style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0,alignSelf:'flex-start'}}>+ New Presentation</button>
+                  </div>
+                  <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>My Presentations</div>
+                  {myPresns.length === 0 ? (
+                    <div className="empty-state" style={{marginBottom:'2rem'}}><div className="empty-state-icon">🎞️</div><p>No presentations yet. Hit "+ New Presentation" to get started.</p></div>
+                  ) : (
+                    <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'2rem'}}>
+                      {myPresns.map(p=>(
+                        <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
+                          onClick={()=>setActivePresentationId(p.id)}
+                          onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.4)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                          <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                            <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                          </div>
+                          <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:p.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.isPublic?'#10b981':'#8b92b0',border:`1px solid ${p.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
+                            {p.isPublic?'🌐 Public':'🔒 Private'}
+                          </span>
+                          <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.3rem 0.7rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'7px',color:'#f87171',cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {publicGallery.length > 0 && (
+                    <>
+                      <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>Public Gallery</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:'0.75rem'}}>
+                        {publicGallery.map(p=>(
+                          <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
+                            onClick={()=>setActivePresentationId(p.id)}
+                            onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(16,185,129,0.4)'}
+                            onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                            <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                              <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · by {p.userId} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                            </div>
+                            <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* UPLOAD */}
             {activeTab === 'upload' && (
@@ -2719,6 +3012,143 @@
           </main>
 
           {showModal && modalData && modalViewJSX}
+
+          {/* FULLSCREEN PRESENTATION MODE */}
+          {presentationMode && (() => {
+            const pres = presentations.find(p => p.id === presentationMode.pId);
+            if (!pres || pres.slides.length === 0) return null;
+            const curIdx = presentationMode.idx;
+            const slide = pres.slides[curIdx];
+            const evt = slide ? data.events.find(e => e.id === slide.eventId) : null;
+            const slideTitle = slide?.customTitle || evt?.title || '';
+            const slideDate = slide?.customDate || evt?.date || '';
+            const slideContent = slide?.customContent || evt?.aiSummary || evt?.description || '';
+            const slideTopics = slide?.customTopics ? slide.customTopics.split(',').map(t=>t.trim()).filter(Boolean) : (evt?.topics||[]);
+            const slideNotes = slide?.customNotes || '';
+            const totalSlides = pres.slides.length;
+            const isDark = presentationTheme === 'dark';
+            return (
+              <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,background:isDark?'#080b1a':'#e8ecf5',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem',boxSizing:'border-box'}}>
+                <div style={{position:'absolute',top:'1rem',left:'1rem',color:isDark?'#8b92b0':'#888',fontSize:'0.78rem',fontFamily:"'Space Mono',monospace",maxWidth:'40%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pres.name}</div>
+                <div style={{position:'absolute',top:'1rem',right:'1rem',display:'flex',gap:'0.5rem',zIndex:1}}>
+                  <button onClick={()=>setPresentationTheme(isDark?'light':'dark')} style={{padding:'0.4rem 0.9rem',borderRadius:'8px',border:`1px solid ${isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)'}`,background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)',color:isDark?'#e0e6ed':'#333',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',fontWeight:600}}>
+                    {isDark?'☀ Light':'🌙 Dark'}
+                  </button>
+                  <button onClick={()=>setPresentationMode(null)} style={{padding:'0.4rem 0.75rem',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.4)',background:'rgba(239,68,68,0.1)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:'1rem',lineHeight:1}}>✕</button>
+                </div>
+                <div style={{maxWidth:'820px',width:'100%',padding:'3rem 3.5rem',background:isDark?'rgba(21,25,50,0.85)':'#fff',borderRadius:'20px',border:`1px solid ${isDark?'rgba(96,165,250,0.2)':'rgba(0,0,0,0.1)'}`,boxShadow:isDark?'0 20px 60px rgba(0,0,0,0.7)':'0 10px 40px rgba(0,0,0,0.15)',minHeight:'260px',display:'flex',flexDirection:'column',gap:'1.25rem',justifyContent:'center',boxSizing:'border-box'}}>
+                  {slideDate && <div style={{fontSize:'0.85rem',color:'#60a5fa',fontFamily:"'Space Mono',monospace",letterSpacing:'0.5px'}}>{slideDate}</div>}
+                  <h1 style={{fontSize:'clamp(1.4rem,3vw,2.2rem)',fontWeight:800,color:isDark?'#e0e6ed':'#111',fontFamily:"'Space Mono',monospace",lineHeight:1.3,margin:0}}>{slideTitle}</h1>
+                  {slideContent && <p style={{fontSize:'1.05rem',color:isDark?'#c0c7d8':'#444',lineHeight:1.7,margin:0}}>{slideContent}</p>}
+                  {slideTopics.length>0 && <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>{slideTopics.slice(0,6).map(t=><span key={t} style={{padding:'0.25rem 0.7rem',borderRadius:'20px',fontSize:'0.78rem',fontWeight:600,background:isDark?'rgba(124,58,237,0.15)':'rgba(124,58,237,0.08)',color:'#a78bfa',border:'1px solid rgba(124,58,237,0.3)'}}>{t}</span>)}</div>}
+                  {slideNotes && <div style={{padding:'0.75rem 1rem',background:isDark?'rgba(96,165,250,0.08)':'rgba(37,99,235,0.05)',borderRadius:'10px',borderLeft:'3px solid rgba(96,165,250,0.4)',color:isDark?'#93c5fd':'#2563eb',fontSize:'0.9rem',lineHeight:1.6}}>{slideNotes}</div>}
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'2rem',marginTop:'1.5rem'}}>
+                  <button onClick={()=>setPresentationMode(prev=>({...prev,idx:Math.max(0,prev.idx-1)}))} disabled={curIdx===0} style={{padding:'0.75rem 1.75rem',borderRadius:'12px',border:`1px solid ${isDark?'rgba(96,165,250,0.3)':'rgba(0,0,0,0.15)'}`,background:isDark?(curIdx===0?'rgba(26,31,58,0.4)':'rgba(96,165,250,0.1)'):(curIdx===0?'rgba(0,0,0,0.03)':'#fff'),color:curIdx===0?(isDark?'#3d4563':'#ccc'):(isDark?'#60a5fa':'#2563eb'),cursor:curIdx===0?'not-allowed':'pointer',fontSize:'1.3rem',fontWeight:700}}>←</button>
+                  <span style={{color:isDark?'#8b92b0':'#666',fontSize:'0.9rem',fontFamily:"'Space Mono',monospace",minWidth:'60px',textAlign:'center'}}>{curIdx+1} / {totalSlides}</span>
+                  <button onClick={()=>setPresentationMode(prev=>({...prev,idx:Math.min(totalSlides-1,prev.idx+1)}))} disabled={curIdx===totalSlides-1} style={{padding:'0.75rem 1.75rem',borderRadius:'12px',border:`1px solid ${isDark?'rgba(96,165,250,0.3)':'rgba(0,0,0,0.15)'}`,background:isDark?(curIdx===totalSlides-1?'rgba(26,31,58,0.4)':'rgba(96,165,250,0.1)'):(curIdx===totalSlides-1?'rgba(0,0,0,0.03)':'#fff'),color:curIdx===totalSlides-1?(isDark?'#3d4563':'#ccc'):(isDark?'#60a5fa':'#2563eb'),cursor:curIdx===totalSlides-1?'not-allowed':'pointer',fontSize:'1.3rem',fontWeight:700}}>→</button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* NEW PRESENTATION MODAL */}
+          {showNewPresentationModal && (
+            <div className="modal" onClick={()=>setShowNewPresentationModal(false)}>
+              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'420px'}}>
+                <h3 style={{marginBottom:'0.5rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace"}}>New Presentation</h3>
+                <p style={{color:'#8b92b0',fontSize:'0.83rem',marginBottom:'1.25rem'}}>Give your presentation a title.</p>
+                <div style={{marginBottom:'1.25rem'}}>
+                  <label className="filter-label">Name</label>
+                  <input type="text" value={newPresentationName} onChange={e=>setNewPresentationName(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter'&&newPresentationName.trim()){createPresentation(newPresentationName);setNewPresentationName('');setShowNewPresentationModal(false);}else if(e.key==='Escape'){setShowNewPresentationModal(false);}}}
+                    placeholder="e.g. JFK Assassination Overview"
+                    style={{width:'100%',padding:'0.65rem 0.9rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} autoFocus />
+                </div>
+                <div style={{display:'flex',gap:'0.75rem',justifyContent:'flex-end'}}>
+                  <button onClick={()=>{setShowNewPresentationModal(false);setNewPresentationName('');}} style={{padding:'0.5rem 1.2rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Cancel</button>
+                  <button onClick={()=>{if(newPresentationName.trim()){createPresentation(newPresentationName);setNewPresentationName('');setShowNewPresentationModal(false);}}} disabled={!newPresentationName.trim()} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:newPresentationName.trim()?'pointer':'not-allowed',fontFamily:'inherit',fontSize:'0.85rem',opacity:newPresentationName.trim()?1:0.5}}>Create</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SLIDE EVENT PICKER */}
+          {showSlideEventPicker && (
+            <div className="modal" onClick={()=>setShowSlideEventPicker(false)}>
+              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'580px',maxHeight:'70vh',display:'flex',flexDirection:'column',padding:'1.5rem'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem',flexShrink:0}}>
+                  <h3 style={{color:'#e0e6ed',margin:0,fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Add Slide from Database</h3>
+                  <button onClick={()=>setShowSlideEventPicker(false)} style={{background:'none',border:'none',color:'#8b92b0',fontSize:'1.5rem',cursor:'pointer',lineHeight:1,padding:'0 0.25rem'}}>×</button>
+                </div>
+                <input type="text" placeholder="Search events…" value={slidePickerSearch} onChange={e=>setSlidePickerSearch(e.target.value)}
+                  style={{padding:'0.6rem 0.9rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',marginBottom:'0.75rem',outline:'none',flexShrink:0}} autoFocus />
+                <div style={{overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'0.45rem'}}>
+                  {sortedEvents.filter(e=>{
+                    if(!slidePickerSearch)return true;
+                    const s=slidePickerSearch.toLowerCase();
+                    return(e.title||'').toLowerCase().includes(s)||(e.aiSummary||'').toLowerCase().includes(s)||(e.topics||[]).some(t=>t.toLowerCase().includes(s));
+                  }).slice(0,60).map(e=>(
+                    <div key={e.id} onClick={()=>{addSlideToPresentation(showSlideEventPicker,e);setShowSlideEventPicker(false);}}
+                      style={{padding:'0.65rem 0.9rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'8px',cursor:'pointer'}}
+                      onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.5)'}
+                      onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.4)'}>
+                      <div style={{fontWeight:600,color:'#e0e6ed',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:'0.15rem'}}>{e.title}</div>
+                      <div style={{fontSize:'0.75rem',color:'#8b92b0'}}>{e.date||'No date'}{(e.topics||[]).length>0?' · ':''}{(e.topics||[]).slice(0,3).join(', ')}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* EDIT SLIDE MODAL */}
+          {editingSlide && (
+            <div className="modal" onClick={()=>setEditingSlide(null)}>
+              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'540px'}}>
+                <h3 style={{marginBottom:'0.35rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Edit Slide</h3>
+                <p style={{color:'#8b92b0',fontSize:'0.82rem',marginBottom:'1.5rem',lineHeight:1.5}}>Override event data for this slide. Leave a field blank to use the original event data.</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'1rem',marginBottom:'1.5rem'}}>
+                  <div>
+                    <label className="filter-label">Title override</label>
+                    <input type="text" value={editingSlide.localTitle} onChange={e=>setEditingSlide(p=>({...p,localTitle:e.target.value}))}
+                      placeholder={data.events.find(ev=>ev.id===editingSlide.slide.eventId)?.title||''}
+                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} />
+                  </div>
+                  <div>
+                    <label className="filter-label">Date override</label>
+                    <input type="text" value={editingSlide.localDate} onChange={e=>setEditingSlide(p=>({...p,localDate:e.target.value}))}
+                      placeholder={data.events.find(ev=>ev.id===editingSlide.slide.eventId)?.date||'e.g. 1963-11-22'}
+                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} />
+                  </div>
+                  <div>
+                    <label className="filter-label">Content override</label>
+                    <textarea value={editingSlide.localContent} onChange={e=>setEditingSlide(p=>({...p,localContent:e.target.value}))}
+                      placeholder="Leave blank to use AI summary or description…"
+                      rows={4}
+                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none',resize:'vertical'}} />
+                  </div>
+                  <div>
+                    <label className="filter-label">Notes (shown in a callout box on the slide)</label>
+                    <textarea value={editingSlide.localNotes} onChange={e=>setEditingSlide(p=>({...p,localNotes:e.target.value}))}
+                      placeholder="Optional presenter notes or extra context…"
+                      rows={3}
+                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none',resize:'vertical'}} />
+                  </div>
+                  <div>
+                    <label className="filter-label">Topics override (comma-separated)</label>
+                    <input type="text" value={editingSlide.localTopics} onChange={e=>setEditingSlide(p=>({...p,localTopics:e.target.value}))}
+                      placeholder={((data.events.find(ev=>ev.id===editingSlide.slide.eventId)?.topics)||[]).join(', ')||'e.g. CIA, Cold War'}
+                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} />
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:'0.75rem',justifyContent:'flex-end'}}>
+                  <button onClick={()=>setEditingSlide(null)} style={{padding:'0.5rem 1.2rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Cancel</button>
+                  <button onClick={()=>saveSlideEdits(editingSlide.pId,editingSlide.slide.id,{customTitle:editingSlide.localTitle,customDate:editingSlide.localDate,customContent:editingSlide.localContent,customTopics:editingSlide.localTopics,customNotes:editingSlide.localNotes})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Save Changes</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Download Format Popup */}
           {showDownloadPopup && (
