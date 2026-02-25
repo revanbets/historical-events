@@ -786,18 +786,47 @@
         [slides[idx], slides[ni]] = [slides[ni], slides[idx]];
         await saveSlidesToPres(pId, slides);
       };
+      // ── Rich slide layout builder (shared by addEventsAsSlides + AI generation) ──
+      const createEventSlide = (uid, evt, aiContent) => {
+        const title  = aiContent?.title || evt?.title || '';
+        const date   = aiContent?.date  || evt?.date  || '';
+        const body   = aiContent?.body  || evt?.aiSummary || evt?.description || '';
+        const topics = evt?.topics        || [];
+        const people = evt?.people        || [];
+        const orgs   = evt?.organizations || [];
+        const link   = evt?.link || '';
+        const hasTags  = topics.length > 0 || people.length > 0 || orgs.length > 0;
+        const hasLinks = !!link || !!evt;
+        const bodyW  = hasTags ? 59 : 91;
+        const bodyY  = 27;
+        const bodyH  = hasLinks ? 47 : 59;
+        const srcY   = bodyY + bodyH + 2;
+        return {
+          id: uid(), bg: '#080d22',
+          blocks: [
+            // Blue accent bar on left edge
+            { id: uid(), type: 'image', x: 0, y: 0, w: 1.3, h: 100, background: '#3b82f6', imageUrl: null, noImagePrompt: true, imageFit: 'cover', eventId: null, eventField: null },
+            // Title
+            { id: uid(), type: 'heading', x: 3, y: 6, w: hasTags ? 58 : 91, h: 17, text: title, fontSize: 34, fontWeight: 'bold', fontStyle: 'normal', color: '#ffffff', textAlign: 'left', background: 'transparent', eventId: evt?.id||null, eventField: 'title' },
+            // Date (top-right of main area)
+            ...(date ? [{ id: uid(), type: 'text', x: hasTags ? 65 : 67, y: 8, w: hasTags ? 33 : 30, h: 7, text: date, fontSize: 12, fontWeight: 'normal', fontStyle: 'normal', color: '#60a5fa', textAlign: 'right', background: 'transparent', eventId: evt?.id||null, eventField: 'date' }] : []),
+            // Thin divider line
+            { id: uid(), type: 'image', x: 3, y: 24, w: hasTags ? 58 : 92, h: 0.45, background: 'rgba(96,165,250,0.25)', imageUrl: null, noImagePrompt: true, imageFit: 'cover', eventId: null, eventField: null },
+            // Body text
+            { id: uid(), type: 'text', x: 3, y: bodyY, w: bodyW, h: bodyH, text: body, fontSize: 14, fontWeight: 'normal', fontStyle: 'normal', color: '#c0c7d8', textAlign: 'left', background: 'transparent', eventId: evt?.id||null, eventField: null },
+            // Tags panel (right column)
+            ...(hasTags ? [{ id: uid(), type: 'tags', x: 65, y: 6, w: 33, h: hasLinks ? 72 : 88, topics, people, orgs, background: 'transparent', eventId: evt?.id||null, eventField: null }] : []),
+            // Sources + event link strip at bottom
+            ...(hasLinks ? [{ id: uid(), type: 'sources', x: 3, y: srcY, w: 92, h: 100 - srcY - 2, items: [...(link ? [{url: link, label: 'Source'}] : []), ...(evt ? [{eventId: evt.id, label: 'View Event'}] : [])], background: 'transparent', eventId: evt?.id||null, eventField: null }] : []),
+          ].filter(Boolean)
+        };
+      };
+
       const addEventsAsSlides = async (pId, events) => {
         const pres = presentations.find(p => p.id === pId);
         if (!pres) return;
         const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
-        const newSlides = events.map(evt => ({
-          id: uid(), bg: '#0a0d1e',
-          blocks: [
-            { id: uid(), type: 'heading', x: 5, y: 8, w: 90, h: 18, text: evt.title || '', fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', color: '#ffffff', textAlign: 'left', background: 'transparent', eventId: evt.id, eventField: 'title' },
-            { id: uid(), type: 'text', x: 5, y: 28, w: 40, h: 8, text: evt.date || '', fontSize: 15, fontWeight: 'normal', fontStyle: 'normal', color: '#60a5fa', textAlign: 'left', background: 'transparent', eventId: evt.id, eventField: 'date' },
-            { id: uid(), type: 'text', x: 5, y: 38, w: 90, h: 48, text: evt.aiSummary || evt.description || '', fontSize: 15, fontWeight: 'normal', fontStyle: 'normal', color: '#c0c7d8', textAlign: 'left', background: 'transparent', eventId: evt.id, eventField: 'summary' },
-          ]
-        }));
+        const newSlides = events.map(evt => createEventSlide(uid, evt, null));
         await saveSlidesToPres(pId, [...pres.slides, ...newSlides]);
         setPresSelectedEvents(new Set());
         setEditingSlideId(newSlides[0]?.id || null);
@@ -931,14 +960,11 @@
           const result = await res.json();
           if (result.slides) {
             const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
-            const aiSlides = result.slides.map(s => ({
-              id: uid(), bg: '#0a0d1e',
-              blocks: [
-                ...(s.title ? [{ id: uid(), type: 'heading', x: 5, y: 8, w: 90, h: 18, text: s.title, fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', color: '#ffffff', textAlign: 'left', background: 'transparent', eventId: null, eventField: null }] : []),
-                ...(s.date  ? [{ id: uid(), type: 'text',    x: 5, y: 28, w: 40, h: 7,  text: s.date,  fontSize: 14, fontWeight: 'normal', fontStyle: 'normal', color: '#60a5fa', textAlign: 'left', background: 'transparent', eventId: null, eventField: null }] : []),
-                ...(s.body  ? [{ id: uid(), type: 'text',    x: 5, y: 37, w: 90, h: 50, text: s.body,  fontSize: 15, fontWeight: 'normal', fontStyle: 'normal', color: '#c0c7d8', textAlign: 'left', background: 'transparent', eventId: null, eventField: null }] : []),
-              ]
-            }));
+            const aiSlides = result.slides.map((s, i) => {
+              // Re-attach to source event for tags/links (match by position in eventsPayload)
+              const srcEvt = i < eventsPayload.length ? data.events.find(e => e.id === eventsPayload[i].id) : null;
+              return createEventSlide(uid, srcEvt, { title: s.title, date: s.date, body: s.body });
+            });
             await saveSlidesToPres(pId, aiSlides);
             setEditingSlideId(aiSlides[0]?.id || null);
           }
@@ -2853,7 +2879,7 @@
                         <div key={s.id} style={{flexShrink:0,width:'130px',position:'relative',cursor:'pointer'}}>
                           <div onClick={()=>setEditingSlideId(s.id)} style={{width:'130px',height:'73px',background:s.bg||'#0a0d1e',borderRadius:'6px',border:`2px solid ${editingSlideId===s.id?'#60a5fa':'rgba(61,69,99,0.4)'}`,overflow:'hidden',position:'relative'}}>
                             {s.blocks.map(b=>(
-                              <div key={b.id} style={{position:'absolute',left:`${b.x}%`,top:`${b.y}%`,width:`${b.w}%`,height:`${b.h}%`,background:b.type==='image'?'rgba(96,165,250,0.25)':b.type==='heading'?'rgba(255,255,255,0.2)':'rgba(192,199,216,0.12)',borderRadius:'1px'}} />
+                              <div key={b.id} style={{position:'absolute',left:`${b.x}%`,top:`${b.y}%`,width:`${b.w}%`,height:`${b.h}%`,background:b.type==='image'?(b.background&&b.background!=='transparent'?b.background:'rgba(96,165,250,0.25)'):b.type==='heading'?'rgba(255,255,255,0.2)':b.type==='tags'?'rgba(124,58,237,0.2)':b.type==='sources'?'rgba(16,185,129,0.12)':'rgba(192,199,216,0.12)',borderRadius:'1px'}} />
                             ))}
                           </div>
                           <div style={{fontSize:'0.6rem',color:'#8b92b0',textAlign:'center',marginTop:'0.2rem'}}>Slide {i+1}</div>
@@ -2895,14 +2921,25 @@
                                   style={{position:'absolute',left:`${block.x}%`,top:`${block.y}%`,width:`${block.w}%`,height:`${block.h}%`,outline:isSel?'2px solid #60a5fa':isTxt?'2px solid #a78bfa':'none',outlineOffset:'-1px',background:block.background==='transparent'||!block.background?'transparent':block.background,boxSizing:'border-box',userSelect:'none',cursor:isPresOwner&&!isTxt?'move':'default'}}
                                   onPointerDown={isPresOwner&&!isTxt?e=>handleBlockPointerDown(e,block.id,false,''):undefined}
                                   onClick={e=>{e.stopPropagation();setSelectedBlockId(block.id);}}
-                                  onDoubleClick={e=>{e.stopPropagation();if(block.type!=='image'&&isPresOwner){setSelectedBlockId(block.id);setCanvasTextEditId(block.id);}}}>
+                                  onDoubleClick={e=>{e.stopPropagation();if(block.type!=='image'&&block.type!=='tags'&&block.type!=='sources'&&isPresOwner){setSelectedBlockId(block.id);setCanvasTextEditId(block.id);}}}>
                                   {block.type==='image' ? (
                                     block.imageUrl
                                       ? <img src={block.imageUrl} style={{width:'100%',height:'100%',objectFit:block.imageFit||'cover',display:'block',pointerEvents:'none'}} alt="" />
+                                      : block.noImagePrompt ? null
                                       : <div onClick={isPresOwner?e=>{e.stopPropagation();openImageBrowser(block.id);}:undefined} style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(96,165,250,0.5)',fontSize:'0.75rem',border:'1px dashed rgba(96,165,250,0.3)',borderRadius:'4px',gap:'0.2rem',cursor:isPresOwner?'pointer':'default'}}>
                                           <span style={{fontSize:'1.4rem'}}>🖼️</span>
                                           {isPresOwner && <span>Click to add image</span>}
                                         </div>
+                                  ) : block.type==='tags' ? (
+                                    <div style={{padding:'4%',height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',gap:'3%',fontSize:'clamp(5px,0.85vw,8px)'}}>
+                                      {block.topics?.length>0 && <><div style={{color:'#a78bfa',fontWeight:700}}>Topics</div><div style={{display:'flex',flexWrap:'wrap',gap:'2px'}}>{block.topics.slice(0,5).map(t=><span key={t} style={{padding:'1px 3px',background:'rgba(124,58,237,0.2)',color:'#c4b5fd',borderRadius:'2px'}}>{t}</span>)}</div></>}
+                                      {block.people?.length>0 && <><div style={{color:'#60a5fa',fontWeight:700,marginTop:'2px'}}>People</div><div style={{display:'flex',flexWrap:'wrap',gap:'2px'}}>{block.people.slice(0,4).map(p=><span key={p} style={{padding:'1px 3px',background:'rgba(96,165,250,0.2)',color:'#93c5fd',borderRadius:'2px'}}>{p}</span>)}</div></>}
+                                      {block.orgs?.length>0 && <><div style={{color:'#10b981',fontWeight:700,marginTop:'2px'}}>Orgs</div><div style={{display:'flex',flexWrap:'wrap',gap:'2px'}}>{block.orgs.slice(0,4).map(o=><span key={o} style={{padding:'1px 3px',background:'rgba(16,185,129,0.2)',color:'#6ee7b7',borderRadius:'2px'}}>{o}</span>)}</div></>}
+                                    </div>
+                                  ) : block.type==='sources' ? (
+                                    <div style={{padding:'2% 3%',height:'100%',overflow:'hidden',display:'flex',gap:'3%',alignItems:'center',flexWrap:'wrap',borderTop:'1px solid rgba(96,165,250,0.15)',fontSize:'clamp(5px,0.75vw,7px)'}}>
+                                      {(block.items||[]).map((item,i)=><span key={i} style={{padding:'1px 4px',borderRadius:'3px',background:item.eventId?'rgba(96,165,250,0.12)':'rgba(16,185,129,0.1)',color:item.eventId?'#60a5fa':'#10b981',border:`1px solid ${item.eventId?'rgba(96,165,250,0.25)':'rgba(16,185,129,0.25)'}`}}>{item.eventId?'→ ':'🔗 '}{item.label}</span>)}
+                                    </div>
                                   ) : isTxt ? (
                                     <textarea value={block.text||''} onChange={e=>{e.stopPropagation();updateBlock(block.id,{text:e.target.value});}} onBlur={()=>setCanvasTextEditId(null)} onPointerDown={e=>e.stopPropagation()} autoFocus style={{width:'100%',height:'100%',background:'transparent',border:'none',color:block.color||'#e0e6ed',fontSize:`${block.fontSize||16}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'normal',textAlign:block.textAlign||'left',resize:'none',outline:'none',fontFamily:'inherit',padding:'2px',lineHeight:1.4,boxSizing:'border-box'}} />
                                   ) : (
@@ -2922,7 +2959,7 @@
                         {/* Properties panel */}
                         {selBlock && isPresOwner && (
                           <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap',padding:'0.55rem 0.75rem',background:'rgba(21,25,50,0.85)',borderRadius:'8px',alignItems:'center',marginTop:'0.4rem',border:'1px solid rgba(61,69,99,0.4)'}}>
-                            {selBlock.type!=='image' && (<>
+                            {selBlock.type!=='image' && selBlock.type!=='tags' && selBlock.type!=='sources' && (<>
                               <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Size</label>
                               <input type="number" value={selBlock.fontSize||16} min={8} max={120} onChange={e=>updateBlock(selectedBlockId,{fontSize:Number(e.target.value)})} style={{width:'50px',padding:'0.2rem 0.35rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.8rem'}} />
                               <button onClick={()=>updateBlock(selectedBlockId,{fontWeight:selBlock.fontWeight==='bold'?'normal':'bold'})} style={{...btnSm,fontWeight:'bold',color:selBlock.fontWeight==='bold'?'#60a5fa':'#8b92b0',background:selBlock.fontWeight==='bold'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)'}}>B</button>
@@ -3334,7 +3371,9 @@
                 {/* 16:9 slide canvas */}
                 <div style={{position:'relative',width:'min(88vw,calc(80vh*(16/9)))',aspectRatio:'16/9',background:slideBg,boxShadow:isDark?'0 20px 60px rgba(0,0,0,0.8)':'0 10px 40px rgba(0,0,0,0.2)',borderRadius:'6px',overflow:'hidden'}}>
                   {(slide?.blocks||[]).map(b => {
-                    const isImg = b.type === 'image';
+                    const isImg  = b.type === 'image';
+                    const isTags = b.type === 'tags';
+                    const isSrc  = b.type === 'sources';
                     return (
                       <div key={b.id} style={{
                         position:'absolute',
@@ -3344,10 +3383,39 @@
                         overflow:'hidden',
                         display:'flex', alignItems:'flex-start',
                         boxSizing:'border-box',
-                        padding: isImg ? 0 : '2% 3%',
+                        padding: (isImg || isTags || isSrc) ? 0 : '2% 3%',
                       }}>
                         {isImg ? (
                           b.imageUrl ? <img src={b.imageUrl} alt="" style={{width:'100%',height:'100%',objectFit:b.imageFit||'cover',display:'block'}} /> : null
+                        ) : isTags ? (
+                          <div style={{width:'100%',height:'100%',padding:'4% 5%',overflow:'hidden',display:'flex',flexDirection:'column',gap:'0.45em',fontSize:`clamp(8px,1.25vw,13px)`}}>
+                            {b.topics?.length>0 && (<>
+                              <div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.72em',letterSpacing:'0.8px',textTransform:'uppercase',marginBottom:'0.1em'}}>Topics</div>
+                              <div style={{display:'flex',flexWrap:'wrap',gap:'0.3em',marginBottom:'0.25em'}}>
+                                {b.topics.map(t=><span key={t} style={{padding:'0.15em 0.55em',borderRadius:'4px',background:'rgba(124,58,237,0.2)',color:'#c4b5fd',border:'1px solid rgba(124,58,237,0.3)',fontSize:'0.9em',whiteSpace:'nowrap'}}>{t}</span>)}
+                              </div>
+                            </>)}
+                            {b.people?.length>0 && (<>
+                              <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.72em',letterSpacing:'0.8px',textTransform:'uppercase',marginBottom:'0.1em'}}>People</div>
+                              <div style={{display:'flex',flexWrap:'wrap',gap:'0.3em',marginBottom:'0.25em'}}>
+                                {b.people.map(p=><span key={p} style={{padding:'0.15em 0.55em',borderRadius:'4px',background:'rgba(96,165,250,0.15)',color:'#93c5fd',border:'1px solid rgba(96,165,250,0.3)',fontSize:'0.9em',whiteSpace:'nowrap'}}>{p}</span>)}
+                              </div>
+                            </>)}
+                            {b.orgs?.length>0 && (<>
+                              <div style={{color:'#34d399',fontWeight:700,fontSize:'0.72em',letterSpacing:'0.8px',textTransform:'uppercase',marginBottom:'0.1em'}}>Organizations</div>
+                              <div style={{display:'flex',flexWrap:'wrap',gap:'0.3em'}}>
+                                {b.orgs.map(o=><span key={o} style={{padding:'0.15em 0.55em',borderRadius:'4px',background:'rgba(16,185,129,0.15)',color:'#6ee7b7',border:'1px solid rgba(16,185,129,0.3)',fontSize:'0.9em',whiteSpace:'nowrap'}}>{o}</span>)}
+                              </div>
+                            </>)}
+                          </div>
+                        ) : isSrc ? (
+                          <div style={{width:'100%',height:'100%',padding:'0 3%',display:'flex',alignItems:'center',gap:'0.6em',flexWrap:'wrap',borderTop:'1px solid rgba(96,165,250,0.12)'}}>
+                            {(b.items||[]).map((item,i) => item.eventId ? (
+                              <button key={i} onClick={()=>{const ev=data.events.find(e=>e.id===item.eventId);if(ev){setPresentationMode(null);setTimeout(()=>setModalData(ev),50);}}} style={{padding:'0.2em 0.85em',borderRadius:'6px',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.4)',color:'#93c5fd',cursor:'pointer',fontFamily:'inherit',fontSize:`clamp(8px,1.15vw,12px)`,fontWeight:600,lineHeight:1.5}}>→ {item.label}</button>
+                            ) : (
+                              <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{padding:'0.2em 0.85em',borderRadius:'6px',background:'rgba(16,185,129,0.12)',border:'1px solid rgba(16,185,129,0.35)',color:'#6ee7b7',textDecoration:'none',fontSize:`clamp(8px,1.15vw,12px)`,fontWeight:600,lineHeight:1.5}}>🔗 {item.label}</a>
+                            ))}
+                          </div>
                         ) : (
                           <div style={{
                             fontSize:`clamp(9px, ${(b.fontSize||16) * 0.065}vw, ${(b.fontSize||16) * 1.4}px)`,
