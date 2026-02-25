@@ -43,6 +43,17 @@ def _sanitize_filename(name, max_len=80):
     return name[:max_len] if name else "untitled"
 
 
+def _format_time(seconds):
+    """Format seconds as M:SS or H:MM:SS."""
+    seconds = int(seconds)
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
 # ── Helpers ──
 
 def extract_video_id(url):
@@ -90,8 +101,9 @@ def get_video_metadata(url):
 
 # ── Step 2: Get transcript (fast path — YouTube captions) ──
 
-def get_youtube_transcript(video_id):
-    """Fetch existing YouTube captions. Returns (text, segments) or (None, None)."""
+def get_youtube_transcript(video_id, start_time=None, end_time=None):
+    """Fetch existing YouTube captions. Returns (text, segments) or (None, None).
+    If start_time/end_time (seconds) are given, only segments within that range are returned."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         ytt_api = YouTubeTranscriptApi()
@@ -103,6 +115,17 @@ def get_youtube_transcript(video_id):
                 "start": snippet.start,
                 "duration": snippet.duration,
             })
+
+        # Filter to time range if specified
+        if start_time is not None or end_time is not None:
+            filtered = [
+                s for s in segments
+                if (start_time is None or s["start"] + s["duration"] > start_time)
+                and (end_time is None or s["start"] < end_time)
+            ]
+            if filtered:
+                segments = filtered
+
         full_text = " ".join([s["text"] for s in segments])
         return full_text, segments
     except Exception as e:
@@ -205,10 +228,11 @@ def transcribe_with_whisper(video_path, model_size="base"):
 
 # ── Step 6: Extract visual frames (from stream URL or local file) ──
 
-def extract_frames(source, interval_seconds=30, max_frames=20):
+def extract_frames(source, interval_seconds=30, max_frames=20, start_time=None, end_time=None):
     """
     Extract frames at regular intervals from video.
     `source` can be a local file path or a stream URL.
+    start_time / end_time (seconds) optionally restrict the range.
     Returns list of dicts with base64 JPEG, timestamp, and label.
     """
     import cv2
@@ -224,6 +248,8 @@ def extract_frames(source, interval_seconds=30, max_frames=20):
     duration = total_frames / fps if total_frames > 0 and fps > 0 else 0
     print(f"  [frames] Opened source — fps={fps:.1f}, total_frames={total_frames}, duration={duration:.1f}s")
 
+    start_sec = start_time if start_time is not None else 0.0
+
     # For streams, duration might be 0 — try reading sequentially
     if duration <= 0:
         print(f"  [frames] Duration unknown (stream), reading frames sequentially...")
@@ -234,35 +260,46 @@ def extract_frames(source, interval_seconds=30, max_frames=20):
             ret, frame = cap.read()
             if not ret:
                 break
-            # Grab every Nth frame (approximate interval)
-            if frame_count % skip_interval == 0:
+            cur_ts = frame_count / fps
+            # Stop if past end_time
+            if end_time is not None and cur_ts > end_time:
+                break
+            # Grab every Nth frame within the range
+            if frame_count % skip_interval == 0 and cur_ts >= start_sec:
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 pil_img = Image.fromarray(frame_rgb)
                 pil_img.thumbnail((1024, 1024))
                 buffer = io.BytesIO()
                 pil_img.save(buffer, format="JPEG", quality=80)
                 b64 = base64.standard_b64encode(buffer.getvalue()).decode("utf-8")
-                timestamp = frame_count / fps
-                mins = int(timestamp // 60)
-                secs = int(timestamp % 60)
+                mins = int(cur_ts // 60)
+                secs = int(cur_ts % 60)
                 frames.append({
                     "base64": b64,
-                    "timestamp": timestamp,
+                    "timestamp": cur_ts,
                     "label": f"{mins}:{secs:02d}",
                 })
             frame_count += 1
         cap.release()
         return frames
 
-    # Adjust interval so we don't get too few frames for short videos
-    if duration < interval_seconds * 3:
-        interval_seconds = max(5, int(duration / max_frames))
+    # Effective range
+    end_sec = end_time if end_time is not None else duration
+    range_sec = max(1.0, end_sec - start_sec)
+
+    # Adjust interval so we get good coverage of the range
+    if range_sec < interval_seconds * 3:
+        interval_seconds = max(5, int(range_sec / max_frames))
 
     frame_interval = int(fps * interval_seconds)
+    start_frame = int(fps * start_sec)
+    end_frame = int(fps * end_sec)
     frames = []
-    frame_num = 0
+    frame_num = start_frame
 
     while cap.isOpened() and len(frames) < max_frames:
+        if frame_num >= end_frame:
+            break
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
         ret, frame = cap.read()
         if not ret:
@@ -379,7 +416,7 @@ MODE_CONFIG = {
 }
 
 
-def analyze_video_with_claude(transcript, frames, title="", uploader="", url="", mode="long"):
+def analyze_video_with_claude(transcript, frames, title="", uploader="", url="", mode="long", time_range_note=""):
     """Send transcript + visual frames to Claude for comprehensive analysis."""
     if not ANTHROPIC_API_KEY:
         return {
@@ -406,9 +443,10 @@ def analyze_video_with_claude(transcript, frames, title="", uploader="", url="",
 
     # Add transcript
     truncated_transcript = (transcript or "No transcript available.")[:50000]
+    range_header = f"\n{time_range_note}" if time_range_note else ""
     content.append({
         "type": "text",
-        "text": f"\n## TRANSCRIPT:\n{truncated_transcript}",
+        "text": f"\n## TRANSCRIPT:{range_header}\n{truncated_transcript}",
     })
 
     # Add visual frames with timestamps
@@ -538,22 +576,31 @@ def fetch_video_metadata_only(url):
 
 # ── Full pipeline ──
 
-def analyze_video_url(url, mode="long", skip_frames=False):
+def analyze_video_url(url, mode="long", skip_frames=False, start_time=None, end_time=None):
     """
     Full video analysis pipeline:
     1. Extract metadata (no download)
-    2. Get transcript (captions or whisper)
+    2. Get transcript (captions or whisper), filtered to start_time–end_time if given
     3. Get stream URL or download for frame extraction (unless skip_frames)
-    4. Extract visual frames (unless skip_frames)
+    4. Extract visual frames within start_time–end_time (unless skip_frames)
     5. Send transcript + frames to Claude
     6. Return structured analysis + metadata
 
+    start_time / end_time: float seconds, optional. Restrict analysis to a segment.
     Returns dict with: analysis, metadata, transcript, frames
     """
     video_id = extract_video_id(url)
     transcript = None
     segments = None
     video_path = None
+
+    # Build time range note for Claude
+    time_range_note = ""
+    if start_time is not None or end_time is not None:
+        start_str = _format_time(start_time or 0)
+        end_str = _format_time(end_time) if end_time is not None else "end"
+        time_range_note = f"[Segment analyzed: {start_str} – {end_str}]"
+        print(f"  Time range: {time_range_note}")
 
     # Step 1: Always get metadata first (no download)
     print(f"[1/5] Extracting metadata for: {url}")
@@ -562,7 +609,7 @@ def analyze_video_url(url, mode="long", skip_frames=False):
     # Step 2: Try YouTube captions first (instant, free)
     print(f"[2/5] Fetching transcript...")
     if video_id:
-        transcript, segments = get_youtube_transcript(video_id)
+        transcript, segments = get_youtube_transcript(video_id, start_time=start_time, end_time=end_time)
 
     # Step 3: Extract visual frames (unless skipped)
     frames = []
@@ -590,7 +637,8 @@ def analyze_video_url(url, mode="long", skip_frames=False):
             stream_url = get_stream_url(url)
             if stream_url:
                 print("  Using stream URL for frame extraction (no download)")
-                frames = extract_frames(stream_url, interval_seconds=30, max_frames=20)
+                frames = extract_frames(stream_url, interval_seconds=30, max_frames=20,
+                                        start_time=start_time, end_time=end_time)
                 print(f"  Stream frame extraction: {len(frames)} frames captured")
 
             # If streaming failed, try downloading as fallback
@@ -599,7 +647,8 @@ def analyze_video_url(url, mode="long", skip_frames=False):
                 try:
                     video_path = download_video(url)
                     if video_path:
-                        frames = extract_frames(video_path, interval_seconds=30, max_frames=20)
+                        frames = extract_frames(video_path, interval_seconds=30, max_frames=20,
+                                                start_time=start_time, end_time=end_time)
                 except Exception as e:
                     print(f"  Download also failed: {e}")
         else:
@@ -615,7 +664,8 @@ def analyze_video_url(url, mode="long", skip_frames=False):
                 transcript, segments = transcribe_with_whisper(video_path)
                 if not transcript:
                     transcript = f"[Transcript unavailable for: {metadata.get('title', url)}]"
-                frames = extract_frames(video_path, interval_seconds=30, max_frames=20)
+                frames = extract_frames(video_path, interval_seconds=30, max_frames=20,
+                                        start_time=start_time, end_time=end_time)
             else:
                 transcript = f"[Transcript unavailable for: {metadata.get('title', url)}]"
 
@@ -626,6 +676,7 @@ def analyze_video_url(url, mode="long", skip_frames=False):
         title=metadata.get("title", ""),
         uploader=metadata.get("uploader", ""),
         url=url, mode=mode,
+        time_range_note=time_range_note,
     )
 
     # Step 5: Cleanup downloaded video if any (keep frames)

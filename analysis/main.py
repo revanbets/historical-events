@@ -196,6 +196,8 @@ async def analyze_url(body: dict):
     mode = body.get("mode", "long")
     skip_frames = body.get("skip_frames", False)
     skip_analysis = body.get("skip_analysis", False)
+    start_time = body.get("start_time")  # float seconds or None
+    end_time = body.get("end_time")      # float seconds or None
     if not url:
         raise HTTPException(status_code=400, detail="No URL provided")
 
@@ -244,7 +246,8 @@ async def analyze_url(body: dict):
 
             else:
                 # ── Full video analysis pipeline ──
-                result = analyze_video_url(url, mode=mode, skip_frames=skip_frames)
+                result = analyze_video_url(url, mode=mode, skip_frames=skip_frames,
+                                           start_time=start_time, end_time=end_time)
                 if "error" in result:
                     raise HTTPException(status_code=500, detail=result["error"])
 
