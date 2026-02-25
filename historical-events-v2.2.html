@@ -2563,11 +2563,13 @@
                             <option value={3}>3 hours</option>
                             <option value={12}>12 hours</option>
                             <option value={24}>24 hours</option>
+                            <option value={72}>3 days</option>
+                            <option value={168}>7 days</option>
                           </select>
                         </div>
                       </div>
                       {recentUploads.length === 0 ? (
-                        <div style={{textAlign:'center',padding:'2rem',color:'#8b92b0'}}>No uploads in the last {recentHoursFilter} hour{recentHoursFilter!==1?'s':''}.</div>
+                        <div style={{textAlign:'center',padding:'2rem',color:'#8b92b0'}}>No uploads in the last {recentHoursFilter >= 24 ? `${recentHoursFilter/24} day${recentHoursFilter/24!==1?'s':''}` : `${recentHoursFilter} hour${recentHoursFilter!==1?'s':''}`}.</div>
                       ) : (
                         <div className="spreadsheet" style={{maxHeight:'400px',overflowY:'auto'}}>
                           <table className="table">
