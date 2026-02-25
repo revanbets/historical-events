@@ -57,7 +57,7 @@ Text:
 {text}"""
 
 
-def analyze_text(text: str, file_name: str, mode: str = "long") -> dict:
+def analyze_text(text: str, file_name: str, mode: str = "long", search_focus: str = "") -> dict:
     """Send text to Anthropic API for analysis. Returns structured dict."""
     if not ANTHROPIC_API_KEY:
         return {
@@ -80,6 +80,13 @@ def analyze_text(text: str, file_name: str, mode: str = "long") -> dict:
 
     prompt_template = ANALYSIS_PROMPT_SHORT if mode == "short" else ANALYSIS_PROMPT_LONG
     prompt = prompt_template.format(file_name=file_name, text=truncated)
+
+    # Prepend focus instruction if provided
+    if search_focus and search_focus.strip():
+        prompt = (
+            f'IMPORTANT: The user is specifically looking for information about: "{search_focus.strip()}". '
+            f'Prioritize finding, highlighting, and expanding on anything related to this in your analysis.\n\n'
+        ) + prompt
 
     message = client.messages.create(
         model="claude-sonnet-4-5-20250929",

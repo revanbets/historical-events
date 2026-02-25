@@ -416,7 +416,7 @@ MODE_CONFIG = {
 }
 
 
-def analyze_video_with_claude(transcript, frames, title="", uploader="", url="", mode="long", time_range_note=""):
+def analyze_video_with_claude(transcript, frames, title="", uploader="", url="", mode="long", time_range_note="", search_focus=""):
     """Send transcript + visual frames to Claude for comprehensive analysis."""
     if not ANTHROPIC_API_KEY:
         return {
@@ -436,10 +436,13 @@ def analyze_video_with_claude(transcript, frames, title="", uploader="", url="",
     config = MODE_CONFIG.get(mode, MODE_CONFIG["long"])
     prompt_template, model_id, max_tokens = config
 
-    content.append({
-        "type": "text",
-        "text": prompt_template.format(title=title, uploader=uploader),
-    })
+    prompt_text = prompt_template.format(title=title, uploader=uploader)
+    if search_focus and search_focus.strip():
+        prompt_text = (
+            f'IMPORTANT: The user is specifically looking for information about: "{search_focus.strip()}". '
+            f'Prioritize finding, highlighting, and expanding on anything related to this in your analysis.\n\n'
+        ) + prompt_text
+    content.append({"type": "text", "text": prompt_text})
 
     # Add transcript
     truncated_transcript = (transcript or "No transcript available.")[:50000]
@@ -576,7 +579,7 @@ def fetch_video_metadata_only(url):
 
 # ── Full pipeline ──
 
-def analyze_video_url(url, mode="long", skip_frames=False, start_time=None, end_time=None):
+def analyze_video_url(url, mode="long", skip_frames=False, start_time=None, end_time=None, search_focus=""):
     """
     Full video analysis pipeline:
     1. Extract metadata (no download)
@@ -677,6 +680,7 @@ def analyze_video_url(url, mode="long", skip_frames=False, start_time=None, end_
         uploader=metadata.get("uploader", ""),
         url=url, mode=mode,
         time_range_note=time_range_note,
+        search_focus=search_focus,
     )
 
     # Step 5: Cleanup downloaded video if any (keep frames)

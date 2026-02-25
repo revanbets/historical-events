@@ -112,7 +112,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
 # --- Analysis ---
 
 @app.post("/api/analyze/{record_id}")
-async def analyze_record(record_id: int, mode: str = "long"):
+async def analyze_record(record_id: int, mode: str = "long", search_focus: str = ""):
     """Trigger AI analysis for a specific record. mode=short|long"""
     record = get_record(record_id)
     if not record:
@@ -124,7 +124,7 @@ async def analyze_record(record_id: int, mode: str = "long"):
         raise HTTPException(status_code=400, detail="No extractable text in this file")
 
     try:
-        analysis = analyze_text(text, record["file_name"], mode=mode)
+        analysis = analyze_text(text, record["file_name"], mode=mode, search_focus=search_focus)
         updated = update_record(
             record_id,
             status="analyzed",
@@ -196,8 +196,9 @@ async def analyze_url(body: dict):
     mode = body.get("mode", "long")
     skip_frames = body.get("skip_frames", False)
     skip_analysis = body.get("skip_analysis", False)
-    start_time = body.get("start_time")  # float seconds or None
-    end_time = body.get("end_time")      # float seconds or None
+    start_time = body.get("start_time")   # float seconds or None
+    end_time = body.get("end_time")       # float seconds or None
+    search_focus = body.get("search_focus", "")  # optional topic focus for AI
     if not url:
         raise HTTPException(status_code=400, detail="No URL provided")
 
@@ -247,7 +248,8 @@ async def analyze_url(body: dict):
             else:
                 # ── Full video analysis pipeline ──
                 result = analyze_video_url(url, mode=mode, skip_frames=skip_frames,
-                                           start_time=start_time, end_time=end_time)
+                                           start_time=start_time, end_time=end_time,
+                                           search_focus=search_focus)
                 if "error" in result:
                     raise HTTPException(status_code=500, detail=result["error"])
 
@@ -338,7 +340,7 @@ async def analyze_url(body: dict):
                 })
 
             # Analyze with Claude
-            analysis = analyze_text(text, page_title or url, mode=mode)
+            analysis = analyze_text(text, page_title or url, mode=mode, search_focus=search_focus)
 
             # Update record
             updated = update_record(
