@@ -152,6 +152,59 @@ def condense_text(text: str) -> str:
     return message.content[0].text.strip()
 
 
+def generate_presentation_slides(events: list, focuses: list, detail_level: str, presentation_name: str) -> dict:
+    """Generate presentation slides from event data using Claude."""
+    if not ANTHROPIC_API_KEY:
+        return {"slides": [{"title": e.get("title", ""), "date": e.get("date", ""), "body": e.get("summary", "")} for e in events]}
+
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    detail_instructions = {
+        "brief": "Keep each slide concise — 1-2 sentences for the body.",
+        "standard": "Give moderate detail — 3-5 sentences per slide body.",
+        "comprehensive": "Be thorough — provide detailed analysis, 5-8 sentences per slide body.",
+    }
+
+    events_text = "\n\n".join([
+        f"Event: {e.get('title', 'Untitled')}\nDate: {e.get('date', 'Unknown')}\nSummary: {e.get('summary', '')}\nTopics: {', '.join(e.get('topics', []))}\nPeople: {', '.join(e.get('people', []))}\nOrganizations: {', '.join(e.get('organizations', []))}"
+        for e in events
+    ])
+
+    focus_text = ""
+    if focuses:
+        focus_text = f"\n\nFocus areas the user wants emphasized: {', '.join(focuses)}"
+
+    prompt = f"""You are creating slides for a presentation titled "{presentation_name}".
+{detail_instructions.get(detail_level, detail_instructions['standard'])}{focus_text}
+
+Create one slide per event. Each slide should have a title, date, and body text written in a clear, presentation-friendly style.
+
+Events to cover:
+{events_text}
+
+Respond with a JSON object in this exact format:
+{{"slides": [{{"title": "slide title here", "date": "date string here", "body": "slide body text here"}}]}}
+
+Only respond with the JSON — no other text."""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        raw = "\n".join(lines[1:-1])
+        if raw.startswith("json"):
+            raw = raw[4:].strip()
+
+    return json.loads(raw)
+
+
 def analyze_pending():
     """Analyze all pending files in pending_analysis/ and update the database."""
     from database import get_pending_records, update_record

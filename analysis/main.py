@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import init_db, insert_record, update_record, get_record, get_all_records, get_pending_records
 from extractors import extract, get_file_type
-from analyzer import analyze_text, condense_text
+from analyzer import analyze_text, condense_text, generate_presentation_slides
 from video_analyzer import analyze_video_url, fetch_video_metadata_only, is_video_url, save_frames_to_disk, save_transcript_to_disk
 from web_scraper import scrape_url
 
@@ -372,6 +372,16 @@ async def analyze_url(body: dict):
 
 # --- Serve saved frames ---
 
+@app.get("/api/frames/")
+def list_frames():
+    """List all available frame images (for image browser in presentations)."""
+    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    if not os.path.exists(FRAMES_DIR):
+        return JSONResponse(content=[])
+    files = [f for f in os.listdir(FRAMES_DIR) if os.path.splitext(f)[1].lower() in IMAGE_EXTS]
+    return JSONResponse(content=sorted(files))
+
+
 @app.get("/api/frames/{filename}")
 def serve_frame(filename: str):
     """Serve a saved video frame image from downloads/frames/."""
@@ -397,6 +407,16 @@ def serve_transcript(filename: str):
 
 
 # --- Attachments ---
+
+@app.get("/api/attachments/")
+def list_attachments():
+    """List all available attachment images (for image browser in presentations)."""
+    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    if not os.path.exists(ATTACHMENTS_DIR):
+        return JSONResponse(content=[])
+    files = [f for f in os.listdir(ATTACHMENTS_DIR) if os.path.splitext(f)[1].lower() in IMAGE_EXTS]
+    return JSONResponse(content=sorted(files))
+
 
 @app.get("/api/attachments/{filename}")
 def serve_attachment(filename: str):
@@ -492,6 +512,26 @@ async def condense_summary(body: dict):
         return JSONResponse(content={"condensed": condensed})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Condense failed: {e}")
+
+
+# --- Presentation AI Generation ---
+
+@app.post("/api/generate-presentation")
+async def generate_presentation(body: dict):
+    """Generate AI presentation slides from event data."""
+    events = body.get("events", [])
+    focuses = [f for f in body.get("focuses", []) if f.strip()]
+    detail_level = body.get("detail_level", "standard")
+    presentation_name = body.get("presentation_name", "Untitled Presentation")
+
+    if not events:
+        raise HTTPException(status_code=400, detail="No events provided")
+
+    try:
+        result = generate_presentation_slides(events, focuses, detail_level, presentation_name)
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
 
 # --- Records ---
