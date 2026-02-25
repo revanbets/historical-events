@@ -911,15 +911,23 @@
         const focuses = presAiFocuses.filter(f => f.trim());
         setPresAiLoading(true);
         try {
-          // Gather event data from all blocks in this presentation
+          // Try to gather event data from block eventId references
           const eventIds = [...new Set(pres.slides.flatMap(s => s.blocks.map(b => b.eventId).filter(Boolean)))];
-          const events = eventIds.map(id => data.events.find(e => e.id === id)).filter(Boolean);
-          const payload = {
-            events: events.map(e => ({ id: e.id, title: e.title, date: e.date, summary: e.aiSummary || e.description, topics: e.topics, people: e.people, organizations: e.organizations })),
-            focuses, detail_level: presAiDetail, presentation_name: pres.name,
-          };
+          let eventsPayload = eventIds.map(id => data.events.find(e => e.id === id)).filter(Boolean)
+            .map(e => ({ id: e.id, title: e.title, date: e.date, summary: e.aiSummary || e.description, topics: e.topics||[], people: e.people||[], organizations: e.organizations||[] }));
+          // Fallback: if no event refs (e.g. previously AI-generated slides), extract text from blocks
+          if (eventsPayload.length === 0) {
+            eventsPayload = pres.slides.map((s, i) => {
+              const heading = s.blocks.find(b => b.type === 'heading');
+              const dateBlock = s.blocks.find(b => b.type === 'text' && b.color === '#60a5fa');
+              const bodyBlock = s.blocks.find(b => b.type === 'text' && b.color !== '#60a5fa');
+              return { id: `slide-${i}`, title: heading?.text || `Slide ${i+1}`, date: dateBlock?.text || '', summary: bodyBlock?.text || '', topics: [], people: [], organizations: [] };
+            }).filter(e => e.title);
+          }
+          if (eventsPayload.length === 0) { alert('No content found to regenerate from. Add events via the spreadsheet first.'); setPresAiLoading(false); return; }
+          const payload = { events: eventsPayload, focuses, detail_level: presAiDetail, presentation_name: pres.name };
           const res = await fetch(`${API_BASE}/api/generate-presentation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          if (!res.ok) throw new Error('Backend returned ' + res.status);
+          if (!res.ok) { const detail = await res.text().catch(()=>''); throw new Error(`Backend returned ${res.status}${detail ? ': ' + detail : ''}`); }
           const result = await res.json();
           if (result.slides) {
             const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -935,7 +943,7 @@
             setEditingSlideId(aiSlides[0]?.id || null);
           }
         } catch (err) {
-          alert('AI generation failed: ' + err.message + '\n\nNote: this feature requires a backend update. See the backend code in the session notes.');
+          alert('AI generation failed: ' + err.message);
         }
         setPresAiLoading(false);
       };
