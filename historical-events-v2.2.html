@@ -590,19 +590,31 @@
       // Breadcrumb: array of {label, action}
       const [breadcrumbs, setBreadcrumbs] = useState([]);
       const fileInputRef = useRef(null);
+      // Canvas drag engine refs
+      const canvasRef = useRef(null);
+      const dragRef = useRef(null);
+      const liveBlocksRef = useRef([]);
+      const activePresentationIdRef = useRef(null);
+      const editingSlideIdRef = useRef(null);
 
       // ── Presentations state ──
-      const [presentations, setPresentations] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('hdb_presentations') || '[]'); } catch { return []; }
-      });
+      const [presentations, setPresentations] = useState([]);
+      const [presentationsLoading, setPresentationsLoading] = useState(false);
       const [activePresentationId, setActivePresentationId] = useState(null);
+      const [editingSlideId, setEditingSlideId] = useState(null);
+      const [liveBlocks, setLiveBlocks] = useState([]);
+      const [selectedBlockId, setSelectedBlockId] = useState(null);
+      const [canvasTextEditId, setCanvasTextEditId] = useState(null);
       const [presentationMode, setPresentationMode] = useState(null); // { pId, idx }
       const [presentationTheme, setPresentationTheme] = useState('dark');
-      const [showSlideEventPicker, setShowSlideEventPicker] = useState(false);
-      const [slidePickerSearch, setSlidePickerSearch] = useState('');
-      const [editingSlide, setEditingSlide] = useState(null); // { pId, slide, localTitle, localDate, localContent, localTopics, localNotes }
       const [showNewPresentationModal, setShowNewPresentationModal] = useState(false);
       const [newPresentationName, setNewPresentationName] = useState('');
+      const [presSelectedEvents, setPresSelectedEvents] = useState(new Set());
+      const [showImageBrowser, setShowImageBrowser] = useState(null); // blockId | null
+      const [imageBrowserFiles, setImageBrowserFiles] = useState([]);
+      const [presAiFocuses, setPresAiFocuses] = useState(['']);
+      const [presAiDetail, setPresAiDetail] = useState('standard');
+      const [presAiLoading, setPresAiLoading] = useState(false);
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -643,6 +655,26 @@
           try { localStorage.setItem('historicalEventsDB', JSON.stringify(data)); } catch(e) {}
         }
       }, [data, dbReady]);
+
+      // ── Load presentations from Supabase when user logs in ──
+      useEffect(() => {
+        if (currentUser && supabaseClient) loadPresentations();
+      }, [currentUser?.username]);
+
+      // ── Sync liveBlocks when editing slide changes ──
+      useEffect(() => {
+        if (!editingSlideId || !activePresentationId) { setLiveBlocks([]); setSelectedBlockId(null); return; }
+        const pres = presentations.find(p => p.id === activePresentationId);
+        const slide = pres?.slides?.find(s => s.id === editingSlideId);
+        setLiveBlocks(slide?.blocks || []);
+        setSelectedBlockId(null);
+        setCanvasTextEditId(null);
+      }, [editingSlideId, activePresentationId]); // intentionally excludes `presentations` to avoid loop
+
+      // ── Keep refs in sync with state ──
+      useEffect(() => { liveBlocksRef.current = liveBlocks; }, [liveBlocks]);
+      useEffect(() => { activePresentationIdRef.current = activePresentationId; }, [activePresentationId]);
+      useEffect(() => { editingSlideIdRef.current = editingSlideId; }, [editingSlideId]);
 
       // ── Keyboard navigation for fullscreen presentation mode ──
       useEffect(() => {
@@ -698,42 +730,214 @@
         setBreadcrumbs([{ label: tab.charAt(0).toUpperCase() + tab.slice(1), action: () => { setActiveTab(tab); setSelectedEntity(null); } }]);
       };
 
-      // ── Presentation helper functions ──
-      const savePresns = (pArr) => { localStorage.setItem('hdb_presentations', JSON.stringify(pArr)); setPresentations(pArr); };
-      const createPresentation = (name) => {
-        const p = { id: Date.now().toString(), name: name.trim(), userId: currentUser?.username || 'anon', isPublic: false, slides: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-        savePresns([p, ...presentations]);
-        setActivePresentationId(p.id);
+      // ── Presentation Supabase helpers ──
+      const loadPresentations = async () => {
+        if (!supabaseClient) return;
+        setPresentationsLoading(true);
+        const { data } = await supabaseClient.from('presentations').select('*').order('updated_at', { ascending: false });
+        if (data) setPresentations(data.map(p => ({ ...p, slides: p.slides || [] })));
+        setPresentationsLoading(false);
       };
-      const deletePresentationById = (id) => {
+      const presUpdateLocal = (pId, changes) => {
+        setPresentations(prev => prev.map(p => p.id === pId ? { ...p, ...changes, updated_at: new Date().toISOString() } : p));
+      };
+      const saveSlidesToPres = async (pId, newSlides) => {
+        await supabaseClient.from('presentations').update({ slides: newSlides, updated_at: new Date().toISOString() }).eq('id', pId);
+        presUpdateLocal(pId, { slides: newSlides });
+      };
+      const createPresentation = async (name) => {
+        const { data } = await supabaseClient.from('presentations').insert([{ name: name.trim(), user_id: currentUser?.username || 'anon', is_public: false, slides: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]).select();
+        if (data?.[0]) { setPresentations(prev => [{ ...data[0], slides: [] }, ...prev]); setActivePresentationId(data[0].id); setEditingSlideId(null); }
+      };
+      const deletePresentationById = async (id) => {
         if (!window.confirm('Delete this presentation?')) return;
-        savePresns(presentations.filter(p => p.id !== id));
-        if (activePresentationId === id) setActivePresentationId(null);
+        await supabaseClient.from('presentations').delete().eq('id', id);
+        setPresentations(prev => prev.filter(p => p.id !== id));
+        if (activePresentationId === id) { setActivePresentationId(null); setEditingSlideId(null); }
       };
-      const togglePresentationPublic = (id) => {
-        savePresns(presentations.map(p => p.id === id ? { ...p, isPublic: !p.isPublic, updatedAt: new Date().toISOString() } : p));
+      const togglePresentationPublic = async (id, current) => {
+        const nv = !current;
+        await supabaseClient.from('presentations').update({ is_public: nv, updated_at: new Date().toISOString() }).eq('id', id);
+        presUpdateLocal(id, { is_public: nv });
       };
-      const addSlideToPresentation = (pId, event) => {
-        const slide = { id: Date.now().toString() + Math.random().toString(36).slice(2), type: 'event', eventId: event.id, customTitle: '', customDate: '', customContent: '', customTopics: '', customNotes: '' };
-        savePresns(presentations.map(p => p.id === pId ? { ...p, slides: [...p.slides, slide], updatedAt: new Date().toISOString() } : p));
+      const addSlide = async (pId) => {
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres) return;
+        const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+        const s = { id: uid(), bg: '#0a0d1e', blocks: [] };
+        const ns = [...pres.slides, s];
+        await saveSlidesToPres(pId, ns);
+        setEditingSlideId(s.id);
       };
-      const removeSlideFromPresentation = (pId, sId) => {
-        savePresns(presentations.map(p => p.id === pId ? { ...p, slides: p.slides.filter(s => s.id !== sId), updatedAt: new Date().toISOString() } : p));
+      const removeSlide = async (pId, sId) => {
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres) return;
+        const ns = pres.slides.filter(s => s.id !== sId);
+        await saveSlidesToPres(pId, ns);
+        if (editingSlideId === sId) setEditingSlideId(ns[0]?.id || null);
       };
-      const moveSlideInPresentation = (pId, sId, dir) => {
-        savePresns(presentations.map(p => {
-          if (p.id !== pId) return p;
-          const slides = [...p.slides];
-          const idx = slides.findIndex(s => s.id === sId);
-          const newIdx = dir === 'up' ? idx - 1 : idx + 1;
-          if (newIdx < 0 || newIdx >= slides.length) return p;
-          [slides[idx], slides[newIdx]] = [slides[newIdx], slides[idx]];
-          return { ...p, slides, updatedAt: new Date().toISOString() };
+      const moveSlide = async (pId, sId, dir) => {
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres) return;
+        const slides = [...pres.slides];
+        const idx = slides.findIndex(s => s.id === sId);
+        const ni = dir === 'left' ? idx - 1 : idx + 1;
+        if (ni < 0 || ni >= slides.length) return;
+        [slides[idx], slides[ni]] = [slides[ni], slides[idx]];
+        await saveSlidesToPres(pId, slides);
+      };
+      const addEventsAsSlides = async (pId, events) => {
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres) return;
+        const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+        const newSlides = events.map(evt => ({
+          id: uid(), bg: '#0a0d1e',
+          blocks: [
+            { id: uid(), type: 'heading', x: 5, y: 8, w: 90, h: 18, text: evt.title || '', fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', color: '#ffffff', textAlign: 'left', background: 'transparent', eventId: evt.id, eventField: 'title' },
+            { id: uid(), type: 'text', x: 5, y: 28, w: 40, h: 8, text: evt.date || '', fontSize: 15, fontWeight: 'normal', fontStyle: 'normal', color: '#60a5fa', textAlign: 'left', background: 'transparent', eventId: evt.id, eventField: 'date' },
+            { id: uid(), type: 'text', x: 5, y: 38, w: 90, h: 48, text: evt.aiSummary || evt.description || '', fontSize: 15, fontWeight: 'normal', fontStyle: 'normal', color: '#c0c7d8', textAlign: 'left', background: 'transparent', eventId: evt.id, eventField: 'summary' },
+          ]
         }));
+        await saveSlidesToPres(pId, [...pres.slides, ...newSlides]);
+        setPresSelectedEvents(new Set());
+        setEditingSlideId(newSlides[0]?.id || null);
       };
-      const saveSlideEdits = (pId, sId, changes) => {
-        savePresns(presentations.map(p => p.id !== pId ? p : { ...p, slides: p.slides.map(s => s.id !== sId ? s : { ...s, ...changes }), updatedAt: new Date().toISOString() }));
-        setEditingSlide(null);
+
+      // ── Canvas block helpers ──
+      const _saveBlocks = async (blocks) => {
+        const pId = activePresentationIdRef.current;
+        const sId = editingSlideIdRef.current;
+        if (!pId || !sId) return;
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres) return;
+        const ns = pres.slides.map(s => s.id === sId ? { ...s, blocks } : s);
+        await saveSlidesToPres(pId, ns);
+      };
+      const addBlock = (type) => {
+        const uid = Date.now().toString(36) + Math.random().toString(36).slice(2);
+        const defs = {
+          text:    { type: 'text',    x: 10, y: 40, w: 45, h: 15, text: 'Text box', fontSize: 16, fontWeight: 'normal', fontStyle: 'normal', color: '#e0e6ed', textAlign: 'left', background: 'transparent', eventId: null, eventField: null },
+          heading: { type: 'heading', x: 5,  y: 8,  w: 88, h: 20, text: 'Heading',  fontSize: 36, fontWeight: 'bold',   fontStyle: 'normal', color: '#ffffff',  textAlign: 'left', background: 'transparent', eventId: null, eventField: null },
+          image:   { type: 'image',   x: 55, y: 20, w: 38, h: 55, imageUrl: '', imageFit: 'cover', eventId: null, eventField: null },
+        };
+        const nb = { id: uid, ...defs[type] };
+        const updated = [...liveBlocksRef.current, nb];
+        setLiveBlocks(updated);
+        setSelectedBlockId(uid);
+        _saveBlocks(updated);
+      };
+      const removeBlock = (blockId) => {
+        const updated = liveBlocksRef.current.filter(b => b.id !== blockId);
+        setLiveBlocks(updated);
+        setSelectedBlockId(null);
+        _saveBlocks(updated);
+      };
+      const updateBlock = (blockId, changes) => {
+        const updated = liveBlocksRef.current.map(b => b.id === blockId ? { ...b, ...changes } : b);
+        setLiveBlocks(updated);
+        _saveBlocks(updated);
+      };
+
+      // ── Canvas drag handlers ──
+      const handleBlockPointerDown = (e, blockId, isResize, handle) => {
+        e.preventDefault(); e.stopPropagation();
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const block = liveBlocksRef.current.find(b => b.id === blockId);
+        if (!block) return;
+        setSelectedBlockId(blockId);
+        setCanvasTextEditId(null);
+        dragRef.current = {
+          blockId, isResize, handle,
+          startMX: e.clientX, startMY: e.clientY,
+          startProps: { x: block.x, y: block.y, w: block.w, h: block.h },
+          canvasW: rect.width, canvasH: rect.height,
+          current: null,
+          el: canvas.querySelector(`[data-block="${blockId}"]`),
+        };
+        canvas.setPointerCapture(e.pointerId);
+      };
+      const handleCanvasPointerMove = (e) => {
+        const d = dragRef.current;
+        if (!d) return;
+        const dx = (e.clientX - d.startMX) / d.canvasW * 100;
+        const dy = (e.clientY - d.startMY) / d.canvasH * 100;
+        const { x: sx, y: sy, w: sw, h: sh } = d.startProps;
+        let nx = sx, ny = sy, nw = sw, nh = sh;
+        if (!d.isResize) {
+          nx = Math.max(0, Math.min(100 - sw, sx + dx));
+          ny = Math.max(0, Math.min(100 - sh, sy + dy));
+        } else {
+          const h = d.handle;
+          if (h.includes('e')) nw = Math.max(5, sw + dx);
+          if (h.includes('w')) { nw = Math.max(5, sw - dx); nx = sx + sw - nw; }
+          if (h.includes('s')) nh = Math.max(5, sh + dy);
+          if (h.includes('n')) { nh = Math.max(5, sh - dy); ny = sy + sh - nh; }
+        }
+        d.current = { x: nx, y: ny, w: nw, h: nh };
+        if (d.el) { d.el.style.left = `${nx}%`; d.el.style.top = `${ny}%`; d.el.style.width = `${nw}%`; d.el.style.height = `${nh}%`; }
+      };
+      const handleCanvasPointerUp = () => {
+        const d = dragRef.current;
+        if (!d || !d.current) { dragRef.current = null; return; }
+        const final = d.current;
+        dragRef.current = null;
+        setLiveBlocks(prev => {
+          const updated = prev.map(b => b.id === d.blockId ? { ...b, ...final } : b);
+          _saveBlocks(updated);
+          return updated;
+        });
+      };
+
+      // ── Image browser ──
+      const openImageBrowser = async (blockId) => {
+        setShowImageBrowser(blockId);
+        try {
+          const [fr, ar] = await Promise.all([fetch(`${API_BASE}/api/frames/`), fetch(`${API_BASE}/api/attachments/`)]);
+          const frames = fr.ok ? await fr.json() : [];
+          const atts = ar.ok ? await ar.json() : [];
+          setImageBrowserFiles([
+            ...frames.map(f => ({ url: `${API_BASE}/api/frames/${f}`, name: f, kind: 'frame' })),
+            ...atts.map(a => ({ url: `${API_BASE}/api/attachments/${a}`, name: a, kind: 'attachment' })),
+          ]);
+        } catch { setImageBrowserFiles([]); }
+      };
+
+      // ── AI Presentation generation ──
+      const generateAiPresentation = async (pId) => {
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres || pres.slides.length === 0) { alert('Add at least one slide first, then run AI generation.'); return; }
+        const focuses = presAiFocuses.filter(f => f.trim());
+        setPresAiLoading(true);
+        try {
+          // Gather event data from all blocks in this presentation
+          const eventIds = [...new Set(pres.slides.flatMap(s => s.blocks.map(b => b.eventId).filter(Boolean)))];
+          const events = eventIds.map(id => data.events.find(e => e.id === id)).filter(Boolean);
+          const payload = {
+            events: events.map(e => ({ id: e.id, title: e.title, date: e.date, summary: e.aiSummary || e.description, topics: e.topics, people: e.people, organizations: e.organizations })),
+            focuses, detail_level: presAiDetail, presentation_name: pres.name,
+          };
+          const res = await fetch(`${API_BASE}/api/generate-presentation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error('Backend returned ' + res.status);
+          const result = await res.json();
+          if (result.slides) {
+            const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+            const aiSlides = result.slides.map(s => ({
+              id: uid(), bg: '#0a0d1e',
+              blocks: [
+                ...(s.title ? [{ id: uid(), type: 'heading', x: 5, y: 8, w: 90, h: 18, text: s.title, fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', color: '#ffffff', textAlign: 'left', background: 'transparent', eventId: null, eventField: null }] : []),
+                ...(s.date  ? [{ id: uid(), type: 'text',    x: 5, y: 28, w: 40, h: 7,  text: s.date,  fontSize: 14, fontWeight: 'normal', fontStyle: 'normal', color: '#60a5fa', textAlign: 'left', background: 'transparent', eventId: null, eventField: null }] : []),
+                ...(s.body  ? [{ id: uid(), type: 'text',    x: 5, y: 37, w: 90, h: 50, text: s.body,  fontSize: 15, fontWeight: 'normal', fontStyle: 'normal', color: '#c0c7d8', textAlign: 'left', background: 'transparent', eventId: null, eventField: null }] : []),
+              ]
+            }));
+            await saveSlidesToPres(pId, aiSlides);
+            setEditingSlideId(aiSlides[0]?.id || null);
+          }
+        } catch (err) {
+          alert('AI generation failed: ' + err.message + '\n\nNote: this feature requires a backend update. See the backend code in the session notes.');
+        }
+        setPresAiLoading(false);
       };
 
       // ── Auth functions ──
@@ -2130,85 +2334,33 @@
 
                 {/* My Uploads — Presentations */}
                 {myPageTab === 'presentations' && (() => {
-                  const activePres = activePresentationId ? presentations.find(p => p.id === activePresentationId) : null;
-                  const isPresOwner = activePres && activePres.userId === currentUser?.username;
-                  if (activePres) {
-                    return (
-                      <div>
-                        <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'2rem',flexWrap:'wrap'}}>
-                          <button onClick={()=>setActivePresentationId(null)} style={{padding:'0.4rem 0.8rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',flexShrink:0}}>← Back</button>
-                          <h2 style={{flex:1,fontSize:'1.4rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePres.name}</h2>
-                          {isPresOwner && (
-                            <button onClick={()=>togglePresentationPublic(activePres.id)} style={{padding:'0.3rem 0.8rem',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',flexShrink:0,background:activePres.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:activePres.isPublic?'#10b981':'#8b92b0',border:`1px solid ${activePres.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
-                              {activePres.isPublic?'🌐 Public':'🔒 Private'}
-                            </button>
-                          )}
-                          {activePres.slides.length > 0 && (
-                            <button onClick={()=>setPresentationMode({pId:activePres.id,idx:0})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>▶ Present</button>
-                          )}
-                        </div>
-                        {activePres.slides.length === 0 ? (
-                          <div className="empty-state" style={{marginBottom:'1.5rem'}}><div className="empty-state-icon">🎞️</div><p>No slides yet. Add an event from the database below.</p></div>
-                        ) : (
-                          <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'1.5rem'}}>
-                            {activePres.slides.map((slide, idx) => {
-                              const evt = data.events.find(e => e.id === slide.eventId);
-                              const slideTitle = slide.customTitle || evt?.title || '(Unknown Event)';
-                              const slideContent = slide.customContent || evt?.aiSummary || evt?.description || '';
-                              const slideDate = slide.customDate || evt?.date || '';
-                              return (
-                                <div key={slide.id} style={{display:'flex',alignItems:'flex-start',gap:'0.75rem',padding:'0.9rem 1.1rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px'}}>
-                                  <div style={{fontSize:'0.75rem',color:'#8b92b0',fontWeight:700,minWidth:'22px',paddingTop:'0.15rem',fontFamily:"'Space Mono',monospace",textAlign:'right',flexShrink:0}}>{idx+1}</div>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideTitle}</div>
-                                    {slideDate && <div style={{fontSize:'0.75rem',color:'#60a5fa',marginBottom:'0.2rem'}}>{slideDate}</div>}
-                                    <div style={{fontSize:'0.8rem',color:'#8b92b0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideContent.substring(0,100)}{slideContent.length>100?'…':''}</div>
-                                  </div>
-                                  <div style={{display:'flex',gap:'0.4rem',flexShrink:0,alignItems:'center'}}>
-                                    {isPresOwner && <button onClick={()=>setEditingSlide({pId:activePres.id,slide,localTitle:slide.customTitle,localDate:slide.customDate,localContent:slide.customContent,localTopics:slide.customTopics,localNotes:slide.customNotes})} style={{padding:'0.3rem 0.6rem',background:'rgba(96,165,250,0.12)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit'}}>Edit</button>}
-                                    {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'up')} disabled={idx===0} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===0?'#3d4563':'#8b92b0',cursor:idx===0?'not-allowed':'pointer',fontSize:'0.78rem'}}>↑</button>}
-                                    {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'down')} disabled={idx===activePres.slides.length-1} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===activePres.slides.length-1?'#3d4563':'#8b92b0',cursor:idx===activePres.slides.length-1?'not-allowed':'pointer',fontSize:'0.78rem'}}>↓</button>}
-                                    {isPresOwner && <button onClick={()=>removeSlideFromPresentation(activePres.id,slide.id)} style={{padding:'0.3rem 0.45rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'0.78rem'}}>✕</button>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {isPresOwner && (
-                          <button onClick={()=>{setSlidePickerSearch('');setShowSlideEventPicker(activePres.id);}} style={{padding:'0.6rem 1.2rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>+ Add Slide from Database</button>
-                        )}
-                      </div>
-                    );
-                  }
-                  const myPresns2 = presentations.filter(p => p.userId === currentUser?.username);
-                  const publicGallery2 = presentations.filter(p => p.isPublic && p.userId !== currentUser?.username);
+                  const myPresns2 = presentations.filter(p => p.user_id === currentUser?.username);
+                  const publicGallery2 = presentations.filter(p => p.is_public && p.user_id !== currentUser?.username);
                   return (
                     <div>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'2rem',gap:'1rem',flexWrap:'wrap'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.5rem',gap:'1rem',flexWrap:'wrap'}}>
                         <div>
-                          <h2 style={{fontSize:'1.6rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",marginBottom:'0.25rem',marginTop:0}}>Presentations</h2>
-                          <p style={{color:'#8b92b0',fontSize:'0.85rem',margin:0}}>Build slide-based presentations from your research</p>
+                          <h2 style={{fontSize:'1.5rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",marginBottom:'0.25rem',marginTop:0}}>My Presentations</h2>
+                          <p style={{color:'#8b92b0',fontSize:'0.85rem',margin:0}}>Use the Presentations tab to create and edit your slides.</p>
                         </div>
-                        <button onClick={()=>setShowNewPresentationModal(true)} style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0,alignSelf:'flex-start'}}>+ New Presentation</button>
+                        <button onClick={()=>{setActiveTab('presentations');}} style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0,alignSelf:'flex-start'}}>Open Presentations →</button>
                       </div>
-                      <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>My Presentations</div>
                       {myPresns2.length === 0 ? (
-                        <div className="empty-state" style={{marginBottom:'2rem'}}><div className="empty-state-icon">🎞️</div><p>No presentations yet. Hit "+ New Presentation" to get started.</p></div>
+                        <div className="empty-state" style={{marginBottom:'2rem'}}><div className="empty-state-icon">🎞️</div><p>No presentations yet. Go to the Presentations tab to get started.</p></div>
                       ) : (
                         <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'2rem'}}>
                           {myPresns2.map(p=>(
                             <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
-                              onClick={()=>setActivePresentationId(p.id)}
+                              onClick={()=>{setActivePresentationId(p.id);setActiveTab('presentations');}}
                               onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.4)'}
                               onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
                               <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
                               <div style={{flex:1,minWidth:0}}>
                                 <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                                <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                                <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{(p.slides||[]).length} slide{(p.slides||[]).length!==1?'s':''} · {new Date(p.created_at).toLocaleDateString()}</div>
                               </div>
-                              <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:p.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.isPublic?'#10b981':'#8b92b0',border:`1px solid ${p.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
-                                {p.isPublic?'🌐 Public':'🔒 Private'}
+                              <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:p.is_public?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.is_public?'#10b981':'#8b92b0',border:`1px solid ${p.is_public?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
+                                {p.is_public?'🌐 Public':'🔒 Private'}
                               </span>
                               <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.3rem 0.7rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'7px',color:'#f87171',cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
                             </div>
@@ -2221,13 +2373,13 @@
                           <div style={{display:'flex',flexDirection:'column',gap:'0.75rem'}}>
                             {publicGallery2.map(p=>(
                               <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
-                                onClick={()=>setActivePresentationId(p.id)}
+                                onClick={()=>{setActivePresentationId(p.id);setActiveTab('presentations');}}
                                 onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(16,185,129,0.4)'}
                                 onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
                                 <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
                                 <div style={{flex:1,minWidth:0}}>
                                   <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                                  <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · by {p.userId} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                                  <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{(p.slides||[]).length} slide{(p.slides||[]).length!==1?'s':''} · by {p.user_id} · {new Date(p.created_at).toLocaleDateString()}</div>
                                 </div>
                                 <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
                               </div>
@@ -2529,8 +2681,8 @@
               </div>
             )}
 
-            {/* Show filters on all tabs except upload, account, and presentations */}
-            {activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && <FiltersComponent {...filterProps} />}
+            {/* Show filters on all tabs except upload, account, and presentations editor */}
+            {activeTab !== 'upload' && activeTab !== 'account' && !(activeTab === 'presentations' && activePresentationId) && <FiltersComponent {...filterProps} />}
 
             {/* TIMELINE */}
             {activeTab === 'timeline' && (
@@ -2668,110 +2820,247 @@
             {/* PRESENTATIONS */}
             {activeTab === 'presentations' && (() => {
               const activePres = activePresentationId ? presentations.find(p => p.id === activePresentationId) : null;
-              const isPresOwner = activePres && activePres.userId === currentUser?.username;
+              const isPresOwner = activePres && activePres.user_id === currentUser?.username;
+              const editSlide = editingSlideId && activePres ? activePres.slides.find(s => s.id === editingSlideId) : null;
+              const selBlock = selectedBlockId ? liveBlocks.find(b => b.id === selectedBlockId) : null;
+              const btnSm = {padding:'0.3rem 0.6rem',fontSize:'0.78rem',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',background:'rgba(26,31,58,0.7)',color:'#8b92b0'};
+              const hpos = {nw:{top:'-4px',left:'-4px',cursor:'nw-resize'},n:{top:'-4px',left:'calc(50% - 4px)',cursor:'n-resize'},ne:{top:'-4px',right:'-4px',cursor:'ne-resize'},e:{top:'calc(50% - 4px)',right:'-4px',cursor:'e-resize'},se:{bottom:'-4px',right:'-4px',cursor:'se-resize'},s:{bottom:'-4px',left:'calc(50% - 4px)',cursor:'s-resize'},sw:{bottom:'-4px',left:'-4px',cursor:'sw-resize'},w:{top:'calc(50% - 4px)',left:'-4px',cursor:'w-resize'}};
+              const hStyle = h => ({width:'8px',height:'8px',background:'#60a5fa',border:'1px solid rgba(255,255,255,0.8)',borderRadius:'2px',position:'absolute',zIndex:10,...hpos[h]});
+
+              // ── EDITOR VIEW ──
               if (activePres) {
                 return (
-                  <div>
-                    <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'2rem',flexWrap:'wrap'}}>
-                      <button onClick={()=>setActivePresentationId(null)} style={{padding:'0.4rem 0.8rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',flexShrink:0}}>← Back</button>
+                  <div style={{display:'flex',flexDirection:'column',gap:'0.85rem'}}>
+                    {/* Header */}
+                    <div style={{display:'flex',alignItems:'center',gap:'0.75rem',flexWrap:'wrap'}}>
+                      <button onClick={()=>{setActivePresentationId(null);setEditingSlideId(null);}} style={btnSm}>← Back</button>
                       <h2 style={{flex:1,fontSize:'1.4rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePres.name}</h2>
-                      {isPresOwner && (
-                        <button onClick={()=>togglePresentationPublic(activePres.id)} style={{padding:'0.3rem 0.8rem',borderRadius:'8px',fontSize:'0.8rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',flexShrink:0,background:activePres.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:activePres.isPublic?'#10b981':'#8b92b0',border:`1px solid ${activePres.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
-                          {activePres.isPublic?'🌐 Public':'🔒 Private'}
-                        </button>
-                      )}
-                      {activePres.slides.length > 0 && (
-                        <button onClick={()=>setPresentationMode({pId:activePres.id,idx:0})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>▶ Present</button>
-                      )}
+                      {isPresOwner && <button onClick={()=>togglePresentationPublic(activePres.id,activePres.is_public)} style={{...btnSm,background:activePres.is_public?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:activePres.is_public?'#10b981':'#8b92b0',border:`1px solid ${activePres.is_public?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>{activePres.is_public?'🌐 Public':'🔒 Private'}</button>}
+                      {activePres.slides.length>0 && <button onClick={()=>setPresentationMode({pId:activePres.id,idx:Math.max(0,activePres.slides.findIndex(s=>s.id===editingSlideId))})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>▶ Present</button>}
                     </div>
-                    {activePres.slides.length === 0 ? (
-                      <div className="empty-state" style={{marginBottom:'1.5rem'}}><div className="empty-state-icon">🎞️</div><p>No slides yet. Add an event from the database below.</p></div>
-                    ) : (
-                      <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'1.5rem'}}>
-                        {activePres.slides.map((slide, idx) => {
-                          const evt = data.events.find(e => e.id === slide.eventId);
-                          const slideTitle = slide.customTitle || evt?.title || '(Unknown Event)';
-                          const slideContent = slide.customContent || evt?.aiSummary || evt?.description || '';
-                          const slideDate = slide.customDate || evt?.date || '';
-                          return (
-                            <div key={slide.id} style={{display:'flex',alignItems:'flex-start',gap:'0.75rem',padding:'0.9rem 1.1rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px'}}>
-                              <div style={{fontSize:'0.75rem',color:'#8b92b0',fontWeight:700,minWidth:'22px',paddingTop:'0.15rem',fontFamily:"'Space Mono',monospace",textAlign:'right',flexShrink:0}}>{idx+1}</div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideTitle}</div>
-                                {slideDate && <div style={{fontSize:'0.75rem',color:'#60a5fa',marginBottom:'0.2rem'}}>{slideDate}</div>}
-                                <div style={{fontSize:'0.8rem',color:'#8b92b0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{slideContent.substring(0,100)}{slideContent.length>100?'…':''}</div>
-                              </div>
-                              <div style={{display:'flex',gap:'0.4rem',flexShrink:0,alignItems:'center'}}>
-                                {isPresOwner && <button onClick={()=>setEditingSlide({pId:activePres.id,slide,localTitle:slide.customTitle,localDate:slide.customDate,localContent:slide.customContent,localTopics:slide.customTopics,localNotes:slide.customNotes})} style={{padding:'0.3rem 0.6rem',background:'rgba(96,165,250,0.12)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit'}}>Edit</button>}
-                                {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'up')} disabled={idx===0} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===0?'#3d4563':'#8b92b0',cursor:idx===0?'not-allowed':'pointer',fontSize:'0.78rem'}}>↑</button>}
-                                {isPresOwner && <button onClick={()=>moveSlideInPresentation(activePres.id,slide.id,'down')} disabled={idx===activePres.slides.length-1} style={{padding:'0.3rem 0.45rem',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:idx===activePres.slides.length-1?'#3d4563':'#8b92b0',cursor:idx===activePres.slides.length-1?'not-allowed':'pointer',fontSize:'0.78rem'}}>↓</button>}
-                                {isPresOwner && <button onClick={()=>removeSlideFromPresentation(activePres.id,slide.id)} style={{padding:'0.3rem 0.45rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'0.78rem'}}>✕</button>}
-                              </div>
+
+                    {/* Slide strip */}
+                    <div style={{display:'flex',gap:'0.5rem',overflowX:'auto',paddingBottom:'0.25rem',alignItems:'flex-end'}}>
+                      {activePres.slides.map((s,i)=>(
+                        <div key={s.id} style={{flexShrink:0,width:'130px',position:'relative',cursor:'pointer'}}>
+                          <div onClick={()=>setEditingSlideId(s.id)} style={{width:'130px',height:'73px',background:s.bg||'#0a0d1e',borderRadius:'6px',border:`2px solid ${editingSlideId===s.id?'#60a5fa':'rgba(61,69,99,0.4)'}`,overflow:'hidden',position:'relative'}}>
+                            {s.blocks.map(b=>(
+                              <div key={b.id} style={{position:'absolute',left:`${b.x}%`,top:`${b.y}%`,width:`${b.w}%`,height:`${b.h}%`,background:b.type==='image'?'rgba(96,165,250,0.25)':b.type==='heading'?'rgba(255,255,255,0.2)':'rgba(192,199,216,0.12)',borderRadius:'1px'}} />
+                            ))}
+                          </div>
+                          <div style={{fontSize:'0.6rem',color:'#8b92b0',textAlign:'center',marginTop:'0.2rem'}}>Slide {i+1}</div>
+                          {isPresOwner && <button onClick={e=>{e.stopPropagation();removeSlide(activePres.id,s.id);}} style={{position:'absolute',top:'-5px',right:'-5px',width:'16px',height:'16px',borderRadius:'50%',background:'rgba(239,68,68,0.85)',border:'none',color:'#fff',cursor:'pointer',fontSize:'0.6rem',lineHeight:1,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
+                        </div>
+                      ))}
+                      {isPresOwner && <button onClick={()=>addSlide(activePres.id)} style={{flexShrink:0,width:'130px',height:'73px',background:'rgba(26,31,58,0.4)',border:'1px dashed rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'1.8rem',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>}
+                    </div>
+
+                    {/* Canvas area */}
+                    {editSlide ? (
+                      <div>
+                        {/* Block toolbar */}
+                        {isPresOwner && (
+                          <div style={{display:'flex',gap:'0.4rem',marginBottom:'0.5rem',flexWrap:'wrap',alignItems:'center'}}>
+                            <span style={{fontSize:'0.72rem',color:'#8b92b0',marginRight:'0.2rem'}}>Add:</span>
+                            {['heading','text','image'].map(t=>(
+                              <button key={t} onClick={()=>addBlock(t)} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)'}}>+ {t.charAt(0).toUpperCase()+t.slice(1)}</button>
+                            ))}
+                            <div style={{flex:1}} />
+                            <span style={{fontSize:'0.72rem',color:'#8b92b0'}}>Slide BG:</span>
+                            <input type="color" value={editSlide.bg||'#0a0d1e'} onChange={e=>{const sId=editingSlideId,pId=activePresentationId;const ns=activePres.slides.map(s=>s.id===sId?{...s,bg:e.target.value}:s);saveSlidesToPres(pId,ns);}} style={{width:'28px',height:'24px',border:'none',borderRadius:'4px',cursor:'pointer',padding:0}} />
+                          </div>
+                        )}
+                        {/* Canvas */}
+                        <div style={{position:'relative',width:'100%',paddingBottom:'56.25%',background:editSlide.bg||'#0a0d1e',borderRadius:'10px',overflow:'hidden',border:'2px solid rgba(61,69,99,0.5)',touchAction:'none'}}
+                          ref={canvasRef}
+                          onPointerMove={handleCanvasPointerMove}
+                          onPointerUp={handleCanvasPointerUp}
+                          onClick={()=>{setSelectedBlockId(null);setCanvasTextEditId(null);}}>
+                          <div style={{position:'absolute',inset:0}}>
+                            {liveBlocks.map(block=>{
+                              const isSel = selectedBlockId===block.id;
+                              const isTxt = canvasTextEditId===block.id;
+                              const evt = block.eventId ? data.events.find(e=>e.id===block.eventId) : null;
+                              const dispText = block.text || (evt ? (block.eventField==='summary'?(evt.aiSummary||evt.description||''):block.eventField==='title'?evt.title:block.eventField==='date'?evt.date:(evt.topics||[]).join(', ')) : '');
+                              return (
+                                <div key={block.id} data-block={block.id}
+                                  style={{position:'absolute',left:`${block.x}%`,top:`${block.y}%`,width:`${block.w}%`,height:`${block.h}%`,outline:isSel?'2px solid #60a5fa':isTxt?'2px solid #a78bfa':'none',outlineOffset:'-1px',background:block.background==='transparent'||!block.background?'transparent':block.background,boxSizing:'border-box',userSelect:'none',cursor:isPresOwner&&!isTxt?'move':'default'}}
+                                  onPointerDown={isPresOwner&&!isTxt?e=>handleBlockPointerDown(e,block.id,false,''):undefined}
+                                  onClick={e=>{e.stopPropagation();setSelectedBlockId(block.id);}}
+                                  onDoubleClick={e=>{e.stopPropagation();if(block.type!=='image'&&isPresOwner){setSelectedBlockId(block.id);setCanvasTextEditId(block.id);}}}>
+                                  {block.type==='image' ? (
+                                    block.imageUrl
+                                      ? <img src={block.imageUrl} style={{width:'100%',height:'100%',objectFit:block.imageFit||'cover',display:'block',pointerEvents:'none'}} alt="" />
+                                      : <div onClick={isPresOwner?e=>{e.stopPropagation();openImageBrowser(block.id);}:undefined} style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(96,165,250,0.5)',fontSize:'0.75rem',border:'1px dashed rgba(96,165,250,0.3)',borderRadius:'4px',gap:'0.2rem',cursor:isPresOwner?'pointer':'default'}}>
+                                          <span style={{fontSize:'1.4rem'}}>🖼️</span>
+                                          {isPresOwner && <span>Click to add image</span>}
+                                        </div>
+                                  ) : isTxt ? (
+                                    <textarea value={block.text||''} onChange={e=>{e.stopPropagation();updateBlock(block.id,{text:e.target.value});}} onBlur={()=>setCanvasTextEditId(null)} onPointerDown={e=>e.stopPropagation()} autoFocus style={{width:'100%',height:'100%',background:'transparent',border:'none',color:block.color||'#e0e6ed',fontSize:`${block.fontSize||16}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'normal',textAlign:block.textAlign||'left',resize:'none',outline:'none',fontFamily:'inherit',padding:'2px',lineHeight:1.4,boxSizing:'border-box'}} />
+                                  ) : (
+                                    <div style={{width:'100%',height:'100%',color:block.color||'#e0e6ed',fontSize:`${block.fontSize||16}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'normal',textAlign:block.textAlign||'left',overflow:'hidden',lineHeight:1.4,padding:'2px',boxSizing:'border-box',whiteSpace:'pre-wrap',wordBreak:'break-word',pointerEvents:'none'}}>
+                                      {dispText || (isPresOwner ? <span style={{opacity:0.25,fontStyle:'italic'}}>double-click to edit</span> : '')}
+                                    </div>
+                                  )}
+                                  {isSel && isPresOwner && ['nw','n','ne','e','se','s','sw','w'].map(h=>(
+                                    <div key={h} style={hStyle(h)} onPointerDown={e=>{e.stopPropagation();handleBlockPointerDown(e,block.id,true,h);}} />
+                                  ))}
+                                </div>
+                              );
+                            })}
+                            {liveBlocks.length===0 && isPresOwner && <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.15)',fontSize:'0.85rem',pointerEvents:'none'}}>Add blocks using the toolbar above</div>}
+                          </div>
+                        </div>
+                        {/* Properties panel */}
+                        {selBlock && isPresOwner && (
+                          <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap',padding:'0.55rem 0.75rem',background:'rgba(21,25,50,0.85)',borderRadius:'8px',alignItems:'center',marginTop:'0.4rem',border:'1px solid rgba(61,69,99,0.4)'}}>
+                            {selBlock.type!=='image' && (<>
+                              <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Size</label>
+                              <input type="number" value={selBlock.fontSize||16} min={8} max={120} onChange={e=>updateBlock(selectedBlockId,{fontSize:Number(e.target.value)})} style={{width:'50px',padding:'0.2rem 0.35rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.8rem'}} />
+                              <button onClick={()=>updateBlock(selectedBlockId,{fontWeight:selBlock.fontWeight==='bold'?'normal':'bold'})} style={{...btnSm,fontWeight:'bold',color:selBlock.fontWeight==='bold'?'#60a5fa':'#8b92b0',background:selBlock.fontWeight==='bold'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)'}}>B</button>
+                              <button onClick={()=>updateBlock(selectedBlockId,{fontStyle:selBlock.fontStyle==='italic'?'normal':'italic'})} style={{...btnSm,fontStyle:'italic',color:selBlock.fontStyle==='italic'?'#60a5fa':'#8b92b0',background:selBlock.fontStyle==='italic'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)'}}>I</button>
+                              {['left','center','right'].map((a,ai)=>(
+                                <button key={a} title={a} onClick={()=>updateBlock(selectedBlockId,{textAlign:a})} style={{...btnSm,color:selBlock.textAlign===a?'#60a5fa':'#8b92b0',background:selBlock.textAlign===a?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)',minWidth:'26px',textAlign:'center'}}>{ai===0?'⬛':ai===1?'⬜':'▪'}</button>
+                              ))}
+                              <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Text</label>
+                              <input type="color" value={selBlock.color||'#ffffff'} onChange={e=>updateBlock(selectedBlockId,{color:e.target.value})} style={{width:'26px',height:'22px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                            </>)}
+                            {selBlock.type==='image' && <button onClick={()=>openImageBrowser(selectedBlockId)} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)'}}>🖼️ Browse Images</button>}
+                            <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Block BG</label>
+                            <input type="color" value={selBlock.background&&selBlock.background!=='transparent'?selBlock.background:'#000000'} onChange={e=>updateBlock(selectedBlockId,{background:e.target.value})} style={{width:'26px',height:'22px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                            <button onClick={()=>updateBlock(selectedBlockId,{background:'transparent'})} style={{...btnSm,fontSize:'0.7rem'}}>Clear BG</button>
+                            <div style={{marginLeft:'auto'}}>
+                              <button onClick={()=>removeBlock(selectedBlockId)} style={{...btnSm,color:'#f87171',borderColor:'rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.08)'}}>🗑 Delete block</button>
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      <div className="empty-state"><div className="empty-state-icon">🎞️</div><p>{activePres.slides.length===0?'Click + to add your first slide.':'Click a slide above to start editing.'}</p></div>
                     )}
+
+                    {/* AI Generation row */}
                     {isPresOwner && (
-                      <button onClick={()=>{setSlidePickerSearch('');setShowSlideEventPicker(activePres.id);}} style={{padding:'0.6rem 1.2rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>+ Add Slide from Database</button>
+                      <div style={{display:'flex',gap:'0.55rem',flexWrap:'wrap',alignItems:'center',padding:'0.65rem 0.9rem',background:'rgba(167,139,250,0.07)',border:'1px solid rgba(167,139,250,0.25)',borderRadius:'10px'}}>
+                        <span style={{fontWeight:700,color:'#a78bfa',fontSize:'0.8rem',flexShrink:0}}>⚡ AI Generate</span>
+                        {presAiFocuses.map((f,i)=>(
+                          <input key={i} value={f} onChange={e=>{const a=[...presAiFocuses];a[i]=e.target.value;setPresAiFocuses(a);}} placeholder={`Focus ${i+1}…`} style={{padding:'0.3rem 0.55rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.8rem',width:'140px',outline:'none'}} />
+                        ))}
+                        <button onClick={()=>setPresAiFocuses([...presAiFocuses,''])} style={{...btnSm,color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)',background:'rgba(167,139,250,0.08)'}}>+ Focus</button>
+                        <select value={presAiDetail} onChange={e=>setPresAiDetail(e.target.value)} style={{padding:'0.3rem 0.5rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.8rem',cursor:'pointer'}}>
+                          <option value="brief">Brief</option>
+                          <option value="standard">Standard</option>
+                          <option value="comprehensive">Comprehensive</option>
+                        </select>
+                        <div className="tooltip-wrapper" style={{display:'inline-flex',alignItems:'center'}}>
+                          <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
+                          <div className="tooltip-content" style={{position:'absolute',bottom:'100%',right:0,marginBottom:'8px',background:'rgba(15,18,35,0.97)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',padding:'0.75rem 1rem',width:'270px',zIndex:9999,pointerEvents:'none',opacity:0,transition:'opacity 0.15s',fontSize:'0.78rem',lineHeight:1.6,color:'#c0c7d8',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
+                            <b style={{color:'#a78bfa'}}>AI Presentation Generator</b><br/>Generates new slides from the events already in this presentation. Add focus areas to guide the AI — e.g. "CIA involvement" or "timeline of events". Replaces existing slides with AI-generated ones.<br/><br/><b style={{color:'#f87171'}}>Requires a backend update.</b> Ask the developer for the endpoint code.
+                          </div>
+                        </div>
+                        <button onClick={()=>generateAiPresentation(activePres.id)} disabled={presAiLoading} style={{padding:'0.35rem 0.9rem',background:presAiLoading?'rgba(61,69,99,0.4)':'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'8px',color:presAiLoading?'#8b92b0':'#fff',fontWeight:700,cursor:presAiLoading?'not-allowed':'pointer',fontFamily:'inherit',fontSize:'0.8rem',flexShrink:0}}>{presAiLoading?'Generating…':'Generate Slides'}</button>
+                      </div>
                     )}
                   </div>
                 );
               }
-              const myPresns = presentations.filter(p => p.userId === currentUser?.username);
-              const publicGallery = presentations.filter(p => p.isPublic && p.userId !== currentUser?.username);
+
+              // ── LIST VIEW ──
+              const myPresns = presentations.filter(p => p.user_id === currentUser?.username);
+              const publicGallery = presentations.filter(p => p.is_public && p.user_id !== currentUser?.username);
               return (
                 <div>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'2rem',gap:'1rem',flexWrap:'wrap'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.25rem',gap:'1rem',flexWrap:'wrap'}}>
                     <div>
                       <h2 style={{fontSize:'1.6rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",marginBottom:'0.25rem',marginTop:0}}>Presentations</h2>
                       <p style={{color:'#8b92b0',fontSize:'0.85rem',margin:0}}>Build slide-based presentations from your research</p>
                     </div>
-                    <button onClick={()=>setShowNewPresentationModal(true)} style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0,alignSelf:'flex-start'}}>+ New Presentation</button>
+                    <button onClick={()=>setShowNewPresentationModal(true)} style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>+ New Presentation</button>
                   </div>
-                  <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>My Presentations</div>
-                  {myPresns.length === 0 ? (
-                    <div className="empty-state" style={{marginBottom:'2rem'}}><div className="empty-state-icon">🎞️</div><p>No presentations yet. Hit "+ New Presentation" to get started.</p></div>
-                  ) : (
-                    <div style={{display:'flex',flexDirection:'column',gap:'0.75rem',marginBottom:'2rem'}}>
+                  {presentationsLoading && <div style={{color:'#8b92b0',marginBottom:'1rem',fontSize:'0.85rem'}}>Loading…</div>}
+                  {!presentationsLoading && myPresns.length===0 && (
+                    <div className="empty-state" style={{marginBottom:'1.5rem'}}><div className="empty-state-icon">🎞️</div><p>No presentations yet. Create one above.</p></div>
+                  )}
+                  {myPresns.length>0 && (
+                    <div style={{display:'flex',flexDirection:'column',gap:'0.55rem',marginBottom:'1.25rem'}}>
                       {myPresns.map(p=>(
-                        <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
-                          onClick={()=>setActivePresentationId(p.id)}
+                        <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'0.8rem 1.1rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
+                          onClick={()=>{setActivePresentationId(p.id);setEditingSlideId(p.slides[0]?.id||null);}}
                           onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.4)'}
                           onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
-                          <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
+                          <div style={{fontSize:'1.3rem',flexShrink:0}}>🎞️</div>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                            <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                            <div style={{fontWeight:700,color:'#e0e6ed',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                            <div style={{fontSize:'0.78rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · {new Date(p.updated_at||p.created_at).toLocaleDateString()}</div>
                           </div>
-                          <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:p.isPublic?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.isPublic?'#10b981':'#8b92b0',border:`1px solid ${p.isPublic?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
-                            {p.isPublic?'🌐 Public':'🔒 Private'}
-                          </span>
-                          <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.3rem 0.7rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'7px',color:'#f87171',cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
+                          <span style={{padding:'0.2rem 0.6rem',borderRadius:'20px',fontSize:'0.7rem',fontWeight:600,flexShrink:0,background:p.is_public?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.is_public?'#10b981':'#8b92b0',border:`1px solid ${p.is_public?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>{p.is_public?'🌐 Public':'🔒 Private'}</span>
+                          <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.25rem 0.55rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
                         </div>
                       ))}
                     </div>
                   )}
-                  {publicGallery.length > 0 && (
-                    <>
-                      <div style={{marginBottom:'0.75rem',fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>Public Gallery</div>
-                      <div style={{display:'flex',flexDirection:'column',gap:'0.75rem'}}>
+                  {publicGallery.length>0 && (
+                    <div style={{marginBottom:'1.25rem'}}>
+                      <div style={{marginBottom:'0.6rem',fontSize:'0.72rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>Public Gallery</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:'0.55rem'}}>
                         {publicGallery.map(p=>(
-                          <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
-                            onClick={()=>setActivePresentationId(p.id)}
+                          <div key={p.id} style={{display:'flex',alignItems:'center',gap:'1rem',padding:'0.8rem 1.1rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',cursor:'pointer',transition:'border-color 0.15s'}}
+                            onClick={()=>{setActivePresentationId(p.id);setEditingSlideId(p.slides[0]?.id||null);}}
                             onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(16,185,129,0.4)'}
                             onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
-                            <div style={{fontSize:'1.5rem',flexShrink:0}}>🎞️</div>
+                            <div style={{fontSize:'1.3rem',flexShrink:0}}>🎞️</div>
                             <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.2rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                              <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · by {p.userId} · {new Date(p.createdAt).toLocaleDateString()}</div>
+                              <div style={{fontWeight:700,color:'#e0e6ed',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                              <div style={{fontSize:'0.78rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · by {p.user_id} · {new Date(p.updated_at||p.created_at).toLocaleDateString()}</div>
                             </div>
-                            <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
+                            <span style={{padding:'0.2rem 0.6rem',borderRadius:'20px',fontSize:'0.7rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
                           </div>
                         ))}
                       </div>
-                    </>
+                    </div>
                   )}
+                  {/* Embedded spreadsheet for adding events to a presentation */}
+                  <div style={{paddingTop:'1rem',borderTop:'1px solid rgba(61,69,99,0.35)'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'0.65rem',flexWrap:'wrap'}}>
+                      <div style={{fontSize:'0.72rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600}}>Add Events to a Presentation</div>
+                      {presSelectedEvents.size>0 && (
+                        <div style={{display:'flex',gap:'0.5rem',alignItems:'center',flexWrap:'wrap'}}>
+                          <span style={{color:'#a78bfa',fontSize:'0.82rem',fontWeight:600}}>{presSelectedEvents.size} selected</span>
+                          {myPresns.length>0 ? (<>
+                            <select id="presTargetSelect" style={{padding:'0.3rem 0.5rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.82rem',cursor:'pointer'}}>
+                              {myPresns.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                            <button onClick={()=>{const sel=document.getElementById('presTargetSelect');if(sel?.value){const evts=sortedEvents.filter(e=>presSelectedEvents.has(e.id));addEventsAsSlides(sel.value,evts);}}} style={{padding:'0.32rem 0.8rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'7px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>Add to Presentation</button>
+                          </>) : <span style={{color:'#f87171',fontSize:'0.82rem'}}>Create a presentation first.</span>}
+                          <button onClick={()=>setPresSelectedEvents(new Set())} style={{...btnSm,fontSize:'0.78rem'}}>Clear</button>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{overflowX:'auto'}}>
+                      <table className="table">
+                        <thead><tr>
+                          <th style={{width:'34px',textAlign:'center'}}>
+                            <button onClick={()=>{if(presSelectedEvents.size===sortedEvents.length)setPresSelectedEvents(new Set());else setPresSelectedEvents(new Set(sortedEvents.map(e=>e.id)));}} style={{padding:'0.15rem 0.35rem',fontSize:'0.68rem',color:'#a78bfa',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit'}}>{presSelectedEvents.size===sortedEvents.length&&sortedEvents.length>0?'✓':'All'}</button>
+                          </th>
+                          <th>Title</th><th>AI Summary</th><th>Topics</th><th>Level</th><th>Date</th>
+                        </tr></thead>
+                        <tbody>
+                          {sortedEvents.map(e=>(
+                            <tr key={e.id} onClick={()=>setPresSelectedEvents(prev=>{const n=new Set(prev);n.has(e.id)?n.delete(e.id):n.add(e.id);return n;})} style={{cursor:'pointer',background:presSelectedEvents.has(e.id)?'rgba(124,58,237,0.12)':'transparent'}}>
+                              <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
+                                <input type="checkbox" checked={presSelectedEvents.has(e.id)} onChange={()=>setPresSelectedEvents(prev=>{const n=new Set(prev);n.has(e.id)?n.delete(e.id):n.add(e.id);return n;})} style={{width:'14px',height:'14px',cursor:'pointer',accentColor:'#7c3aed'}} />
+                              </td>
+                              <td style={{fontWeight:600}}>{e.title}</td>
+                              <td style={{color:'#8b92b0',fontSize:'0.78rem'}}>{e.aiSummary?(e.aiSummary.substring(0,70)+'…'):'—'}</td>
+                              <td style={{fontSize:'0.78rem'}}>{(e.topics||[]).slice(0,2).join(', ')}</td>
+                              <td><span className={`level-${e.researchLevel}`}>L{e.researchLevel}</span></td>
+                              <td style={{fontSize:'0.78rem'}}>{e.date||'—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
@@ -3016,37 +3305,63 @@
           {/* FULLSCREEN PRESENTATION MODE */}
           {presentationMode && (() => {
             const pres = presentations.find(p => p.id === presentationMode.pId);
-            if (!pres || pres.slides.length === 0) return null;
+            if (!pres || !pres.slides || pres.slides.length === 0) return null;
             const curIdx = presentationMode.idx;
             const slide = pres.slides[curIdx];
-            const evt = slide ? data.events.find(e => e.id === slide.eventId) : null;
-            const slideTitle = slide?.customTitle || evt?.title || '';
-            const slideDate = slide?.customDate || evt?.date || '';
-            const slideContent = slide?.customContent || evt?.aiSummary || evt?.description || '';
-            const slideTopics = slide?.customTopics ? slide.customTopics.split(',').map(t=>t.trim()).filter(Boolean) : (evt?.topics||[]);
-            const slideNotes = slide?.customNotes || '';
             const totalSlides = pres.slides.length;
             const isDark = presentationTheme === 'dark';
+            const slideBg = slide?.bg || '#0a0d1e';
             return (
-              <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,background:isDark?'#080b1a':'#e8ecf5',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem',boxSizing:'border-box'}}>
-                <div style={{position:'absolute',top:'1rem',left:'1rem',color:isDark?'#8b92b0':'#888',fontSize:'0.78rem',fontFamily:"'Space Mono',monospace",maxWidth:'40%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pres.name}</div>
-                <div style={{position:'absolute',top:'1rem',right:'1rem',display:'flex',gap:'0.5rem',zIndex:1}}>
-                  <button onClick={()=>setPresentationTheme(isDark?'light':'dark')} style={{padding:'0.4rem 0.9rem',borderRadius:'8px',border:`1px solid ${isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)'}`,background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)',color:isDark?'#e0e6ed':'#333',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',fontWeight:600}}>
-                    {isDark?'☀ Light':'🌙 Dark'}
-                  </button>
-                  <button onClick={()=>setPresentationMode(null)} style={{padding:'0.4rem 0.75rem',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.4)',background:'rgba(239,68,68,0.1)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:'1rem',lineHeight:1}}>✕</button>
+              <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,background:isDark?'#05070f':'#c8cdd8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
+                {/* Top bar */}
+                <div style={{position:'absolute',top:0,left:0,right:0,padding:'0.55rem 1rem',display:'flex',alignItems:'center',justifyContent:'space-between',zIndex:1,background:isDark?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.5)',backdropFilter:'blur(8px)'}}>
+                  <div style={{color:isDark?'#8b92b0':'#555',fontSize:'0.78rem',fontFamily:"'Space Mono',monospace",overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'40%'}}>{pres.name}</div>
+                  <div style={{display:'flex',gap:'0.5rem'}}>
+                    <button onClick={()=>setPresentationTheme(isDark?'light':'dark')} style={{padding:'0.3rem 0.75rem',borderRadius:'7px',border:`1px solid ${isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)'}`,background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)',color:isDark?'#e0e6ed':'#333',cursor:'pointer',fontFamily:'inherit',fontSize:'0.78rem',fontWeight:600}}>
+                      {isDark?'☀ Light':'🌙 Dark'}
+                    </button>
+                    <button onClick={()=>setPresentationMode(null)} style={{padding:'0.3rem 0.7rem',borderRadius:'7px',border:'1px solid rgba(239,68,68,0.4)',background:'rgba(239,68,68,0.1)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:'0.95rem',lineHeight:1}}>✕</button>
+                  </div>
                 </div>
-                <div style={{maxWidth:'820px',width:'100%',padding:'3rem 3.5rem',background:isDark?'rgba(21,25,50,0.85)':'#fff',borderRadius:'20px',border:`1px solid ${isDark?'rgba(96,165,250,0.2)':'rgba(0,0,0,0.1)'}`,boxShadow:isDark?'0 20px 60px rgba(0,0,0,0.7)':'0 10px 40px rgba(0,0,0,0.15)',minHeight:'260px',display:'flex',flexDirection:'column',gap:'1.25rem',justifyContent:'center',boxSizing:'border-box'}}>
-                  {slideDate && <div style={{fontSize:'0.85rem',color:'#60a5fa',fontFamily:"'Space Mono',monospace",letterSpacing:'0.5px'}}>{slideDate}</div>}
-                  <h1 style={{fontSize:'clamp(1.4rem,3vw,2.2rem)',fontWeight:800,color:isDark?'#e0e6ed':'#111',fontFamily:"'Space Mono',monospace",lineHeight:1.3,margin:0}}>{slideTitle}</h1>
-                  {slideContent && <p style={{fontSize:'1.05rem',color:isDark?'#c0c7d8':'#444',lineHeight:1.7,margin:0}}>{slideContent}</p>}
-                  {slideTopics.length>0 && <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>{slideTopics.slice(0,6).map(t=><span key={t} style={{padding:'0.25rem 0.7rem',borderRadius:'20px',fontSize:'0.78rem',fontWeight:600,background:isDark?'rgba(124,58,237,0.15)':'rgba(124,58,237,0.08)',color:'#a78bfa',border:'1px solid rgba(124,58,237,0.3)'}}>{t}</span>)}</div>}
-                  {slideNotes && <div style={{padding:'0.75rem 1rem',background:isDark?'rgba(96,165,250,0.08)':'rgba(37,99,235,0.05)',borderRadius:'10px',borderLeft:'3px solid rgba(96,165,250,0.4)',color:isDark?'#93c5fd':'#2563eb',fontSize:'0.9rem',lineHeight:1.6}}>{slideNotes}</div>}
+                {/* 16:9 slide canvas */}
+                <div style={{position:'relative',width:'min(88vw,calc(80vh*(16/9)))',aspectRatio:'16/9',background:slideBg,boxShadow:isDark?'0 20px 60px rgba(0,0,0,0.8)':'0 10px 40px rgba(0,0,0,0.2)',borderRadius:'6px',overflow:'hidden'}}>
+                  {(slide?.blocks||[]).map(b => {
+                    const isImg = b.type === 'image';
+                    return (
+                      <div key={b.id} style={{
+                        position:'absolute',
+                        left:`${b.x}%`, top:`${b.y}%`,
+                        width:`${b.w}%`, height:`${b.h}%`,
+                        background: b.background || 'transparent',
+                        overflow:'hidden',
+                        display:'flex', alignItems:'flex-start',
+                        boxSizing:'border-box',
+                        padding: isImg ? 0 : '2% 3%',
+                      }}>
+                        {isImg ? (
+                          b.imageUrl ? <img src={b.imageUrl} alt="" style={{width:'100%',height:'100%',objectFit:b.imageFit||'cover',display:'block'}} /> : null
+                        ) : (
+                          <div style={{
+                            fontSize:`clamp(9px, ${(b.fontSize||16) * 0.065}vw, ${(b.fontSize||16) * 1.4}px)`,
+                            fontWeight: b.fontWeight || (b.type==='heading' ? 700 : 400),
+                            fontStyle: b.fontStyle || 'normal',
+                            color: b.color || (isDark ? '#e0e6ed' : '#111'),
+                            textAlign: b.textAlign || 'left',
+                            lineHeight: 1.45,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            width: '100%',
+                          }}>{b.text||''}</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div style={{display:'flex',alignItems:'center',gap:'2rem',marginTop:'1.5rem'}}>
-                  <button onClick={()=>setPresentationMode(prev=>({...prev,idx:Math.max(0,prev.idx-1)}))} disabled={curIdx===0} style={{padding:'0.75rem 1.75rem',borderRadius:'12px',border:`1px solid ${isDark?'rgba(96,165,250,0.3)':'rgba(0,0,0,0.15)'}`,background:isDark?(curIdx===0?'rgba(26,31,58,0.4)':'rgba(96,165,250,0.1)'):(curIdx===0?'rgba(0,0,0,0.03)':'#fff'),color:curIdx===0?(isDark?'#3d4563':'#ccc'):(isDark?'#60a5fa':'#2563eb'),cursor:curIdx===0?'not-allowed':'pointer',fontSize:'1.3rem',fontWeight:700}}>←</button>
-                  <span style={{color:isDark?'#8b92b0':'#666',fontSize:'0.9rem',fontFamily:"'Space Mono',monospace",minWidth:'60px',textAlign:'center'}}>{curIdx+1} / {totalSlides}</span>
-                  <button onClick={()=>setPresentationMode(prev=>({...prev,idx:Math.min(totalSlides-1,prev.idx+1)}))} disabled={curIdx===totalSlides-1} style={{padding:'0.75rem 1.75rem',borderRadius:'12px',border:`1px solid ${isDark?'rgba(96,165,250,0.3)':'rgba(0,0,0,0.15)'}`,background:isDark?(curIdx===totalSlides-1?'rgba(26,31,58,0.4)':'rgba(96,165,250,0.1)'):(curIdx===totalSlides-1?'rgba(0,0,0,0.03)':'#fff'),color:curIdx===totalSlides-1?(isDark?'#3d4563':'#ccc'):(isDark?'#60a5fa':'#2563eb'),cursor:curIdx===totalSlides-1?'not-allowed':'pointer',fontSize:'1.3rem',fontWeight:700}}>→</button>
+                {/* Bottom nav */}
+                <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'0.55rem 1rem',display:'flex',alignItems:'center',justifyContent:'center',gap:'1.5rem',zIndex:1,background:isDark?'rgba(0,0,0,0.5)':'rgba(255,255,255,0.5)',backdropFilter:'blur(8px)'}}>
+                  <button onClick={()=>setPresentationMode(prev=>({...prev,idx:Math.max(0,prev.idx-1)}))} disabled={curIdx===0} style={{padding:'0.45rem 1.5rem',borderRadius:'9px',border:`1px solid ${isDark?'rgba(96,165,250,0.3)':'rgba(0,0,0,0.15)'}`,background:curIdx===0?'transparent':(isDark?'rgba(96,165,250,0.1)':'#fff'),color:curIdx===0?(isDark?'#3d4563':'#bbb'):(isDark?'#60a5fa':'#2563eb'),cursor:curIdx===0?'not-allowed':'pointer',fontSize:'1.2rem',fontWeight:700,lineHeight:1}}>←</button>
+                  <span style={{color:isDark?'#8b92b0':'#555',fontSize:'0.85rem',fontFamily:"'Space Mono',monospace",minWidth:'60px',textAlign:'center'}}>{curIdx+1} / {totalSlides}</span>
+                  <button onClick={()=>setPresentationMode(prev=>({...prev,idx:Math.min(totalSlides-1,prev.idx+1)}))} disabled={curIdx===totalSlides-1} style={{padding:'0.45rem 1.5rem',borderRadius:'9px',border:`1px solid ${isDark?'rgba(96,165,250,0.3)':'rgba(0,0,0,0.15)'}`,background:curIdx===totalSlides-1?'transparent':(isDark?'rgba(96,165,250,0.1)':'#fff'),color:curIdx===totalSlides-1?(isDark?'#3d4563':'#bbb'):(isDark?'#60a5fa':'#2563eb'),cursor:curIdx===totalSlides-1?'not-allowed':'pointer',fontSize:'1.2rem',fontWeight:700,lineHeight:1}}>→</button>
                 </div>
               </div>
             );
@@ -3073,79 +3388,29 @@
             </div>
           )}
 
-          {/* SLIDE EVENT PICKER */}
-          {showSlideEventPicker && (
-            <div className="modal" onClick={()=>setShowSlideEventPicker(false)}>
-              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'580px',maxHeight:'70vh',display:'flex',flexDirection:'column',padding:'1.5rem'}}>
+          {/* IMAGE BROWSER MODAL */}
+          {showImageBrowser && (
+            <div className="modal" onClick={()=>setShowImageBrowser(null)}>
+              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'680px',maxHeight:'75vh',display:'flex',flexDirection:'column',padding:'1.5rem'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem',flexShrink:0}}>
-                  <h3 style={{color:'#e0e6ed',margin:0,fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Add Slide from Database</h3>
-                  <button onClick={()=>setShowSlideEventPicker(false)} style={{background:'none',border:'none',color:'#8b92b0',fontSize:'1.5rem',cursor:'pointer',lineHeight:1,padding:'0 0.25rem'}}>×</button>
+                  <h3 style={{color:'#e0e6ed',margin:0,fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Pick an Image</h3>
+                  <button onClick={()=>setShowImageBrowser(null)} style={{background:'none',border:'none',color:'#8b92b0',fontSize:'1.5rem',cursor:'pointer',lineHeight:1,padding:'0 0.25rem'}}>×</button>
                 </div>
-                <input type="text" placeholder="Search events…" value={slidePickerSearch} onChange={e=>setSlidePickerSearch(e.target.value)}
-                  style={{padding:'0.6rem 0.9rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',marginBottom:'0.75rem',outline:'none',flexShrink:0}} autoFocus />
-                <div style={{overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'0.45rem'}}>
-                  {sortedEvents.filter(e=>{
-                    if(!slidePickerSearch)return true;
-                    const s=slidePickerSearch.toLowerCase();
-                    return(e.title||'').toLowerCase().includes(s)||(e.aiSummary||'').toLowerCase().includes(s)||(e.topics||[]).some(t=>t.toLowerCase().includes(s));
-                  }).slice(0,60).map(e=>(
-                    <div key={e.id} onClick={()=>{addSlideToPresentation(showSlideEventPicker,e);setShowSlideEventPicker(false);}}
-                      style={{padding:'0.65rem 0.9rem',background:'rgba(26,31,58,0.7)',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'8px',cursor:'pointer'}}
-                      onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.5)'}
-                      onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.4)'}>
-                      <div style={{fontWeight:600,color:'#e0e6ed',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:'0.15rem'}}>{e.title}</div>
-                      <div style={{fontSize:'0.75rem',color:'#8b92b0'}}>{e.date||'No date'}{(e.topics||[]).length>0?' · ':''}{(e.topics||[]).slice(0,3).join(', ')}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* EDIT SLIDE MODAL */}
-          {editingSlide && (
-            <div className="modal" onClick={()=>setEditingSlide(null)}>
-              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'540px'}}>
-                <h3 style={{marginBottom:'0.35rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Edit Slide</h3>
-                <p style={{color:'#8b92b0',fontSize:'0.82rem',marginBottom:'1.5rem',lineHeight:1.5}}>Override event data for this slide. Leave a field blank to use the original event data.</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'1rem',marginBottom:'1.5rem'}}>
-                  <div>
-                    <label className="filter-label">Title override</label>
-                    <input type="text" value={editingSlide.localTitle} onChange={e=>setEditingSlide(p=>({...p,localTitle:e.target.value}))}
-                      placeholder={data.events.find(ev=>ev.id===editingSlide.slide.eventId)?.title||''}
-                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} />
+                {imageBrowserFiles.length === 0 ? (
+                  <div className="empty-state"><div className="empty-state-icon">🖼️</div><p>No images found. Upload files or analyze videos to get images.</p></div>
+                ) : (
+                  <div style={{overflowY:'auto',flex:1,display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'0.6rem'}}>
+                    {imageBrowserFiles.map(f => (
+                      <div key={f.url} onClick={()=>{updateBlock(showImageBrowser,{imageUrl:f.url});setShowImageBrowser(null);}}
+                        style={{cursor:'pointer',borderRadius:'8px',overflow:'hidden',border:'1px solid rgba(61,69,99,0.5)',aspectRatio:'16/9',background:'rgba(26,31,58,0.7)',position:'relative'}}
+                        onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.6)'}
+                        onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                        <img src={f.url} alt={f.name||''} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} />
+                        {f.name && <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'0.25rem 0.4rem',background:'rgba(0,0,0,0.6)',color:'#c0c7d8',fontSize:'0.65rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</div>}
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <label className="filter-label">Date override</label>
-                    <input type="text" value={editingSlide.localDate} onChange={e=>setEditingSlide(p=>({...p,localDate:e.target.value}))}
-                      placeholder={data.events.find(ev=>ev.id===editingSlide.slide.eventId)?.date||'e.g. 1963-11-22'}
-                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} />
-                  </div>
-                  <div>
-                    <label className="filter-label">Content override</label>
-                    <textarea value={editingSlide.localContent} onChange={e=>setEditingSlide(p=>({...p,localContent:e.target.value}))}
-                      placeholder="Leave blank to use AI summary or description…"
-                      rows={4}
-                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none',resize:'vertical'}} />
-                  </div>
-                  <div>
-                    <label className="filter-label">Notes (shown in a callout box on the slide)</label>
-                    <textarea value={editingSlide.localNotes} onChange={e=>setEditingSlide(p=>({...p,localNotes:e.target.value}))}
-                      placeholder="Optional presenter notes or extra context…"
-                      rows={3}
-                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none',resize:'vertical'}} />
-                  </div>
-                  <div>
-                    <label className="filter-label">Topics override (comma-separated)</label>
-                    <input type="text" value={editingSlide.localTopics} onChange={e=>setEditingSlide(p=>({...p,localTopics:e.target.value}))}
-                      placeholder={((data.events.find(ev=>ev.id===editingSlide.slide.eventId)?.topics)||[]).join(', ')||'e.g. CIA, Cold War'}
-                      style={{width:'100%',padding:'0.6rem 0.8rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.9rem',boxSizing:'border-box',outline:'none'}} />
-                  </div>
-                </div>
-                <div style={{display:'flex',gap:'0.75rem',justifyContent:'flex-end'}}>
-                  <button onClick={()=>setEditingSlide(null)} style={{padding:'0.5rem 1.2rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Cancel</button>
-                  <button onClick={()=>saveSlideEdits(editingSlide.pId,editingSlide.slide.id,{customTitle:editingSlide.localTitle,customDate:editingSlide.localDate,customContent:editingSlide.localContent,customTopics:editingSlide.localTopics,customNotes:editingSlide.localNotes})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Save Changes</button>
-                </div>
+                )}
               </div>
             </div>
           )}
