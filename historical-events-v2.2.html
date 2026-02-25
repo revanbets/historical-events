@@ -1138,6 +1138,18 @@
         setIsProcessing(true);
         const isVideo = /youtube|youtu\.be|vimeo|dailymotion/i.test(urlInput);
         const doAnalysis = autoAnalysis;
+
+        // If using remote backend, ping it first — free tier sleeps after inactivity
+        if (API_BASE) {
+          setUploadMessage('⏳ Connecting to analysis server...');
+          const pingStart = Date.now();
+          try { await fetch(`${API_BASE}/api/records`, { method: 'GET' }); } catch(e) {}
+          if (Date.now() - pingStart > 3000) {
+            setUploadMessage('🔄 Backend is waking up — it\'ll be ready in just a moment. Subsequent requests will be instant.');
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        }
+
         if (doAnalysis) {
           const modeLabel = {fast:'Fast',quick:'Quick',short:'Short',long:'Detailed'}[analysisMode]||'';
           const frameLabel = skipFrames ? ', no frames' : '';
