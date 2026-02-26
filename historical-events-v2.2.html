@@ -616,6 +616,9 @@
       const [presAiFocuses, setPresAiFocuses] = useState(['']);
       const [presAiDetail, setPresAiDetail] = useState('standard');
       const [presAiLoading, setPresAiLoading] = useState(false);
+      const [showShapeMenu, setShowShapeMenu] = useState(false);
+      const [showThemeMenu, setShowThemeMenu] = useState(false);
+      const [showGradMenu, setShowGradMenu] = useState(false);
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -857,9 +860,18 @@
       const addBlock = (type) => {
         const uid = Date.now().toString(36) + Math.random().toString(36).slice(2);
         const defs = {
-          text:    { type: 'text',    x: 10, y: 40, w: 45, h: 15, text: 'Text box', fontSize: 16, fontWeight: 'normal', fontStyle: 'normal', color: '#e0e6ed', textAlign: 'left', background: 'transparent', eventId: null, eventField: null },
-          heading: { type: 'heading', x: 5,  y: 8,  w: 88, h: 20, text: 'Heading',  fontSize: 36, fontWeight: 'bold',   fontStyle: 'normal', color: '#ffffff',  textAlign: 'left', background: 'transparent', eventId: null, eventField: null },
-          image:   { type: 'image',   x: 55, y: 20, w: 38, h: 55, imageUrl: '', imageFit: 'cover', eventId: null, eventField: null },
+          text:      { type:'text',    x:10, y:40, w:45, h:15, text:'Text box', fontSize:16, fontWeight:'normal', fontStyle:'normal', color:'#e0e6ed', textAlign:'left', background:'transparent', eventId:null, eventField:null },
+          heading:   { type:'heading', x:5,  y:8,  w:88, h:20, text:'Heading',  fontSize:36, fontWeight:'bold',   fontStyle:'normal', color:'#ffffff',  textAlign:'left', background:'transparent', eventId:null, eventField:null },
+          image:     { type:'image',   x:55, y:20, w:38, h:55, imageUrl:'', imageFit:'cover', eventId:null, eventField:null },
+          callout:   { type:'callout', x:8,  y:35, w:55, h:18, text:'Key insight or quote...', fontSize:15, fontWeight:'normal', fontStyle:'italic', color:'#f0f4ff', accentColor:'#f59e0b', background:'rgba(245,158,11,0.08)', eventId:null, eventField:null },
+          rectangle: { type:'shape', x:20, y:25, w:25, h:30, shapeType:'rectangle', fill:'#3b82f6', stroke:'transparent', strokeWidth:0, radius:8 },
+          circle:    { type:'shape', x:20, y:25, w:25, h:30, shapeType:'circle',    fill:'#8b5cf6', stroke:'transparent', strokeWidth:0, radius:0 },
+          triangle:  { type:'shape', x:20, y:25, w:25, h:30, shapeType:'triangle',  fill:'#10b981', stroke:'transparent', strokeWidth:0, radius:0 },
+          diamond:   { type:'shape', x:20, y:25, w:25, h:30, shapeType:'diamond',   fill:'#f59e0b', stroke:'transparent', strokeWidth:0, radius:0 },
+          line:      { type:'shape', x:10, y:48, w:45, h:8,  shapeType:'line',      fill:'#60a5fa', stroke:'transparent', strokeWidth:2, radius:0 },
+          arrow:     { type:'shape', x:10, y:48, w:45, h:8,  shapeType:'arrow',     fill:'#60a5fa', stroke:'transparent', strokeWidth:2, radius:0 },
+          star:      { type:'shape', x:20, y:20, w:25, h:30, shapeType:'star',      fill:'#fbbf24', stroke:'transparent', strokeWidth:0, radius:0 },
+          hexagon:   { type:'shape', x:20, y:20, w:25, h:30, shapeType:'hexagon',   fill:'#06b6d4', stroke:'transparent', strokeWidth:0, radius:0 },
         };
         const nb = { id: uid, ...defs[type] };
         const updated = [...liveBlocksRef.current, nb];
@@ -877,6 +889,84 @@
         const updated = liveBlocksRef.current.map(b => b.id === blockId ? { ...b, ...changes } : b);
         setLiveBlocks(updated);
         _saveBlocks(updated);
+      };
+
+      // ── Presentation themes & gradient presets ──
+      const SLIDE_THEMES = [
+        {id:'dark',    label:'Dark',        bg:'#080d22', swatch:'#0a0f2e'},
+        {id:'navy',    label:'Navy',        bg:'#0d1b2e', swatch:'#0d1b2e'},
+        {id:'slate',   label:'Slate',       bg:'#1e293b', swatch:'#1e293b'},
+        {id:'noir',    label:'Noir',        bg:'#0a0a0a', swatch:'#111'},
+        {id:'forest',  label:'Forest',      bg:'#0d2118', swatch:'#0d2118'},
+        {id:'crimson', label:'Crimson',     bg:'#1a0608', swatch:'#1a0608'},
+        {id:'light',   label:'Light',       bg:'#f0f4ff', swatch:'#e8edf8'},
+        {id:'warm',    label:'Warm',        bg:'#fef3c7', swatch:'#fde68a'},
+      ];
+      const GRAD_PRESETS = [
+        'linear-gradient(135deg,#080d22 0%,#1a0533 100%)',
+        'linear-gradient(135deg,#0d1b2e 0%,#1e3a5f 100%)',
+        'linear-gradient(135deg,#0a0a0a 0%,#1a1a2e 100%)',
+        'linear-gradient(135deg,#1a0608 0%,#3a0d20 100%)',
+        'linear-gradient(135deg,#0d2118 0%,#1a3a2a 100%)',
+        'linear-gradient(135deg,#0f2027 0%,#2c5364 100%)',
+        'linear-gradient(135deg,#1a120a 0%,#3d2b1f 100%)',
+        'linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%)',
+      ];
+
+      // ── Shape SVG renderer ──
+      const renderShapeSVG = (block) => {
+        const {shapeType='rectangle', fill='#3b82f6', stroke='transparent', strokeWidth=0, radius=0} = block;
+        const s = strokeWidth||0, vb = 100;
+        const commonSvg = (children) => (
+          <svg viewBox={`0 0 ${vb} ${vb}`} preserveAspectRatio="none" style={{width:'100%',height:'100%',display:'block',overflow:'visible'}}>
+            {children}
+          </svg>
+        );
+        if (shapeType==='circle') return commonSvg(<ellipse cx={50} cy={50} rx={50-s} ry={50-s} fill={fill} stroke={stroke} strokeWidth={s*2}/>);
+        if (shapeType==='triangle') return commonSvg(<polygon points={`50,${s} ${vb-s},${vb-s} ${s},${vb-s}`} fill={fill} stroke={stroke} strokeWidth={s}/>);
+        if (shapeType==='diamond') return commonSvg(<polygon points={`50,${s} ${vb-s},50 50,${vb-s} ${s},50`} fill={fill} stroke={stroke} strokeWidth={s}/>);
+        if (shapeType==='line') return commonSvg(<line x1={0} y1={50} x2={vb} y2={50} stroke={fill} strokeWidth={Math.max(s*2,3)} strokeLinecap="round"/>);
+        if (shapeType==='arrow') return commonSvg(<>
+          <defs><marker id={`ah-${block.id}`} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill={fill}/></marker></defs>
+          <line x1={5} y1={50} x2={88} y2={50} stroke={fill} strokeWidth={Math.max(s*2,3)} markerEnd={`url(#ah-${block.id})`}/>
+        </>);
+        if (shapeType==='star') {
+          const pts = Array.from({length:10},(_,i)=>{const a=Math.PI/5*i-Math.PI/2;const r=i%2===0?48:22;return`${50+r*Math.cos(a)},${50+r*Math.sin(a)}`;}).join(' ');
+          return commonSvg(<polygon points={pts} fill={fill} stroke={stroke} strokeWidth={s}/>);
+        }
+        if (shapeType==='hexagon') {
+          const pts = Array.from({length:6},(_,i)=>{const a=Math.PI/3*i-Math.PI/6;return`${50+(50-s)*Math.cos(a)},${50+(50-s)*Math.sin(a)}`;}).join(' ');
+          return commonSvg(<polygon points={pts} fill={fill} stroke={stroke} strokeWidth={s}/>);
+        }
+        // default: rectangle
+        return commonSvg(<rect x={s/2} y={s/2} width={vb-s} height={vb-s} rx={radius||0} fill={fill} stroke={stroke} strokeWidth={s}/>);
+      };
+
+      // ── Duplicate / z-order block helpers ──
+      const duplicateBlock = () => {
+        if(!selectedBlockId) return;
+        const src = liveBlocksRef.current.find(b=>b.id===selectedBlockId);
+        if(!src) return;
+        const uid = Date.now().toString(36)+Math.random().toString(36).slice(2);
+        const nb = {...src, id:uid, x:Math.min(src.x+3, 90), y:Math.min(src.y+3, 90)};
+        const updated = [...liveBlocksRef.current, nb];
+        setLiveBlocks(updated); setSelectedBlockId(uid); _saveBlocks(updated);
+      };
+      const moveBlockZ = (dir) => {
+        if(!selectedBlockId) return;
+        const arr = [...liveBlocksRef.current];
+        const idx = arr.findIndex(b=>b.id===selectedBlockId);
+        if(idx<0) return;
+        if(dir==='front') { const [b]=arr.splice(idx,1); arr.push(b); }
+        else if(dir==='back') { const [b]=arr.splice(idx,1); arr.unshift(b); }
+        else if(dir==='fwd'&&idx<arr.length-1) { [arr[idx],arr[idx+1]]=[arr[idx+1],arr[idx]]; }
+        else if(dir==='bwd'&&idx>0) { [arr[idx],arr[idx-1]]=[arr[idx-1],arr[idx]]; }
+        setLiveBlocks(arr); _saveBlocks(arr);
+      };
+      const applyThemeToPresentation = (pId, bgValue) => {
+        const pres = presentations.find(p=>p.id===pId); if(!pres) return;
+        const ns = pres.slides.map(s=>({...s, bg:bgValue}));
+        saveSlidesToPres(pId, ns);
       };
 
       // ── Canvas drag handlers ──
@@ -897,7 +987,9 @@
           current: null,
           el: canvas.querySelector(`[data-block="${blockId}"]`),
         };
-        canvas.setPointerCapture(e.pointerId);
+        // Capture on the block/handle element so click/dblclick fire on the block,
+        // not the canvas — this prevents the canvas onClick from deselecting.
+        e.currentTarget.setPointerCapture(e.pointerId);
       };
       const handleCanvasPointerMove = (e) => {
         const d = dragRef.current;
@@ -2926,14 +3018,52 @@
                       <div>
                         {/* Block toolbar */}
                         {isPresOwner && (
-                          <div style={{display:'flex',gap:'0.4rem',marginBottom:'0.5rem',flexWrap:'wrap',alignItems:'center'}}>
-                            <span style={{fontSize:'0.72rem',color:'#8b92b0',marginRight:'0.2rem'}}>Add:</span>
-                            {['heading','text','image'].map(t=>(
-                              <button key={t} onClick={()=>addBlock(t)} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)'}}>+ {t.charAt(0).toUpperCase()+t.slice(1)}</button>
-                            ))}
-                            <div style={{flex:1}} />
-                            <span style={{fontSize:'0.72rem',color:'#8b92b0'}}>Slide BG:</span>
-                            <input type="color" value={editSlide.bg||'#0a0d1e'} onChange={e=>{const sId=editingSlideId,pId=activePresentationId;const ns=activePres.slides.map(s=>s.id===sId?{...s,bg:e.target.value}:s);saveSlidesToPres(pId,ns);}} style={{width:'28px',height:'24px',border:'none',borderRadius:'4px',cursor:'pointer',padding:0}} />
+                          <div style={{display:'flex',gap:'0.35rem',marginBottom:'0.5rem',flexWrap:'wrap',alignItems:'center'}}>
+                            {/* Text blocks */}
+                            <button onClick={()=>addBlock('heading')} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)',fontSize:'0.72rem'}}>+ Heading</button>
+                            <button onClick={()=>addBlock('text')} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)',fontSize:'0.72rem'}}>+ Text</button>
+                            <button onClick={()=>addBlock('callout')} style={{...btnSm,color:'#f59e0b',borderColor:'rgba(245,158,11,0.35)',background:'rgba(245,158,11,0.08)',fontSize:'0.72rem'}}>+ Callout</button>
+                            <button onClick={()=>addBlock('image')} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)',fontSize:'0.72rem'}}>+ Image</button>
+                            {/* Shapes dropdown */}
+                            <div style={{position:'relative',display:'inline-flex'}}>
+                              <button onClick={()=>{setShowShapeMenu(v=>!v);setShowThemeMenu(false);setShowGradMenu(false);}} style={{...btnSm,color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)',background:'rgba(167,139,250,0.08)',fontSize:'0.72rem'}}>+ Shape ▾</button>
+                              {showShapeMenu && (
+                                <div style={{position:'absolute',top:'100%',left:0,zIndex:200,marginTop:'4px',background:'rgba(15,18,35,0.98)',border:'1px solid rgba(61,69,99,0.6)',borderRadius:'10px',padding:'0.4rem',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.3rem',width:'160px',boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
+                                  {[['rectangle','▭ Rect'],['circle','● Circle'],['triangle','▲ Triangle'],['diamond','◆ Diamond'],['line','— Line'],['arrow','→ Arrow'],['star','★ Star'],['hexagon','⬡ Hex']].map(([st,lbl])=>(
+                                    <button key={st} onClick={()=>{addBlock(st);setShowShapeMenu(false);}} style={{...btnSm,fontSize:'0.7rem',color:'#c0c7d8',textAlign:'left',justifyContent:'flex-start',padding:'0.25rem 0.5rem'}}>{lbl}</button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{flex:1}}/>
+                            {/* Theme picker */}
+                            <div style={{position:'relative',display:'inline-flex'}}>
+                              <button onClick={()=>{setShowThemeMenu(v=>!v);setShowShapeMenu(false);setShowGradMenu(false);}} style={{...btnSm,color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)',background:'rgba(167,139,250,0.08)',fontSize:'0.72rem'}}>🎨 Theme ▾</button>
+                              {showThemeMenu && (
+                                <div style={{position:'absolute',top:'100%',right:0,zIndex:200,marginTop:'4px',background:'rgba(15,18,35,0.98)',border:'1px solid rgba(61,69,99,0.6)',borderRadius:'10px',padding:'0.5rem',display:'flex',flexDirection:'column',gap:'0.25rem',width:'160px',boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
+                                  <div style={{fontSize:'0.65rem',color:'#5a6180',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'0.2rem',paddingLeft:'0.2rem'}}>Apply to all slides</div>
+                                  {SLIDE_THEMES.map(t=>(
+                                    <button key={t.id} onClick={()=>{applyThemeToPresentation(activePres.id,t.bg);setShowThemeMenu(false);}} style={{display:'flex',alignItems:'center',gap:'0.5rem',...btnSm,fontSize:'0.75rem',color:'#e0e6ed',borderColor:'rgba(61,69,99,0.4)'}}>
+                                      <span style={{width:'14px',height:'14px',borderRadius:'3px',background:t.swatch,border:'1px solid rgba(255,255,255,0.15)',flexShrink:0,display:'inline-block'}}/>
+                                      {t.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {/* Slide BG color + gradient */}
+                            <span style={{fontSize:'0.68rem',color:'#8b92b0'}}>BG:</span>
+                            <input type="color" value={(editSlide.bg||'#0a0d1e').startsWith('#')?(editSlide.bg||'#0a0d1e'):'#0a0d1e'} onChange={e=>{const sId=editingSlideId,pId=activePresentationId;const ns=activePres.slides.map(s=>s.id===sId?{...s,bg:e.target.value}:s);saveSlidesToPres(pId,ns);}} style={{width:'26px',height:'22px',border:'none',borderRadius:'4px',cursor:'pointer',padding:0}} />
+                            <div style={{position:'relative',display:'inline-flex'}}>
+                              <button onClick={()=>{setShowGradMenu(v=>!v);setShowShapeMenu(false);setShowThemeMenu(false);}} title="Gradient presets" style={{...btnSm,fontSize:'0.68rem',color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)',padding:'0.2rem 0.5rem'}}>▦</button>
+                              {showGradMenu && (
+                                <div style={{position:'absolute',top:'100%',right:0,zIndex:200,marginTop:'4px',background:'rgba(15,18,35,0.98)',border:'1px solid rgba(61,69,99,0.6)',borderRadius:'10px',padding:'0.5rem',display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'0.35rem',boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
+                                  {GRAD_PRESETS.map((g,i)=>(
+                                    <div key={i} onClick={()=>{const sId=editingSlideId,pId=activePresentationId;const ns=activePres.slides.map(s=>s.id===sId?{...s,bg:g}:s);saveSlidesToPres(pId,ns);setShowGradMenu(false);}} style={{width:'30px',height:'22px',borderRadius:'4px',background:g,border:'1px solid rgba(255,255,255,0.1)',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.border='1px solid rgba(96,165,250,0.6)'} onMouseLeave={e=>e.currentTarget.style.border='1px solid rgba(255,255,255,0.1)'}/>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                         {/* Canvas */}
@@ -2952,8 +3082,8 @@
                                 <div key={block.id} data-block={block.id}
                                   style={{position:'absolute',left:`${block.x}%`,top:`${block.y}%`,width:`${block.w}%`,height:`${block.h}%`,outline:isSel?'2px solid #60a5fa':isTxt?'2px solid #a78bfa':'none',outlineOffset:'-1px',background:block.background==='transparent'||!block.background?'transparent':block.background,boxSizing:'border-box',userSelect:'none',cursor:isPresOwner&&!isTxt?'move':'default'}}
                                   onPointerDown={isPresOwner&&!isTxt?e=>handleBlockPointerDown(e,block.id,false,''):undefined}
-                                  onClick={e=>{e.stopPropagation();setSelectedBlockId(block.id);}}
-                                  onDoubleClick={e=>{e.stopPropagation();if(block.type!=='image'&&block.type!=='tags'&&block.type!=='sources'&&isPresOwner){setSelectedBlockId(block.id);setCanvasTextEditId(block.id);}}}
+                                  onClick={e=>{e.stopPropagation();if(isPresOwner&&(block.type==='text'||block.type==='heading'||block.type==='callout')&&selectedBlockId===block.id){setCanvasTextEditId(block.id);}else{setSelectedBlockId(block.id);}}}
+                                  onDoubleClick={e=>{e.stopPropagation();if(isPresOwner&&block.type!=='image'&&block.type!=='tags'&&block.type!=='sources'&&block.type!=='shape'){setCanvasTextEditId(block.id);}}}
                                   onDragOver={block.type==='image'&&isPresOwner?e=>{e.preventDefault();e.stopPropagation();}:undefined}
                                   onDrop={block.type==='image'&&isPresOwner?e=>{
                                     e.preventDefault();e.stopPropagation();
@@ -2992,11 +3122,27 @@
                                         <span key={i} style={{padding:'1px 4px',borderRadius:'3px',background:'rgba(16,185,129,0.1)',color:'#10b981',border:'1px solid rgba(16,185,129,0.25)'}}>🔗 {item.label}</span>
                                       ))}
                                     </div>
+                                  ) : block.type==='shape' ? (
+                                    <div style={{width:'100%',height:'100%',opacity:block.opacity!=null?block.opacity/100:1,pointerEvents:'none'}}>{renderShapeSVG(block)}</div>
+                                  ) : block.type==='callout' ? (
+                                    isTxt ? (
+                                      <div style={{width:'100%',height:'100%',display:'flex',gap:'4%',alignItems:'stretch'}}>
+                                        <div style={{width:'3px',flexShrink:0,borderRadius:'2px',background:block.accentColor||'#f59e0b'}}/>
+                                        <textarea value={block.text||''} onChange={e=>{e.stopPropagation();updateBlock(block.id,{text:e.target.value});}} onBlur={()=>setCanvasTextEditId(null)} onPointerDown={e=>e.stopPropagation()} autoFocus style={{flex:1,background:'transparent',border:'none',color:block.color||'#f0f4ff',fontSize:`${block.fontSize||15}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'italic',textAlign:block.textAlign||'left',resize:'none',outline:'none',fontFamily:'inherit',padding:'2px 4px',lineHeight:1.4,boxSizing:'border-box'}}/>
+                                      </div>
+                                    ) : (
+                                      <div style={{width:'100%',height:'100%',display:'flex',gap:'4%',alignItems:'stretch',pointerEvents:'none'}}>
+                                        <div style={{width:'3px',flexShrink:0,borderRadius:'2px',background:block.accentColor||'#f59e0b'}}/>
+                                        <div style={{flex:1,color:block.color||'#f0f4ff',fontSize:`${block.fontSize||15}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'italic',textAlign:block.textAlign||'left',overflow:'hidden',lineHeight:1.4,padding:'2px 4px',boxSizing:'border-box',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>
+                                          {block.text||(isPresOwner?<span style={{opacity:0.3,fontStyle:'italic'}}>click to edit callout…</span>:'')}
+                                        </div>
+                                      </div>
+                                    )
                                   ) : isTxt ? (
                                     <textarea value={block.text||''} onChange={e=>{e.stopPropagation();updateBlock(block.id,{text:e.target.value});}} onBlur={()=>setCanvasTextEditId(null)} onPointerDown={e=>e.stopPropagation()} autoFocus style={{width:'100%',height:'100%',background:'transparent',border:'none',color:block.color||'#e0e6ed',fontSize:`${block.fontSize||16}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'normal',textAlign:block.textAlign||'left',resize:'none',outline:'none',fontFamily:'inherit',padding:'2px',lineHeight:1.4,boxSizing:'border-box'}} />
                                   ) : (
                                     <div style={{width:'100%',height:'100%',color:block.color||'#e0e6ed',fontSize:`${block.fontSize||16}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'normal',textAlign:block.textAlign||'left',overflow:'hidden',lineHeight:1.4,padding:'2px',boxSizing:'border-box',whiteSpace:'pre-wrap',wordBreak:'break-word',pointerEvents:'none'}}>
-                                      {dispText || (isPresOwner ? <span style={{opacity:0.25,fontStyle:'italic'}}>double-click to edit</span> : '')}
+                                      {dispText || (isPresOwner ? <span style={{opacity:0.25,fontStyle:'italic'}}>click to select · click again to edit</span> : '')}
                                     </div>
                                   )}
                                   {isSel && isPresOwner && ['nw','n','ne','e','se','s','sw','w'].map(h=>(
@@ -3010,24 +3156,66 @@
                         </div>
                         {/* Properties panel */}
                         {selBlock && isPresOwner && (
-                          <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap',padding:'0.55rem 0.75rem',background:'rgba(21,25,50,0.85)',borderRadius:'8px',alignItems:'center',marginTop:'0.4rem',border:'1px solid rgba(61,69,99,0.4)'}}>
-                            {selBlock.type!=='image' && selBlock.type!=='tags' && selBlock.type!=='sources' && (<>
-                              <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Size</label>
-                              <input type="number" value={selBlock.fontSize||16} min={8} max={120} onChange={e=>updateBlock(selectedBlockId,{fontSize:Number(e.target.value)})} style={{width:'50px',padding:'0.2rem 0.35rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.8rem'}} />
-                              <button onClick={()=>updateBlock(selectedBlockId,{fontWeight:selBlock.fontWeight==='bold'?'normal':'bold'})} style={{...btnSm,fontWeight:'bold',color:selBlock.fontWeight==='bold'?'#60a5fa':'#8b92b0',background:selBlock.fontWeight==='bold'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)'}}>B</button>
-                              <button onClick={()=>updateBlock(selectedBlockId,{fontStyle:selBlock.fontStyle==='italic'?'normal':'italic'})} style={{...btnSm,fontStyle:'italic',color:selBlock.fontStyle==='italic'?'#60a5fa':'#8b92b0',background:selBlock.fontStyle==='italic'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)'}}>I</button>
+                          <div style={{display:'flex',gap:'0.4rem',flexWrap:'wrap',padding:'0.5rem 0.75rem',background:'rgba(21,25,50,0.85)',borderRadius:'8px',alignItems:'center',marginTop:'0.4rem',border:'1px solid rgba(61,69,99,0.4)'}}>
+                            {/* Text / Heading / Callout properties */}
+                            {(selBlock.type==='text'||selBlock.type==='heading'||selBlock.type==='callout') && (<>
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Size</label>
+                              <input type="number" value={selBlock.fontSize||16} min={6} max={120} onChange={e=>updateBlock(selectedBlockId,{fontSize:Number(e.target.value)})} style={{width:'46px',padding:'0.18rem 0.3rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.78rem'}} />
+                              <button onClick={()=>updateBlock(selectedBlockId,{fontWeight:selBlock.fontWeight==='bold'?'normal':'bold'})} style={{...btnSm,fontWeight:'bold',color:selBlock.fontWeight==='bold'?'#60a5fa':'#8b92b0',background:selBlock.fontWeight==='bold'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)',minWidth:'26px'}}>B</button>
+                              <button onClick={()=>updateBlock(selectedBlockId,{fontStyle:selBlock.fontStyle==='italic'?'normal':'italic'})} style={{...btnSm,fontStyle:'italic',color:selBlock.fontStyle==='italic'?'#60a5fa':'#8b92b0',background:selBlock.fontStyle==='italic'?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)',minWidth:'26px'}}>I</button>
                               {['left','center','right'].map((a,ai)=>(
-                                <button key={a} title={a} onClick={()=>updateBlock(selectedBlockId,{textAlign:a})} style={{...btnSm,color:selBlock.textAlign===a?'#60a5fa':'#8b92b0',background:selBlock.textAlign===a?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)',minWidth:'26px',textAlign:'center'}}>{ai===0?'⬛':ai===1?'⬜':'▪'}</button>
+                                <button key={a} title={a} onClick={()=>updateBlock(selectedBlockId,{textAlign:a})} style={{...btnSm,color:selBlock.textAlign===a?'#60a5fa':'#8b92b0',background:selBlock.textAlign===a?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)',minWidth:'24px',textAlign:'center',fontSize:'0.7rem'}}>{ai===0?'≡':ai===1?'☰':'≡'}</button>
                               ))}
-                              <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Text</label>
-                              <input type="color" value={selBlock.color||'#ffffff'} onChange={e=>updateBlock(selectedBlockId,{color:e.target.value})} style={{width:'26px',height:'22px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Color</label>
+                              <input type="color" value={selBlock.color||'#ffffff'} onChange={e=>updateBlock(selectedBlockId,{color:e.target.value})} style={{width:'24px',height:'20px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                              {selBlock.type==='callout' && <>
+                                <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Accent</label>
+                                <input type="color" value={selBlock.accentColor||'#f59e0b'} onChange={e=>updateBlock(selectedBlockId,{accentColor:e.target.value})} style={{width:'24px',height:'20px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                              </>}
                             </>)}
-                            {selBlock.type==='image' && <button onClick={()=>openImageBrowser(selectedBlockId)} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)'}}>🖼️ Browse Images</button>}
-                            <label style={{fontSize:'0.7rem',color:'#8b92b0'}}>Block BG</label>
-                            <input type="color" value={selBlock.background&&selBlock.background!=='transparent'?selBlock.background:'#000000'} onChange={e=>updateBlock(selectedBlockId,{background:e.target.value})} style={{width:'26px',height:'22px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
-                            <button onClick={()=>updateBlock(selectedBlockId,{background:'transparent'})} style={{...btnSm,fontSize:'0.7rem'}}>Clear BG</button>
-                            <div style={{marginLeft:'auto'}}>
-                              <button onClick={()=>removeBlock(selectedBlockId)} style={{...btnSm,color:'#f87171',borderColor:'rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.08)'}}>🗑 Delete block</button>
+                            {/* Shape properties */}
+                            {selBlock.type==='shape' && (<>
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Shape</label>
+                              <select value={selBlock.shapeType||'rectangle'} onChange={e=>updateBlock(selectedBlockId,{shapeType:e.target.value})} style={{padding:'0.18rem 0.3rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.72rem',cursor:'pointer'}}>
+                                {['rectangle','circle','triangle','diamond','line','arrow','star','hexagon'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                              </select>
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Fill</label>
+                              <input type="color" value={selBlock.fill||'#3b82f6'} onChange={e=>updateBlock(selectedBlockId,{fill:e.target.value})} style={{width:'24px',height:'20px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Border</label>
+                              <input type="color" value={selBlock.stroke&&selBlock.stroke!=='transparent'?selBlock.stroke:'#000000'} onChange={e=>updateBlock(selectedBlockId,{stroke:e.target.value})} style={{width:'24px',height:'20px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                              <button onClick={()=>updateBlock(selectedBlockId,{stroke:'transparent'})} style={{...btnSm,fontSize:'0.68rem'}}>No Border</button>
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>W</label>
+                              <input type="number" value={selBlock.strokeWidth||0} min={0} max={20} onChange={e=>updateBlock(selectedBlockId,{strokeWidth:Number(e.target.value)})} style={{width:'38px',padding:'0.18rem 0.3rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.78rem'}} />
+                              {(selBlock.shapeType==='rectangle'||!selBlock.shapeType) && <>
+                                <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Round</label>
+                                <input type="number" value={selBlock.radius||0} min={0} max={50} onChange={e=>updateBlock(selectedBlockId,{radius:Number(e.target.value)})} style={{width:'38px',padding:'0.18rem 0.3rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'5px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.78rem'}} />
+                              </>}
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Opacity</label>
+                              <input type="range" min={10} max={100} value={selBlock.opacity!=null?selBlock.opacity:100} onChange={e=>updateBlock(selectedBlockId,{opacity:Number(e.target.value)})} style={{width:'55px',cursor:'pointer',accentColor:'#a78bfa'}} />
+                            </>)}
+                            {/* Image properties */}
+                            {selBlock.type==='image' && <>
+                              <button onClick={()=>openImageBrowser(selectedBlockId)} style={{...btnSm,color:'#60a5fa',borderColor:'rgba(96,165,250,0.3)',background:'rgba(96,165,250,0.08)',fontSize:'0.72rem'}}>🖼️ Change Image</button>
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>Fit</label>
+                              {['cover','contain','fill'].map(f=>(
+                                <button key={f} onClick={()=>updateBlock(selectedBlockId,{imageFit:f})} style={{...btnSm,fontSize:'0.68rem',color:(selBlock.imageFit||'cover')===f?'#60a5fa':'#8b92b0',background:(selBlock.imageFit||'cover')===f?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)'}}>{f}</button>
+                              ))}
+                              {selBlock.imageUrl && <button onClick={()=>updateBlock(selectedBlockId,{imageUrl:''})} style={{...btnSm,fontSize:'0.68rem',color:'#f87171',borderColor:'rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.06)'}}>Clear</button>}
+                            </>}
+                            {/* Block BG (all non-shape, non-image) */}
+                            {selBlock.type!=='image' && selBlock.type!=='tags' && selBlock.type!=='sources' && selBlock.type!=='shape' && (<>
+                              <label style={{fontSize:'0.68rem',color:'#8b92b0'}}>BG</label>
+                              <input type="color" value={selBlock.background&&selBlock.background!=='transparent'?selBlock.background:'#000000'} onChange={e=>updateBlock(selectedBlockId,{background:e.target.value})} style={{width:'24px',height:'20px',border:'none',borderRadius:'3px',cursor:'pointer',padding:0}} />
+                              <button onClick={()=>updateBlock(selectedBlockId,{background:'transparent'})} style={{...btnSm,fontSize:'0.68rem'}}>Clear BG</button>
+                            </>)}
+                            {/* Z-order + duplicate */}
+                            <div style={{display:'flex',gap:'0.25rem',marginLeft:'auto',alignItems:'center'}}>
+                              <button title="Send to back" onClick={()=>moveBlockZ('back')} style={{...btnSm,fontSize:'0.7rem',minWidth:'22px',padding:'0.18rem 0.35rem'}}>⬇⬇</button>
+                              <button title="Move back" onClick={()=>moveBlockZ('bwd')} style={{...btnSm,fontSize:'0.7rem',minWidth:'22px',padding:'0.18rem 0.35rem'}}>↓</button>
+                              <button title="Move forward" onClick={()=>moveBlockZ('fwd')} style={{...btnSm,fontSize:'0.7rem',minWidth:'22px',padding:'0.18rem 0.35rem'}}>↑</button>
+                              <button title="Bring to front" onClick={()=>moveBlockZ('front')} style={{...btnSm,fontSize:'0.7rem',minWidth:'22px',padding:'0.18rem 0.35rem'}}>⬆⬆</button>
+                              <button title="Duplicate block" onClick={duplicateBlock} style={{...btnSm,fontSize:'0.72rem',color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)',background:'rgba(167,139,250,0.08)'}}>⎘ Dup</button>
+                              <button onClick={()=>removeBlock(selectedBlockId)} style={{...btnSm,color:'#f87171',borderColor:'rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.08)',fontSize:'0.72rem'}}>🗑</button>
                             </div>
                           </div>
                         )}
@@ -3426,22 +3614,31 @@
                 {/* 16:9 slide canvas */}
                 <div style={{position:'relative',width:'min(88vw,calc(80vh*(16/9)))',aspectRatio:'16/9',background:slideBg,boxShadow:isDark?'0 20px 60px rgba(0,0,0,0.8)':'0 10px 40px rgba(0,0,0,0.2)',borderRadius:'6px',overflow:'hidden'}}>
                   {(slide?.blocks||[]).map(b => {
-                    const isImg  = b.type === 'image';
-                    const isTags = b.type === 'tags';
-                    const isSrc  = b.type === 'sources';
+                    const isImg    = b.type === 'image';
+                    const isTags   = b.type === 'tags';
+                    const isSrc    = b.type === 'sources';
+                    const isShape  = b.type === 'shape';
+                    const isCallout= b.type === 'callout';
                     return (
                       <div key={b.id} style={{
                         position:'absolute',
                         left:`${b.x}%`, top:`${b.y}%`,
                         width:`${b.w}%`, height:`${b.h}%`,
-                        background: b.background || 'transparent',
+                        background: (isShape||isImg) ? 'transparent' : (b.background || 'transparent'),
                         overflow:'hidden',
                         display:'flex', alignItems:'flex-start',
                         boxSizing:'border-box',
-                        padding: (isImg || isTags || isSrc) ? 0 : '2% 3%',
+                        padding: (isImg || isTags || isSrc || isShape || isCallout) ? 0 : '2% 3%',
                       }}>
-                        {isImg ? (
+                        {isShape ? (
+                          <div style={{width:'100%',height:'100%',opacity:b.opacity!=null?b.opacity/100:1}}>{renderShapeSVG(b)}</div>
+                        ) : isImg ? (
                           b.imageUrl ? <img src={b.imageUrl} alt="" style={{width:'100%',height:'100%',objectFit:b.imageFit||'cover',display:'block'}} /> : null
+                        ) : isCallout ? (
+                          <div style={{width:'100%',height:'100%',display:'flex',gap:'4%',alignItems:'stretch',padding:'2% 3%',boxSizing:'border-box',background:b.background||'rgba(245,158,11,0.08)'}}>
+                            <div style={{width:'3px',flexShrink:0,borderRadius:'2px',background:b.accentColor||'#f59e0b'}}/>
+                            <div style={{flex:1,color:b.color||'#f0f4ff',fontSize:`clamp(9px,${(b.fontSize||15)*0.065}vw,${(b.fontSize||15)*1.4}px)`,fontWeight:b.fontWeight||'normal',fontStyle:b.fontStyle||'italic',textAlign:b.textAlign||'left',lineHeight:1.45,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{b.text||''}</div>
+                          </div>
                         ) : isTags ? (
                           <div style={{width:'100%',height:'100%',padding:'4% 5%',overflow:'hidden',display:'flex',flexDirection:'column',gap:'0.45em',fontSize:`clamp(8px,1.25vw,13px)`}}>
                             {b.topics?.length>0 && (<>
@@ -3482,6 +3679,7 @@
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
                             width: '100%',
+                            overflow: 'hidden',
                           }}>{b.text||''}</div>
                         )}
                       </div>
