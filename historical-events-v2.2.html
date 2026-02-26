@@ -611,6 +611,7 @@
       const [newPresentationName, setNewPresentationName] = useState('');
       const [presSelectedEvents, setPresSelectedEvents] = useState(new Set());
       const [showImageBrowser, setShowImageBrowser] = useState(null); // blockId | null
+      const [imagePasteUrl, setImagePasteUrl] = useState('');
       const [imageBrowserFiles, setImageBrowserFiles] = useState([]);
       const [presAiFocuses, setPresAiFocuses] = useState(['']);
       const [presAiDetail, setPresAiDetail] = useState('standard');
@@ -2952,24 +2953,44 @@
                                   style={{position:'absolute',left:`${block.x}%`,top:`${block.y}%`,width:`${block.w}%`,height:`${block.h}%`,outline:isSel?'2px solid #60a5fa':isTxt?'2px solid #a78bfa':'none',outlineOffset:'-1px',background:block.background==='transparent'||!block.background?'transparent':block.background,boxSizing:'border-box',userSelect:'none',cursor:isPresOwner&&!isTxt?'move':'default'}}
                                   onPointerDown={isPresOwner&&!isTxt?e=>handleBlockPointerDown(e,block.id,false,''):undefined}
                                   onClick={e=>{e.stopPropagation();setSelectedBlockId(block.id);}}
-                                  onDoubleClick={e=>{e.stopPropagation();if(block.type!=='image'&&block.type!=='tags'&&block.type!=='sources'&&isPresOwner){setSelectedBlockId(block.id);setCanvasTextEditId(block.id);}}}>
+                                  onDoubleClick={e=>{e.stopPropagation();if(block.type!=='image'&&block.type!=='tags'&&block.type!=='sources'&&isPresOwner){setSelectedBlockId(block.id);setCanvasTextEditId(block.id);}}}
+                                  onDragOver={block.type==='image'&&isPresOwner?e=>{e.preventDefault();e.stopPropagation();}:undefined}
+                                  onDrop={block.type==='image'&&isPresOwner?e=>{
+                                    e.preventDefault();e.stopPropagation();
+                                    const files=e.dataTransfer.files;
+                                    if(files?.length>0){
+                                      const f=files[0];
+                                      if(f.type.startsWith('image/')||/\.(png|jpe?g|gif|webp|svg|bmp|tiff?|avif|ico)$/i.test(f.name)){
+                                        const reader=new FileReader();
+                                        reader.onload=ev=>updateBlock(block.id,{imageUrl:ev.target.result});
+                                        reader.readAsDataURL(f);
+                                      }
+                                      return;
+                                    }
+                                    const url=(e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain')||'').trim();
+                                    if(url&&/^https?:\/\//i.test(url))updateBlock(block.id,{imageUrl:url});
+                                  }:undefined}>
                                   {block.type==='image' ? (
                                     block.imageUrl
                                       ? <img src={block.imageUrl} style={{width:'100%',height:'100%',objectFit:block.imageFit||'cover',display:'block',pointerEvents:'none'}} alt="" />
                                       : block.noImagePrompt ? null
                                       : <div onClick={isPresOwner?e=>{e.stopPropagation();openImageBrowser(block.id);}:undefined} style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'rgba(96,165,250,0.5)',fontSize:'0.75rem',border:'1px dashed rgba(96,165,250,0.3)',borderRadius:'4px',gap:'0.2rem',cursor:isPresOwner?'pointer':'default'}}>
                                           <span style={{fontSize:'1.4rem'}}>🖼️</span>
-                                          {isPresOwner && <span>Click to add image</span>}
+                                          {isPresOwner && <span>Click to browse or drop image here</span>}
                                         </div>
                                   ) : block.type==='tags' ? (
-                                    <div style={{padding:'4%',height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',gap:'3%',fontSize:'clamp(5px,0.85vw,8px)'}}>
-                                      {block.topics?.length>0 && <><div style={{color:'#a78bfa',fontWeight:700}}>Topics</div><div style={{display:'flex',flexWrap:'wrap',gap:'2px'}}>{block.topics.slice(0,5).map(t=><span key={t} style={{padding:'1px 3px',background:'rgba(124,58,237,0.2)',color:'#c4b5fd',borderRadius:'2px'}}>{t}</span>)}</div></>}
-                                      {block.people?.length>0 && <><div style={{color:'#60a5fa',fontWeight:700,marginTop:'2px'}}>People</div><div style={{display:'flex',flexWrap:'wrap',gap:'2px'}}>{block.people.slice(0,4).map(p=><span key={p} style={{padding:'1px 3px',background:'rgba(96,165,250,0.2)',color:'#93c5fd',borderRadius:'2px'}}>{p}</span>)}</div></>}
-                                      {block.orgs?.length>0 && <><div style={{color:'#10b981',fontWeight:700,marginTop:'2px'}}>Orgs</div><div style={{display:'flex',flexWrap:'wrap',gap:'2px'}}>{block.orgs.slice(0,4).map(o=><span key={o} style={{padding:'1px 3px',background:'rgba(16,185,129,0.2)',color:'#6ee7b7',borderRadius:'2px'}}>{o}</span>)}</div></>}
+                                    <div style={{padding:'4% 5%',height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',gap:'0.45em',fontSize:'clamp(8px,1.2vw,13px)'}}>
+                                      {block.topics?.length>0 && <><div style={{color:'#a78bfa',fontWeight:700,fontSize:'0.72em',letterSpacing:'0.8px',textTransform:'uppercase',marginBottom:'0.1em'}}>Topics</div><div style={{display:'flex',flexWrap:'wrap',gap:'0.3em',marginBottom:'0.25em'}}>{block.topics.slice(0,5).map(t=><span key={t} style={{padding:'0.15em 0.55em',borderRadius:'4px',background:'rgba(124,58,237,0.2)',color:'#c4b5fd',border:'1px solid rgba(124,58,237,0.3)',fontSize:'0.9em',whiteSpace:'nowrap'}}>{t}</span>)}</div></>}
+                                      {block.people?.length>0 && <><div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.72em',letterSpacing:'0.8px',textTransform:'uppercase',marginBottom:'0.1em'}}>People</div><div style={{display:'flex',flexWrap:'wrap',gap:'0.3em',marginBottom:'0.25em'}}>{block.people.slice(0,4).map(p=><span key={p} style={{padding:'0.15em 0.55em',borderRadius:'4px',background:'rgba(96,165,250,0.15)',color:'#93c5fd',border:'1px solid rgba(96,165,250,0.3)',fontSize:'0.9em',whiteSpace:'nowrap'}}>{p}</span>)}</div></>}
+                                      {block.orgs?.length>0 && <><div style={{color:'#34d399',fontWeight:700,fontSize:'0.72em',letterSpacing:'0.8px',textTransform:'uppercase',marginBottom:'0.1em'}}>Organizations</div><div style={{display:'flex',flexWrap:'wrap',gap:'0.3em'}}>{block.orgs.slice(0,4).map(o=><span key={o} style={{padding:'0.15em 0.55em',borderRadius:'4px',background:'rgba(16,185,129,0.15)',color:'#6ee7b7',border:'1px solid rgba(16,185,129,0.3)',fontSize:'0.9em',whiteSpace:'nowrap'}}>{o}</span>)}</div></>}
                                     </div>
                                   ) : block.type==='sources' ? (
-                                    <div style={{padding:'2% 3%',height:'100%',overflow:'hidden',display:'flex',gap:'3%',alignItems:'center',flexWrap:'wrap',borderTop:'1px solid rgba(96,165,250,0.15)',fontSize:'clamp(5px,0.75vw,7px)'}}>
-                                      {(block.items||[]).map((item,i)=><span key={i} style={{padding:'1px 4px',borderRadius:'3px',background:item.eventId?'rgba(96,165,250,0.12)':'rgba(16,185,129,0.1)',color:item.eventId?'#60a5fa':'#10b981',border:`1px solid ${item.eventId?'rgba(96,165,250,0.25)':'rgba(16,185,129,0.25)'}`}}>{item.eventId?'→ ':'🔗 '}{item.label}</span>)}
+                                    <div style={{padding:'2% 3%',height:'100%',overflow:'hidden',display:'flex',gap:'3%',alignItems:'center',flexWrap:'wrap',borderTop:'1px solid rgba(96,165,250,0.15)',fontSize:'clamp(7px,0.95vw,11px)'}}>
+                                      {(block.items||[]).map((item,i)=>item.eventId?(
+                                        <button key={i} onClick={e=>{e.stopPropagation();const ev=data.events.find(e2=>e2.id===item.eventId);if(ev)openEventModal(ev,'presentations');}} style={{padding:'0.1em 0.5em',borderRadius:'3px',background:'rgba(96,165,250,0.12)',color:'#60a5fa',border:'1px solid rgba(96,165,250,0.25)',cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',lineHeight:1.4,fontWeight:600}}>→ {item.label}</button>
+                                      ):(
+                                        <span key={i} style={{padding:'1px 4px',borderRadius:'3px',background:'rgba(16,185,129,0.1)',color:'#10b981',border:'1px solid rgba(16,185,129,0.25)'}}>🔗 {item.label}</span>
+                                      ))}
                                     </div>
                                   ) : isTxt ? (
                                     <textarea value={block.text||''} onChange={e=>{e.stopPropagation();updateBlock(block.id,{text:e.target.value});}} onBlur={()=>setCanvasTextEditId(null)} onPointerDown={e=>e.stopPropagation()} autoFocus style={{width:'100%',height:'100%',background:'transparent',border:'none',color:block.color||'#e0e6ed',fontSize:`${block.fontSize||16}px`,fontWeight:block.fontWeight||'normal',fontStyle:block.fontStyle||'normal',textAlign:block.textAlign||'left',resize:'none',outline:'none',fontFamily:'inherit',padding:'2px',lineHeight:1.4,boxSizing:'border-box'}} />
@@ -3500,18 +3521,80 @@
 
           {/* IMAGE BROWSER MODAL */}
           {showImageBrowser && (
-            <div className="modal" onClick={()=>setShowImageBrowser(null)}>
-              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'680px',maxHeight:'75vh',display:'flex',flexDirection:'column',padding:'1.5rem'}}>
+            <div className="modal" onClick={()=>{setShowImageBrowser(null);setImagePasteUrl('');}}>
+              <div className="modal-content" onClick={ev=>ev.stopPropagation()} style={{maxWidth:'700px',maxHeight:'82vh',display:'flex',flexDirection:'column',padding:'1.5rem'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem',flexShrink:0}}>
-                  <h3 style={{color:'#e0e6ed',margin:0,fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Pick an Image</h3>
-                  <button onClick={()=>setShowImageBrowser(null)} style={{background:'none',border:'none',color:'#8b92b0',fontSize:'1.5rem',cursor:'pointer',lineHeight:1,padding:'0 0.25rem'}}>×</button>
+                  <h3 style={{color:'#e0e6ed',margin:0,fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Add Image</h3>
+                  <button onClick={()=>{setShowImageBrowser(null);setImagePasteUrl('');}} style={{background:'none',border:'none',color:'#8b92b0',fontSize:'1.5rem',cursor:'pointer',lineHeight:1,padding:'0 0.25rem'}}>×</button>
                 </div>
+
+                {/* URL paste */}
+                <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',flexShrink:0}}>
+                  <input
+                    type="url"
+                    placeholder="Paste image URL (https://…)"
+                    value={imagePasteUrl}
+                    onChange={e=>setImagePasteUrl(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter'&&imagePasteUrl.trim()){updateBlock(showImageBrowser,{imageUrl:imagePasteUrl.trim()});setShowImageBrowser(null);setImagePasteUrl('');}}}
+                    style={{flex:1,padding:'0.5rem 0.75rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.85rem',outline:'none'}}
+                  />
+                  <button onClick={()=>{if(imagePasteUrl.trim()){updateBlock(showImageBrowser,{imageUrl:imagePasteUrl.trim()});setShowImageBrowser(null);setImagePasteUrl('');}}} disabled={!imagePasteUrl.trim()} style={{padding:'0.5rem 1rem',background:'linear-gradient(135deg,#3b82f6,#2563eb)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:imagePasteUrl.trim()?'pointer':'not-allowed',fontFamily:'inherit',fontSize:'0.85rem',opacity:imagePasteUrl.trim()?1:0.5,flexShrink:0}}>Use URL</button>
+                </div>
+
+                {/* Local file upload + drag zone */}
+                <div
+                  onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor='rgba(96,165,250,0.7)';e.currentTarget.style.background='rgba(96,165,250,0.08)';}}
+                  onDragLeave={e=>{e.currentTarget.style.borderColor='rgba(61,69,99,0.4)';e.currentTarget.style.background='rgba(26,31,58,0.3)';}}
+                  onDrop={e=>{
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor='rgba(61,69,99,0.4)';
+                    e.currentTarget.style.background='rgba(26,31,58,0.3)';
+                    const files=e.dataTransfer.files;
+                    if(files?.length>0){
+                      const f=files[0];
+                      if(f.type.startsWith('image/')||/\.(png|jpe?g|gif|webp|svg|bmp|tiff?|avif|ico)$/i.test(f.name)){
+                        const reader=new FileReader();
+                        reader.onload=ev=>{updateBlock(showImageBrowser,{imageUrl:ev.target.result});setShowImageBrowser(null);setImagePasteUrl('');};
+                        reader.readAsDataURL(f);
+                        return;
+                      }
+                    }
+                    const url=(e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain')||'').trim();
+                    if(url&&/^https?:\/\//i.test(url)){updateBlock(showImageBrowser,{imageUrl:url});setShowImageBrowser(null);setImagePasteUrl('');}
+                  }}
+                  style={{border:'1px dashed rgba(61,69,99,0.4)',borderRadius:'10px',padding:'0.9rem 1rem',background:'rgba(26,31,58,0.3)',display:'flex',alignItems:'center',gap:'1rem',marginBottom:'0.75rem',flexShrink:0,transition:'border-color 0.15s,background 0.15s'}}>
+                  <span style={{fontSize:'1.5rem',flexShrink:0}}>📁</span>
+                  <div style={{flex:1,fontSize:'0.82rem',color:'#8b92b0',lineHeight:1.5}}>
+                    Drop an image file here, or drag one from the web
+                    <br/><span style={{fontSize:'0.75rem',color:'#5a6180'}}>PNG, JPG, GIF, WebP, SVG, BMP, TIFF, AVIF, ICO</span>
+                  </div>
+                  <label style={{padding:'0.4rem 0.9rem',background:'rgba(61,69,99,0.4)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'7px',color:'#60a5fa',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',fontWeight:600,flexShrink:0,whiteSpace:'nowrap'}}>
+                    📂 Browse Files
+                    <input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/bmp,image/tiff,image/avif,image/x-icon,.png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.tif,.tiff,.avif,.ico" style={{display:'none'}} onChange={e=>{
+                      const f=e.target.files?.[0];
+                      if(!f)return;
+                      const reader=new FileReader();
+                      reader.onload=ev=>{updateBlock(showImageBrowser,{imageUrl:ev.target.result});setShowImageBrowser(null);setImagePasteUrl('');};
+                      reader.readAsDataURL(f);
+                      e.target.value='';
+                    }} />
+                  </label>
+                </div>
+
+                {/* Divider */}
+                <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'0.75rem',flexShrink:0}}>
+                  <div style={{flex:1,height:'1px',background:'rgba(61,69,99,0.4)'}}/>
+                  <span style={{fontSize:'0.72rem',color:'#5a6180',textTransform:'uppercase',letterSpacing:'1px'}}>or pick from library</span>
+                  <div style={{flex:1,height:'1px',background:'rgba(61,69,99,0.4)'}}/>
+                </div>
+
+                {/* Backend image library */}
                 {imageBrowserFiles.length === 0 ? (
-                  <div className="empty-state"><div className="empty-state-icon">🖼️</div><p>No images found. Upload files or analyze videos to get images.</p></div>
+                  <div className="empty-state" style={{flex:1}}><div className="empty-state-icon">🖼️</div><p>No images in library. Analyze videos or upload attachments to populate this.</p></div>
                 ) : (
                   <div style={{overflowY:'auto',flex:1,display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'0.6rem'}}>
                     {imageBrowserFiles.map(f => (
-                      <div key={f.url} onClick={()=>{updateBlock(showImageBrowser,{imageUrl:f.url});setShowImageBrowser(null);}}
+                      <div key={f.url} onClick={()=>{updateBlock(showImageBrowser,{imageUrl:f.url});setShowImageBrowser(null);setImagePasteUrl('');}}
                         style={{cursor:'pointer',borderRadius:'8px',overflow:'hidden',border:'1px solid rgba(61,69,99,0.5)',aspectRatio:'16/9',background:'rgba(26,31,58,0.7)',position:'relative'}}
                         onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.6)'}
                         onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
