@@ -1912,9 +1912,10 @@
         if (container) {
           const net = new vis.Network(container, { nodes, edges }, {
             nodes:{ margin:{ top:8, right:12, bottom:8, left:12 }, borderWidth:2 },
-            physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 } },
+            physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 }, stabilization:{ iterations:300 } },
             interaction:{ hover:true }
           });
+          net.once('stabilizationIterationsDone', () => net.setOptions({ physics:false }));
           net.on('click', params => {
             if (params.nodes.length > 0) {
               const id = params.nodes[0];
@@ -1955,9 +1956,10 @@
         });
         const net = new vis.Network(container, { nodes, edges }, {
           nodes:{ margin:{ top:8, right:12, bottom:8, left:12 }, borderWidth:2 },
-          physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 } },
+          physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 }, stabilization:{ iterations:300 } },
           interaction:{ hover:true }
         });
+        net.once('stabilizationIterationsDone', () => net.setOptions({ physics:false }));
         net.on('click', params => {
           if (params.nodes.length > 0) {
             const id = params.nodes[0];
