@@ -823,13 +823,24 @@
       };
 
       const addEventsAsSlides = async (pId, events) => {
-        const pres = presentations.find(p => p.id === pId);
-        if (!pres) return;
+        // Fetch fresh slides from DB to prevent stale-closure overwrite
+        const { data: freshPres } = await supabaseClient.from('presentations').select('slides').eq('id', pId).single();
+        const currentSlides = freshPres?.slides || presentations.find(p => p.id === pId)?.slides || [];
         const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
         const newSlides = events.map(evt => createEventSlide(uid, evt, null));
-        await saveSlidesToPres(pId, [...pres.slides, ...newSlides]);
+        await saveSlidesToPres(pId, [...currentSlides, ...newSlides]);
         setPresSelectedEvents(new Set());
         setEditingSlideId(newSlides[0]?.id || null);
+      };
+
+      const removeEventFromPresentation = async (pId, eventId) => {
+        const pres = presentations.find(p => p.id === pId);
+        if (!pres) return;
+        const newSlides = pres.slides.filter(s => !s.blocks.some(b => b.eventId === eventId));
+        await saveSlidesToPres(pId, newSlides);
+        if (editingSlideId && !newSlides.find(s => s.id === editingSlideId)) {
+          setEditingSlideId(newSlides[0]?.id || null);
+        }
       };
 
       // ── Canvas block helpers ──
@@ -2715,8 +2726,8 @@
               </div>
             )}
 
-            {/* Show filters on all tabs except upload, account, and presentations editor */}
-            {activeTab !== 'upload' && activeTab !== 'account' && !(activeTab === 'presentations' && activePresentationId) && <FiltersComponent {...filterProps} />}
+            {/* Show filters on all tabs except upload, account, and presentations (which renders its own filters inline) */}
+            {activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && <FiltersComponent {...filterProps} />}
 
             {/* TIMELINE */}
             {activeTab === 'timeline' && (
@@ -2888,6 +2899,26 @@
                       ))}
                       {isPresOwner && <button onClick={()=>addSlide(activePres.id)} style={{flexShrink:0,width:'130px',height:'73px',background:'rgba(26,31,58,0.4)',border:'1px dashed rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'1.8rem',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>}
                     </div>
+
+                    {/* Events in presentation */}
+                    {(() => {
+                      const refEventIds = [...new Set(activePres.slides.flatMap(s => s.blocks.map(b => b.eventId).filter(Boolean)))];
+                      const refEvents = refEventIds.map(id => data.events.find(e => e.id === id)).filter(Boolean);
+                      if (refEvents.length === 0) return null;
+                      return (
+                        <div style={{padding:'0.6rem 0.85rem',background:'rgba(26,31,58,0.5)',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'10px'}}>
+                          <div style={{fontSize:'0.68rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600,marginBottom:'0.5rem'}}>Events in this Presentation ({refEvents.length})</div>
+                          <div style={{display:'flex',flexWrap:'wrap',gap:'0.4rem'}}>
+                            {refEvents.map(evt => (
+                              <div key={evt.id} style={{display:'flex',alignItems:'center',gap:'0.35rem',padding:'0.25rem 0.55rem',background:'rgba(96,165,250,0.08)',border:'1px solid rgba(96,165,250,0.22)',borderRadius:'7px',maxWidth:'220px'}}>
+                                <span style={{fontSize:'0.78rem',color:'#c0c7d8',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{evt.title}</span>
+                                {isPresOwner && <button onClick={()=>removeEventFromPresentation(activePres.id,evt.id)} title="Remove event from presentation" style={{flexShrink:0,width:'16px',height:'16px',borderRadius:'50%',background:'rgba(239,68,68,0.7)',border:'none',color:'#fff',cursor:'pointer',fontSize:'0.6rem',lineHeight:1,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Canvas area */}
                     {editSlide ? (
@@ -3064,6 +3095,9 @@
                       </div>
                     </div>
                   )}
+                  {/* Filters — rendered here for presentations list so they sit directly above the events table */}
+                  <FiltersComponent {...filterProps} />
+
                   {/* Embedded spreadsheet for adding events to a presentation */}
                   <div style={{paddingTop:'1rem',borderTop:'1px solid rgba(61,69,99,0.35)'}}>
                     <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'0.65rem',flexWrap:'wrap'}}>
@@ -3526,6 +3560,17 @@
                 <h3 style={{marginBottom:'1rem',color:'#60a5fa'}}>Processing...</h3>
                 <p style={{marginBottom:'1.5rem',color:'#8b92b0'}}>Analyzing your files with AI</p>
                 <button className="btn btn-cancel" onClick={cancelProcessing}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {presAiLoading && (
+            <div className="processing-overlay">
+              <div className="processing-card">
+                <div className="processing-spinner" style={{borderTopColor:'#a78bfa',borderColor:'rgba(167,139,250,0.2)'}}></div>
+                <h3 style={{marginBottom:'1rem',color:'#a78bfa'}}>Generating Slides…</h3>
+                <p style={{marginBottom:'0.5rem',color:'#8b92b0'}}>The AI is analyzing your events and building presentation slides.</p>
+                <p style={{color:'#8b92b0',fontSize:'0.82rem'}}>This may take 15–30 seconds.</p>
               </div>
             </div>
           )}
