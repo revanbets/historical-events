@@ -200,9 +200,9 @@ LAYOUT TYPES — choose the best fit for each slide:
    Format: {{"layout": "content", "title": "...", "date": "...", "bullets": ["point", "point", ...]}}
 
 CONTENT RULES (strictly enforce):
-- Bullets: max 5 per slide, max 6-8 words each — punchy and factual
-- Timeline nodes: max 5, year label max 5 words
-- Key figures cards: max 3 cards, detail max 1-2 short sentences
+- Bullets: max 5 per slide — each bullet is a concise, complete thought; 1-2 sentences is fine, but avoid walls of text or multi-sentence paragraphs stuffed into a single bullet
+- Timeline nodes: max 5, year label max 6 words
+- Key figures cards: max 3 cards, detail max 2 short sentences
 
 STRUCTURE:
 - Slide 1: Always "title" for the main theme

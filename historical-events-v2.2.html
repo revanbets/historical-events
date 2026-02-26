@@ -618,6 +618,8 @@
       const [presAiFocuses, setPresAiFocuses] = useState(['']);
       const [presAiDetail, setPresAiDetail] = useState('standard');
       const [presAiLoading, setPresAiLoading] = useState(false);
+      const [presAiSelectMode, setPresAiSelectMode] = useState(false);
+      const [presSelectedSlides, setPresSelectedSlides] = useState(new Set());
       const [showShapeMenu, setShowShapeMenu] = useState(false);
       const [showThemeMenu, setShowThemeMenu] = useState(false);
       const [showGradMenu, setShowGradMenu] = useState(false);
@@ -858,14 +860,30 @@
       };
 
       const buildOverviewSlide = (uid, s, evt) => {
-        const title    = s.title || evt?.title || '';
-        const date     = s.date  || evt?.date  || '';
-        const bullets  = s.bullets || [];
-        const bodyText = bullets.length > 0 ? bullets.slice(0,5).map(b => '• ' + b).join('\n') : (s.body || evt?.aiSummary || evt?.description || '');
-        const topics   = evt?.topics || [];
-        const people   = evt?.people || [];
-        const orgs     = evt?.organizations || [];
-        const hasMeta  = topics.length > 0 || people.length > 0 || orgs.length > 0;
+        const title   = s.title || evt?.title || '';
+        const date    = s.date  || evt?.date  || '';
+        const bullets = (s.bullets || []).slice(0, 5);
+        const body    = bullets.length === 0 ? (s.body || evt?.aiSummary || evt?.description || '') : '';
+        const topics  = evt?.topics || [];
+        const people  = evt?.people || [];
+        const orgs    = evt?.organizations || [];
+        const hasMeta = topics.length > 0 || people.length > 0 || orgs.length > 0;
+        // Build individual bullet blocks in the left column (x:3, y:26, w:57, h:70)
+        const leftX=3, leftY=26, leftW=57, leftH=70;
+        const bulletBlocks = (() => {
+          if (body) return [{ id:uid(), type:'text', x:leftX, y:leftY, w:leftW, h:leftH, text:body, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }];
+          if (bullets.length === 0) return [];
+          if (bullets.length <= 2) {
+            const bh = Math.floor(leftH / bullets.length) - 3;
+            return bullets.map((b,i) => ({ id:uid(), type:'text', x:leftX, y:leftY+i*(bh+3), w:leftW, h:bh, text:'• '+b, fontSize:16, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }));
+          }
+          const lB = bullets.slice(0, Math.ceil(bullets.length/2));
+          const rB = bullets.slice(Math.ceil(bullets.length/2));
+          const cW = Math.floor(leftW/2) - 2;
+          const rx = leftX + cW + 4;
+          const makeCol = (bs, cx) => { const bh=Math.floor(leftH/bs.length)-3; return bs.map((b,i)=>({ id:uid(), type:'text', x:cx, y:leftY+i*(bh+3), w:cW, h:bh, text:'• '+b, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null })); };
+          return [...makeCol(lB, leftX), ...makeCol(rB, rx)];
+        })();
         return {
           id: uid(), bg: PRES_AI_BG,
           blocks: [
@@ -873,7 +891,7 @@
             { id:uid(), type:'heading', x:3, y:5, w:57, h:16, text:title, fontSize:32, fontWeight:'bold', fontStyle:'normal', color:PRES_ACCENT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:'title' },
             ...(date ? [{ id:uid(), type:'text', x:63, y:7, w:35, h:7, text:date, fontSize:13, fontWeight:'normal', fontStyle:'normal', color:PRES_MUTED, textAlign:'right', background:'transparent', eventId:evt?.id||null, eventField:'date' }] : []),
             { id:uid(), type:'shape', x:3, y:23, w:94, h:0.4, shapeType:'rectangle', fill:'rgba(212,175,55,0.3)', stroke:'transparent', strokeWidth:0, radius:0 },
-            { id:uid(), type:'text', x:3, y:26, w:57, h:70, text:bodyText, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null },
+            ...bulletBlocks,
             ...(hasMeta
               ? [{ id:uid(), type:'tags', x:63, y:26, w:34, h:70, topics, people, orgs, background:'rgba(212,175,55,0.04)', eventId:evt?.id||null, eventField:null }]
               : [{ id:uid(), type:'callout', x:63, y:26, w:34, h:70, text:'Insert image\nor map here', fontSize:13, fontWeight:'normal', fontStyle:'italic', color:'#666688', accentColor:PRES_ACCENT, background:'rgba(212,175,55,0.04)', eventId:null, eventField:null }]
@@ -951,18 +969,35 @@
       const buildContentSlide = (uid, s, evt) => {
         const title    = s.title || evt?.title || '';
         const date     = s.date  || evt?.date  || '';
-        const bullets  = s.bullets || [];
-        const body     = bullets.length > 0 ? bullets.slice(0,5).map(b => '• ' + b).join('\n') : (s.body || evt?.aiSummary || evt?.description || '');
+        const bullets  = (s.bullets || []).slice(0, 5);
+        const body     = bullets.length === 0 ? (s.body || evt?.aiSummary || evt?.description || '') : '';
         const topics   = evt?.topics || [];
         const people   = evt?.people || [];
         const orgs     = evt?.organizations || [];
         const hasTags  = topics.length > 0 || people.length > 0 || orgs.length > 0;
         const link     = evt?.link || '';
         const hasLinks = !!link || !!evt;
-        const bodyW    = hasTags ? 58 : 90;
-        const bodyY    = 26;
-        const bodyH    = hasLinks ? 48 : 66;
-        const srcY     = bodyY + bodyH + 2;
+        const contentX = 3;
+        const contentY = 26;
+        const contentW = hasTags ? 58 : 90;
+        const contentH = hasLinks ? 48 : 66;
+        const srcY     = contentY + contentH + 2;
+        // Build individual bullet blocks, laid out in two columns for 3+ bullets
+        const bulletBlocks = (() => {
+          if (body) return [{ id:uid(), type:'text', x:contentX, y:contentY, w:contentW, h:contentH, text:body, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }];
+          if (bullets.length === 0) return [];
+          if (bullets.length <= 2) {
+            const bh = Math.floor(contentH / bullets.length) - 3;
+            return bullets.map((b,i) => ({ id:uid(), type:'text', x:contentX, y:contentY+i*(bh+3), w:contentW, h:bh, text:'• '+b, fontSize:16, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }));
+          }
+          // 3–5 bullets → two columns
+          const lB = bullets.slice(0, Math.ceil(bullets.length/2));
+          const rB = bullets.slice(Math.ceil(bullets.length/2));
+          const cW = Math.floor(contentW/2) - 2;
+          const rx = contentX + cW + 4;
+          const makeCol = (bs, cx) => { const bh=Math.floor(contentH/bs.length)-3; return bs.map((b,i)=>({ id:uid(), type:'text', x:cx, y:contentY+i*(bh+3), w:cW, h:bh, text:'• '+b, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null })); };
+          return [...makeCol(lB, contentX), ...makeCol(rB, rx)];
+        })();
         return {
           id: uid(), bg: PRES_AI_BG,
           blocks: [
@@ -970,7 +1005,7 @@
             { id:uid(), type:'heading', x:3, y:5, w:hasTags?57:90, h:17, text:title, fontSize:32, fontWeight:'bold', fontStyle:'normal', color:'#FFFFFF', textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:'title' },
             ...(date ? [{ id:uid(), type:'text', x:hasTags?62:68, y:7, w:hasTags?35:29, h:7, text:date, fontSize:12, fontWeight:'normal', fontStyle:'normal', color:PRES_ACCENT, textAlign:'right', background:'transparent', eventId:evt?.id||null, eventField:'date' }] : []),
             { id:uid(), type:'shape', x:3, y:23, w:hasTags?57:93, h:0.4, shapeType:'rectangle', fill:'rgba(212,175,55,0.3)', stroke:'transparent', strokeWidth:0, radius:0 },
-            { id:uid(), type:'text', x:3, y:bodyY, w:bodyW, h:bodyH, text:body, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null },
+            ...bulletBlocks,
             ...(hasTags  ? [{ id:uid(), type:'tags',    x:63, y:5,    w:34, h:hasLinks?72:88, topics, people, orgs, background:'transparent', eventId:evt?.id||null, eventField:null }] : []),
             ...(hasLinks ? [{ id:uid(), type:'sources', x:3,  y:srcY, w:92, h:100-srcY-2, items:[...(link?[{url:link,label:'Source'}]:[]),...(evt?[{eventId:evt.id,label:'View Event'}]:[])], background:'transparent', eventId:evt?.id||null, eventField:null }] : []),
           ].filter(Boolean)
@@ -1373,23 +1408,27 @@
       };
 
       // ── AI Presentation generation ──
-      const generateAiPresentation = async (pId) => {
+      // selectedSlideIds: optional Set of slide IDs to regenerate (null = regenerate all)
+      const generateAiPresentation = async (pId, selectedSlideIds = null) => {
         const pres = presentations.find(p => p.id === pId);
-        if (!pres || pres.slides.length === 0) { alert('Add at least one slide first, then run AI generation.'); return; }
+        if (!pres) return;
+        const isSelective = selectedSlideIds && selectedSlideIds.size > 0;
+        const targetSlides = isSelective ? pres.slides.filter(s => selectedSlideIds.has(s.id)) : pres.slides;
+        if (targetSlides.length === 0) { alert('Add at least one slide first, then run AI generation.'); return; }
         const focuses = presAiFocuses.filter(f => f.trim());
         setPresAiLoading(true);
         try {
-          // Try to gather event data from block eventId references
-          const eventIds = [...new Set(pres.slides.flatMap(s => s.blocks.map(b => b.eventId).filter(Boolean)))];
+          // Gather event data from target slides
+          const eventIds = [...new Set(targetSlides.flatMap(s => s.blocks.map(b => b.eventId).filter(Boolean)))];
           let eventsPayload = eventIds.map(id => data.events.find(e => e.id === id)).filter(Boolean)
             .map(e => ({ id: e.id, title: e.title, date: e.date, summary: e.aiSummary || e.description, topics: e.topics||[], people: e.people||[], organizations: e.organizations||[] }));
-          // Fallback: if no event refs (e.g. previously AI-generated slides), extract text from blocks
+          // Fallback: extract text from target slide blocks (handles previously AI-generated slides)
           if (eventsPayload.length === 0) {
-            eventsPayload = pres.slides.map((s, i) => {
-              const heading = s.blocks.find(b => b.type === 'heading');
-              const dateBlock = s.blocks.find(b => b.type === 'text' && b.color === '#60a5fa');
-              const bodyBlock = s.blocks.find(b => b.type === 'text' && b.color !== '#60a5fa');
-              return { id: `slide-${i}`, title: heading?.text || `Slide ${i+1}`, date: dateBlock?.text || '', summary: bodyBlock?.text || '', topics: [], people: [], organizations: [] };
+            eventsPayload = targetSlides.map((s, i) => {
+              const heading   = s.blocks.find(b => b.type === 'heading');
+              const dateBlock = s.blocks.find(b => b.type === 'text' && (b.color === PRES_ACCENT || b.color === '#60a5fa' || b.color === PRES_MUTED));
+              const bodyBlocks = s.blocks.filter(b => b.type === 'text' && b.color !== PRES_ACCENT && b.color !== '#60a5fa' && b.color !== PRES_MUTED);
+              return { id: `slide-${i}`, title: heading?.text || `Slide ${i+1}`, date: dateBlock?.text || '', summary: bodyBlocks.map(b => b.text||'').join(' ').trim(), topics: [], people: [], organizations: [] };
             }).filter(e => e.title);
           }
           if (eventsPayload.length === 0) { alert('No content found to regenerate from. Add events via the spreadsheet first.'); setPresAiLoading(false); return; }
@@ -1399,17 +1438,26 @@
           const result = await res.json();
           if (result.slides) {
             const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
-            // Track which event index to assign to content/overview slides
             let evtIdx = 0;
             const aiSlides = result.slides.map((s) => {
-              // title, key_figures, timeline slides use the first/last event for context only
               const isEventSlide = s.layout === 'content' || s.layout === 'overview' || !s.layout;
               const srcIdx = Math.min(evtIdx, eventsPayload.length - 1);
               const srcEvt = data.events.find(e => e.id === eventsPayload[srcIdx]?.id) || null;
               if (isEventSlide) evtIdx++;
               return buildAiSlide(uid, s, srcEvt);
             });
-            await saveSlidesToPres(pId, aiSlides);
+            if (isSelective) {
+              // Insert AI slides at the position of the first selected slide, removing selected slides
+              const firstIdx = pres.slides.findIndex(s => selectedSlideIds.has(s.id));
+              const kept = pres.slides.filter(s => !selectedSlideIds.has(s.id));
+              const insertAt = firstIdx >= 0 ? firstIdx : kept.length;
+              const newSlides = [...kept.slice(0, insertAt), ...aiSlides, ...kept.slice(insertAt)];
+              await saveSlidesToPres(pId, newSlides);
+              setPresSelectedSlides(new Set());
+              setPresAiSelectMode(false);
+            } else {
+              await saveSlidesToPres(pId, aiSlides);
+            }
             setEditingSlideId(aiSlides[0]?.id || null);
           }
         } catch (err) {
@@ -3320,17 +3368,34 @@
 
                     {/* Slide strip */}
                     <div style={{display:'flex',gap:'0.5rem',overflowX:'auto',paddingBottom:'0.25rem',alignItems:'flex-end'}}>
-                      {activePres.slides.map((s,i)=>(
+                      {activePres.slides.map((s,i)=>{
+                        const isSel = presSelectedSlides.has(s.id);
+                        return (
                         <div key={s.id} style={{flexShrink:0,width:'130px',position:'relative',cursor:'pointer'}}>
-                          <div onClick={()=>setEditingSlideId(s.id)} style={{width:'130px',height:'73px',background:s.bg||'#0a0d1e',borderRadius:'6px',border:`2px solid ${editingSlideId===s.id?'#60a5fa':'rgba(61,69,99,0.4)'}`,overflow:'hidden',position:'relative'}}>
+                          <div onClick={()=>{
+                            if (presAiSelectMode && isPresOwner) {
+                              const ns = new Set(presSelectedSlides);
+                              if (ns.has(s.id)) ns.delete(s.id); else ns.add(s.id);
+                              setPresSelectedSlides(ns);
+                            } else {
+                              setEditingSlideId(s.id);
+                            }
+                          }} style={{width:'130px',height:'73px',background:s.bg||'#0a0d1e',borderRadius:'6px',border:`2px solid ${isSel?PRES_ACCENT:editingSlideId===s.id?'#60a5fa':'rgba(61,69,99,0.4)'}`,overflow:'hidden',position:'relative',boxShadow:isSel?`0 0 8px rgba(212,175,55,0.4)`:'none',transition:'border-color 0.15s,box-shadow 0.15s'}}>
                             {s.blocks.map(b=>(
-                              <div key={b.id} style={{position:'absolute',left:`${b.x}%`,top:`${b.y}%`,width:`${b.w}%`,height:`${b.h}%`,background:b.type==='image'?(b.background&&b.background!=='transparent'?b.background:'rgba(96,165,250,0.25)'):b.type==='heading'?'rgba(255,255,255,0.2)':b.type==='tags'?'rgba(124,58,237,0.2)':b.type==='sources'?'rgba(16,185,129,0.12)':'rgba(192,199,216,0.12)',borderRadius:'1px'}} />
+                              <div key={b.id} style={{position:'absolute',left:`${b.x}%`,top:`${b.y}%`,width:`${b.w}%`,height:`${b.h}%`,background:b.type==='shape'?(b.fill||'rgba(212,175,55,0.4)'):b.type==='image'?(b.background&&b.background!=='transparent'?b.background:'rgba(96,165,250,0.25)'):b.type==='heading'?'rgba(255,255,255,0.2)':b.type==='tags'?'rgba(124,58,237,0.2)':b.type==='sources'?'rgba(16,185,129,0.12)':'rgba(192,199,216,0.12)',borderRadius:'1px'}} />
                             ))}
+                            {/* Selection checkbox overlay */}
+                            {isPresOwner && presAiSelectMode && (
+                              <div style={{position:'absolute',top:'4px',left:'4px',width:'16px',height:'16px',borderRadius:'4px',background:isSel?PRES_ACCENT:'rgba(15,18,35,0.7)',border:`2px solid ${isSel?PRES_ACCENT:'rgba(212,175,55,0.5)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.6rem',fontWeight:700,color:'#1E1E2F',zIndex:5,pointerEvents:'none'}}>
+                                {isSel ? '✓' : ''}
+                              </div>
+                            )}
                           </div>
-                          <div style={{fontSize:'0.6rem',color:'#8b92b0',textAlign:'center',marginTop:'0.2rem'}}>Slide {i+1}</div>
-                          {isPresOwner && <button onClick={e=>{e.stopPropagation();removeSlide(activePres.id,s.id);}} style={{position:'absolute',top:'-5px',right:'-5px',width:'16px',height:'16px',borderRadius:'50%',background:'rgba(239,68,68,0.85)',border:'none',color:'#fff',cursor:'pointer',fontSize:'0.6rem',lineHeight:1,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
+                          <div style={{fontSize:'0.6rem',color:isSel?PRES_ACCENT:'#8b92b0',textAlign:'center',marginTop:'0.2rem',fontWeight:isSel?700:400}}>Slide {i+1}</div>
+                          {isPresOwner && !presAiSelectMode && <button onClick={e=>{e.stopPropagation();removeSlide(activePres.id,s.id);}} style={{position:'absolute',top:'-5px',right:'-5px',width:'16px',height:'16px',borderRadius:'50%',background:'rgba(239,68,68,0.85)',border:'none',color:'#fff',cursor:'pointer',fontSize:'0.6rem',lineHeight:1,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
                         </div>
-                      ))}
+                        );
+                      })}
                       {isPresOwner && <button onClick={()=>addSlide(activePres.id)} style={{flexShrink:0,width:'130px',height:'73px',background:'rgba(26,31,58,0.4)',border:'1px dashed rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'1.8rem',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>}
                     </div>
 
@@ -3578,13 +3643,35 @@
                           <option value="standard">Standard</option>
                           <option value="comprehensive">Comprehensive</option>
                         </select>
+                        {/* Select mode toggle */}
+                        <button
+                          onClick={()=>{ setPresAiSelectMode(!presAiSelectMode); setPresSelectedSlides(new Set()); }}
+                          title={presAiSelectMode ? 'Exit selection mode' : 'Select specific slides to regenerate'}
+                          style={{...btnSm, color:presAiSelectMode?PRES_ACCENT:'#8b92b0', borderColor:presAiSelectMode?`rgba(212,175,55,0.5)`:'rgba(61,69,99,0.5)', background:presAiSelectMode?'rgba(212,175,55,0.1)':'rgba(26,31,58,0.5)', fontWeight:presAiSelectMode?700:400}}>
+                          {presAiSelectMode ? `☑ ${presSelectedSlides.size} selected` : '☐ Select'}
+                        </button>
+                        {presAiSelectMode && presSelectedSlides.size > 0 && (
+                          <button onClick={()=>setPresSelectedSlides(new Set())} style={{...btnSm,fontSize:'0.68rem',color:'#8b92b0',borderColor:'rgba(61,69,99,0.4)',background:'none'}}>Clear</button>
+                        )}
+                        {presAiSelectMode && (
+                          <button onClick={()=>setPresSelectedSlides(new Set(activePres.slides.map(s=>s.id)))} style={{...btnSm,fontSize:'0.68rem',color:'#8b92b0',borderColor:'rgba(61,69,99,0.4)',background:'none'}}>All</button>
+                        )}
                         <div className="tooltip-wrapper" style={{display:'inline-flex',alignItems:'center'}}>
                           <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
                           <div className="tooltip-content" style={{position:'absolute',bottom:'100%',right:0,marginBottom:'8px',background:'rgba(15,18,35,0.97)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',padding:'0.75rem 1rem',width:'270px',zIndex:9999,pointerEvents:'none',opacity:0,transition:'opacity 0.15s',fontSize:'0.78rem',lineHeight:1.6,color:'#c0c7d8',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
-                            <b style={{color:'#a78bfa'}}>AI Presentation Generator</b><br/>Generates new slides from the events already in this presentation. Add focus areas to guide the AI — e.g. "CIA involvement" or "timeline of events". Replaces existing slides with AI-generated ones.<br/><br/><b style={{color:'#f87171'}}>Requires a backend update.</b> Ask the developer for the endpoint code.
+                            <b style={{color:'#a78bfa'}}>AI Presentation Generator</b><br/>
+                            Generates new slides from event data. Add focus areas to guide the AI — e.g. "CIA involvement" or "timeline of events".<br/><br/>
+                            <b style={{color:PRES_ACCENT}}>☐ Select mode:</b> Click slides in the strip above to mark them for targeted regeneration. Only selected slides are replaced — the rest stay untouched.
                           </div>
                         </div>
-                        <button onClick={()=>generateAiPresentation(activePres.id)} disabled={presAiLoading} style={{padding:'0.35rem 0.9rem',background:presAiLoading?'rgba(61,69,99,0.4)':'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'8px',color:presAiLoading?'#8b92b0':'#fff',fontWeight:700,cursor:presAiLoading?'not-allowed':'pointer',fontFamily:'inherit',fontSize:'0.8rem',flexShrink:0}}>{presAiLoading?'Generating…':'Generate Slides'}</button>
+                        <button
+                          onClick={()=> presAiSelectMode && presSelectedSlides.size > 0
+                            ? generateAiPresentation(activePres.id, presSelectedSlides)
+                            : generateAiPresentation(activePres.id)}
+                          disabled={presAiLoading || (presAiSelectMode && presSelectedSlides.size === 0)}
+                          style={{padding:'0.35rem 0.9rem',background:presAiLoading||(presAiSelectMode&&presSelectedSlides.size===0)?'rgba(61,69,99,0.4)':presAiSelectMode?`linear-gradient(135deg,${PRES_ACCENT},#b8860b)`:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'8px',color:presAiLoading||(presAiSelectMode&&presSelectedSlides.size===0)?'#8b92b0':'#fff',fontWeight:700,cursor:presAiLoading||(presAiSelectMode&&presSelectedSlides.size===0)?'not-allowed':'pointer',fontFamily:'inherit',fontSize:'0.8rem',flexShrink:0}}>
+                          {presAiLoading ? 'Generating…' : presAiSelectMode ? (presSelectedSlides.size > 0 ? `Regen ${presSelectedSlides.size} Slide${presSelectedSlides.size>1?'s':''}` : 'Select slides above') : 'Generate All'}
+                        </button>
                       </div>
                     )}
                   </div>
