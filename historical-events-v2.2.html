@@ -1894,19 +1894,24 @@
         const edges = new vis.DataSet();
         const eventsToShow = filteredEvents.slice(0, 50);
         eventsToShow.forEach(e => {
-          nodes.add({ id: e.id, label: (e.title||'Untitled').substring(0,40)+'...', color:{ background:'#60a5fa', border:'#3b82f6' }, title: e.title||'Untitled' });
+          nodes.add({ id: e.id, label: (e.title||'Untitled').substring(0,40)+'...', shape:'ellipse', color:{ background:'#1e3a5f', border:'#60a5fa', highlight:{ background:'#1d4ed8', border:'#93c5fd' } }, font:{ color:'#e2e8f0', size:12 }, title: e.title||'Untitled' });
           (e.people||[]).forEach(p => {
-            if (!nodes.get('p-'+p)) nodes.add({ id:'p-'+p, label:p, shape:'box', color:{ background:'#a78bfa', border:'#8b5cf6' } });
-            edges.add({ from:e.id, to:'p-'+p, color:{ color:'#8b92b0' } });
+            if (!nodes.get('p-'+p)) nodes.add({ id:'p-'+p, label:p, shape:'box', color:{ background:'#3b0764', border:'#c084fc', highlight:{ background:'#6d28d9', border:'#e9d5ff' } }, font:{ color:'#f0e6ff', size:12 } });
+            edges.add({ from:e.id, to:'p-'+p, color:{ color:'#4b5280' } });
           });
           (e.organizations||[]).forEach(o => {
-            if (!nodes.get('o-'+o)) nodes.add({ id:'o-'+o, label:o, shape:'diamond', color:{ background:'#10b981', border:'#059669' } });
-            edges.add({ from:e.id, to:'o-'+o, color:{ color:'#8b92b0' } });
+            if (!nodes.get('o-'+o)) nodes.add({ id:'o-'+o, label:o, shape:'diamond', color:{ background:'#064e3b', border:'#34d399', highlight:{ background:'#059669', border:'#6ee7b7' } }, font:{ color:'#d1fae5', size:12 } });
+            edges.add({ from:e.id, to:'o-'+o, color:{ color:'#4b5280' } });
+          });
+          (e.topics||[]).forEach(t => {
+            if (!nodes.get('t-'+t)) nodes.add({ id:'t-'+t, label:t, shape:'triangle', color:{ background:'#7c2d12', border:'#fb923c', highlight:{ background:'#c2410c', border:'#fdba74' } }, font:{ color:'#ffedd5', size:12 } });
+            edges.add({ from:e.id, to:'t-'+t, color:{ color:'#4b5280' } });
           });
         });
         const container = document.getElementById('network-graph');
         if (container) {
           const net = new vis.Network(container, { nodes, edges }, {
+            nodes:{ margin:{ top:8, right:12, bottom:8, left:12 }, borderWidth:2 },
             physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 } },
             interaction:{ hover:true }
           });
@@ -1915,7 +1920,7 @@
               const id = params.nodes[0];
               if (id.startsWith('p-')) openEntityDetail('person', id.substring(2));
               else if (id.startsWith('o-')) openEntityDetail('org', id.substring(2));
-              else { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, activeTab); }
+              else if (!id.startsWith('t-')) { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, activeTab); }
             }
           });
         }
@@ -1934,17 +1939,22 @@
         const edges = new vis.DataSet();
         const eventsToShow = myFiltered.slice(0, 50);
         eventsToShow.forEach(e => {
-          nodes.add({ id: e.id, label: (e.title||'Untitled').substring(0,40)+'...', color:{ background:'#60a5fa', border:'#3b82f6' }, title: e.title||'Untitled' });
+          nodes.add({ id: e.id, label: (e.title||'Untitled').substring(0,40)+'...', shape:'ellipse', color:{ background:'#1e3a5f', border:'#60a5fa', highlight:{ background:'#1d4ed8', border:'#93c5fd' } }, font:{ color:'#e2e8f0', size:12 }, title: e.title||'Untitled' });
           (e.people||[]).forEach(p => {
-            if (!nodes.get('p-'+p)) nodes.add({ id:'p-'+p, label:p, shape:'box', color:{ background:'#a78bfa', border:'#8b5cf6' } });
-            edges.add({ from:e.id, to:'p-'+p, color:{ color:'#8b92b0' } });
+            if (!nodes.get('p-'+p)) nodes.add({ id:'p-'+p, label:p, shape:'box', color:{ background:'#3b0764', border:'#c084fc', highlight:{ background:'#6d28d9', border:'#e9d5ff' } }, font:{ color:'#f0e6ff', size:12 } });
+            edges.add({ from:e.id, to:'p-'+p, color:{ color:'#4b5280' } });
           });
           (e.organizations||[]).forEach(o => {
-            if (!nodes.get('o-'+o)) nodes.add({ id:'o-'+o, label:o, shape:'diamond', color:{ background:'#10b981', border:'#059669' } });
-            edges.add({ from:e.id, to:'o-'+o, color:{ color:'#8b92b0' } });
+            if (!nodes.get('o-'+o)) nodes.add({ id:'o-'+o, label:o, shape:'diamond', color:{ background:'#064e3b', border:'#34d399', highlight:{ background:'#059669', border:'#6ee7b7' } }, font:{ color:'#d1fae5', size:12 } });
+            edges.add({ from:e.id, to:'o-'+o, color:{ color:'#4b5280' } });
+          });
+          (e.topics||[]).forEach(t => {
+            if (!nodes.get('t-'+t)) nodes.add({ id:'t-'+t, label:t, shape:'triangle', color:{ background:'#7c2d12', border:'#fb923c', highlight:{ background:'#c2410c', border:'#fdba74' } }, font:{ color:'#ffedd5', size:12 } });
+            edges.add({ from:e.id, to:'t-'+t, color:{ color:'#4b5280' } });
           });
         });
         const net = new vis.Network(container, { nodes, edges }, {
+          nodes:{ margin:{ top:8, right:12, bottom:8, left:12 }, borderWidth:2 },
           physics:{ barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 } },
           interaction:{ hover:true }
         });
@@ -1953,7 +1963,7 @@
             const id = params.nodes[0];
             if (id.startsWith('p-')) openEntityDetail('person', id.substring(2));
             else if (id.startsWith('o-')) openEntityDetail('org', id.substring(2));
-            else { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, 'account'); }
+            else if (!id.startsWith('t-')) { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, 'account'); }
           }
         });
       };
@@ -2991,6 +3001,15 @@
                 {/* Network */}
                 {myPageTab === 'network' && (
                   <div className="network">
+                    <div style={{position:'absolute',top:'12px',right:'12px',zIndex:10,background:'rgba(10,13,28,0.93)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'10px',padding:'0.7rem 1rem',backdropFilter:'blur(12px)',minWidth:'148px'}}>
+                      <div style={{color:'#64748b',fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:'0.55rem'}}>Legend</div>
+                      {[{symbol:'●',color:'#60a5fa',label:'Event'},{symbol:'■',color:'#c084fc',label:'Person'},{symbol:'◆',color:'#34d399',label:'Organization'},{symbol:'▲',color:'#fb923c',label:'Topic'}].map(item=>(
+                        <div key={item.label} style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.3rem'}}>
+                          <span style={{color:item.color,fontSize:'0.85rem',lineHeight:1,flexShrink:0}}>{item.symbol}</span>
+                          <span style={{color:'#cbd5e1',fontSize:'0.76rem'}}>{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
                     <div id="my-network-graph" style={{width:'100%',height:'100%',borderRadius:'16px'}}></div>
                   </div>
                 )}
@@ -3481,6 +3500,15 @@
                 <button className="btn btn-primary fullscreen-btn" onClick={()=>setIsNetworkFullscreen(!isNetworkFullscreen)}>
                   {isNetworkFullscreen?'✕ Exit':'⛶ Fullscreen'}
                 </button>
+                <div style={{position:'absolute',top:'12px',right:'12px',zIndex:10,background:'rgba(10,13,28,0.93)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'10px',padding:'0.7rem 1rem',backdropFilter:'blur(12px)',minWidth:'148px'}}>
+                  <div style={{color:'#64748b',fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:'0.55rem'}}>Legend</div>
+                  {[{symbol:'●',color:'#60a5fa',label:'Event'},{symbol:'■',color:'#c084fc',label:'Person'},{symbol:'◆',color:'#34d399',label:'Organization'},{symbol:'▲',color:'#fb923c',label:'Topic'}].map(item=>(
+                    <div key={item.label} style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.3rem'}}>
+                      <span style={{color:item.color,fontSize:'0.85rem',lineHeight:1,flexShrink:0}}>{item.symbol}</span>
+                      <span style={{color:'#cbd5e1',fontSize:'0.76rem'}}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
                 <div id="network-graph"></div>
               </div>
             )}
