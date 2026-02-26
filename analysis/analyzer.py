@@ -184,33 +184,43 @@ Create a well-structured, visually engaging presentation using VARIED slide layo
 
 LAYOUT TYPES — choose the best fit for each slide:
 
-1. "title" — Opening slide. Exactly ONE per presentation, always first.
-   Format: {{"layout": "title", "title": "main title", "subtitle": "brief context phrase", "date": "era/date"}}
+1. "title" — Opening slide.
+   Format: {{"layout": "title", "title": "...", "subtitle": "...", "date": "..."}}
 
-2. "overview" — Summary with bullet points. Use for broad context or multi-event overviews.
-   Format: {{"layout": "overview", "title": "...", "date": "...", "bullets": ["point", "point", ...]}}
+2. "overview" — Summary slide, good for broad context.
+   Format: {{"layout": "overview", "title": "...", "date": "...", "text_blocks": ["...", "..."]}}
 
-3. "key_figures" — Person cards. Use ONLY when 2 or more notable people are involved.
-   Format: {{"layout": "key_figures", "title": "Key Figures", "cards": [{{"name": "Full Name", "role": "Their role/title", "detail": "One sentence on what they did."}}]}}
+3. "key_figures" — Person cards. Use when 2+ notable people are involved.
+   Format: {{"layout": "key_figures", "title": "Key Figures", "cards": [{{"name": "...", "role": "...", "detail": "..."}}]}}
 
-4. "timeline" — Horizontal timeline. Use ONLY when there are 3 or more clearly dated events in sequence.
-   Format: {{"layout": "timeline", "title": "Timeline", "nodes": [{{"year": "1963", "label": "Short label"}}]}}
+4. "timeline" — Horizontal timeline. Use when there's a clear sequence of dated events.
+   Format: {{"layout": "timeline", "title": "Timeline", "nodes": [{{"year": "1963", "label": "..."}}]}}
 
-5. "content" — Standard event slide. Use for each major event.
-   Format: {{"layout": "content", "title": "...", "date": "...", "bullets": ["point", "point", ...]}}
+5. "content" — Standard event slide.
+   Format: {{"layout": "content", "title": "...", "date": "...", "text_blocks": ["...", "..."]}}
 
-CONTENT RULES:
-- Bullets: max 5 per slide — keep each bullet a clear, complete thought; a sentence or two is fine, but avoid dumping a whole paragraph into one bullet
+TEXT BLOCKS (for content and overview slides):
+Use the "text_blocks" array — each string becomes its own visual text box on the slide.
+The frontend auto-arranges them: 1 block fills the area, 2 blocks go side-by-side, 3 blocks go 2-on-top + 1-spanning-bottom, 4 blocks form a 2×2 grid.
+
+YOU decide how to group content. This is flexible by design:
+- Put related points together in one string (use newlines or bullet chars within it)
+- Give a single important fact its own string so it has visual weight
+- Mix groupings based on what will look good and read clearly
+- Avoid more than 4 text_blocks per slide (gets crowded)
+- Avoid dumping a wall of text into a single block
+
+RULES:
 - Timeline nodes: max 5, keep labels short
 - Key figures cards: max 3 cards
 
 STRUCTURE — use your judgment, not a formula:
-You are NOT required to follow a fixed template. Design the slide sequence the way a human presenter would — based on what best serves the content. Some guidance:
-- A title slide is a natural opener but isn't mandatory if the content speaks for itself another way
-- You can give a single complex event multiple slides if it deserves that depth
-- Use key_figures or timeline only when the data genuinely calls for them, not as a checkbox
-- Vary the layout types so consecutive slides don't all look identical
-- If given multiple events, find the narrative thread and build around it
+Design the slide sequence the way a human presenter would:
+- A title slide is a natural opener but isn't mandatory
+- You can give a complex event multiple slides if it warrants depth
+- Use key_figures or timeline only when the data genuinely calls for them
+- Vary layout types so consecutive slides don't all look identical
+- Find the narrative thread and build around it
 
 Events to cover:
 {events_text}
@@ -218,7 +228,7 @@ Events to cover:
 Respond with ONLY valid JSON — no other text:
 {{"slides": [
   {{"layout": "title", "title": "...", "subtitle": "...", "date": "..."}},
-  {{"layout": "content", "title": "...", "date": "...", "bullets": ["...", "...", "..."]}}
+  {{"layout": "content", "title": "...", "date": "...", "text_blocks": ["block 1 text", "block 2 text"]}}
 ]}}"""
 
     message = client.messages.create(
@@ -236,13 +246,20 @@ Respond with ONLY valid JSON — no other text:
 
     result = json.loads(raw)
 
-    # Normalize: if any slide still uses old "body" field, convert to bullets
+    # Normalize: ensure every slide has a layout and convert legacy fields to text_blocks
     for slide in result.get("slides", []):
-        if "body" in slide and "bullets" not in slide:
-            body = slide.pop("body", "")
-            slide["bullets"] = [s.strip() for s in body.split(".") if s.strip()][:5]
         if "layout" not in slide:
             slide["layout"] = "content"
+        # Convert old "body" field → single text_block
+        if "body" in slide and "text_blocks" not in slide and "bullets" not in slide:
+            body = slide.pop("body", "")
+            if body:
+                slide["text_blocks"] = [body]
+        # Convert old "bullets" list → single joined text_block (keeps compat)
+        if "bullets" in slide and "text_blocks" not in slide:
+            bullets = slide.pop("bullets", [])
+            if bullets:
+                slide["text_blocks"] = ["\u2022 " + b for b in bullets]
 
     return result
 
