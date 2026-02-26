@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Historical Events Research Assistant",
+  "short_name": "HDB Research",
+  "version": "1.0.0",
+  "description": "Capture URLs, highlighted text, and video timecodes while researching — then save directly to the Historical Events Database with AI analysis.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "webNavigation",
+    "activeTab",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Historical Events Research Assistant"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

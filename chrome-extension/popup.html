@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HDB Research Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════
+       LOGIN SCREEN
+  ══════════════════════════════════════════════════════════ -->
+  <div id="login-screen" class="screen">
+    <div class="login-logo">
+      <span class="logo-icon">◈</span>
+      <div class="logo-text">
+        <div class="logo-main">HDB Research</div>
+        <div class="logo-sub">Historical Events Assistant</div>
+      </div>
+    </div>
+
+    <div class="login-form">
+      <div class="field-group">
+        <label class="field-label">Username</label>
+        <input type="text" id="login-username" class="field-input" placeholder="Enter username" autocomplete="username" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <input type="password" id="login-password" class="field-input" placeholder="Enter password" autocomplete="current-password" />
+      </div>
+      <div id="login-error" class="error-msg" style="display:none;"></div>
+      <button id="login-btn" class="btn-primary">Log In</button>
+      <p class="login-hint">Use your Historical Events Database credentials.</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       MAIN SCREEN
+  ══════════════════════════════════════════════════════════ -->
+  <div id="main-screen" class="screen" style="display:none;">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="logo-icon-sm">◈</span>
+        <div>
+          <div class="header-title">HDB Research</div>
+          <div id="header-user" class="header-user"></div>
+        </div>
+      </div>
+      <div class="header-right">
+        <a id="open-app-btn" class="btn-icon" title="Open Database" target="_blank">↗</a>
+        <button id="logout-btn" class="btn-icon" title="Log out">⏏</button>
+      </div>
+    </div>
+
+    <!-- Current Page Card -->
+    <div class="current-page-card" id="current-page-card">
+      <div class="page-card-left">
+        <img id="page-favicon" class="page-favicon" src="" alt="" style="display:none;" />
+        <div class="page-card-text">
+          <div id="page-title" class="page-title">—</div>
+          <div id="page-url" class="page-url">—</div>
+        </div>
+      </div>
+      <button id="capture-url-btn" class="btn-capture-url" title="Save this page to DB">
+        Save Page
+      </button>
+    </div>
+
+    <!-- Session Bar -->
+    <div class="session-bar">
+      <div class="session-bar-left">
+        <div class="session-status-dot" id="session-dot"></div>
+        <div>
+          <div id="session-name-display" class="session-name">No active session</div>
+          <div id="session-trail-count" class="session-trail-count" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="session-bar-right">
+        <button id="rename-session-btn" class="btn-text" style="display:none;" title="Rename this session">✎</button>
+        <button id="session-toggle-btn" class="btn-session-start">Start Session</button>
+      </div>
+    </div>
+
+    <!-- Rename session inline input (hidden by default) -->
+    <div id="rename-row" class="rename-row" style="display:none;">
+      <input type="text" id="rename-input" class="field-input field-input-sm" placeholder="Session name…" />
+      <button id="rename-confirm-btn" class="btn-primary btn-sm">Save</button>
+      <button id="rename-cancel-btn" class="btn-ghost btn-sm">✕</button>
+    </div>
+
+    <!-- Tab Nav -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="captured">
+        Captured
+        <span id="captured-count-badge" class="tab-badge" style="display:none;">0</span>
+      </button>
+      <button class="tab-btn" data-tab="trail">
+        Trail
+        <span id="trail-count-badge" class="tab-badge" style="display:none;">0</span>
+      </button>
+    </div>
+
+    <!-- Tab: Captured Items -->
+    <div id="tab-captured" class="tab-content active">
+      <div id="captured-empty" class="empty-state">
+        <div class="empty-icon">📎</div>
+        <div class="empty-title">No captures yet</div>
+        <div class="empty-desc">Highlight text on any page and click <strong>"Save to DB"</strong>, or use the right-click menu.</div>
+      </div>
+      <div id="captured-list" class="item-list"></div>
+    </div>
+
+    <!-- Tab: Research Trail -->
+    <div id="tab-trail" class="tab-content" style="display:none;">
+      <div class="trail-header">
+        <span class="section-label">Pages visited this session</span>
+        <button id="clear-trail-btn" class="btn-text btn-danger-text" style="display:none;">Clear</button>
+      </div>
+      <div id="trail-empty" class="empty-state">
+        <div class="empty-icon">🗺</div>
+        <div class="empty-title">No trail yet</div>
+        <div class="empty-desc">Start a session and browse — every page you visit gets tracked here.</div>
+      </div>
+      <div id="trail-list" class="trail-list"></div>
+    </div>
+
+  </div>
+
+  <!-- Rename modal overlay (reuse for session rename) -->
+  <script src="popup.js"></script>
+</body>
+</html>

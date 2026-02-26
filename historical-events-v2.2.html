@@ -2913,6 +2913,26 @@
         const accountScopedData = { ...data, topics: userTopics, people: userPeople, organizations: userOrgs };
         const myFilterProps = { filters: myFilters, setFilters: setMyFilters, data: accountScopedData, activeTab: myPageTab, onSearch: applyMySearch, onClear: clearMyFilters, onExportCSV: myExportCSV, onExportJSON: myExportJSON };
         const statusLabel = s => s==='historical_record'?'Historical Record':s==='contested'?'Contested':'Unverified';
+        // Research Sessions state (loaded on demand when the Sessions tab is opened)
+        const [researchSessions, setResearchSessions] = React.useState([]);
+        const [sessionsLoading, setSessionsLoading] = React.useState(false);
+        const [sessionsLoaded, setSessionsLoaded] = React.useState(false);
+        const [expandedSession, setExpandedSession] = React.useState(null);
+        const loadResearchSessions = async () => {
+          if (sessionsLoaded) return;
+          setSessionsLoading(true);
+          try {
+            const { data: rows, error } = await supabaseClient
+              .from('research_sessions')
+              .select('*')
+              .eq('uploaded_by', currentUser.username)
+              .order('started_at', { ascending: false });
+            if (!error && rows) setResearchSessions(rows);
+          } catch(e) { /* table may not exist yet */ }
+          setSessionsLoading(false);
+          setSessionsLoaded(true);
+        };
+        React.useEffect(() => { if (accountTab === 'sessions') loadResearchSessions(); }, [accountTab]);
         return (
           <div>
             {/* Profile card */}
@@ -2942,6 +2962,7 @@
             {/* Sub-tabs */}
             <div className="account-tabs">
               <button className={`account-tab ${accountTab==='uploads'?'active':''}`} onClick={()=>setAccountTab('uploads')}>📂 My Uploads</button>
+              <button className={`account-tab ${accountTab==='sessions'?'active':''}`} onClick={()=>setAccountTab('sessions')}>🗺 Research Sessions</button>
               {isAdminOrOwner && (
                 <button className={`account-tab ${accountTab==='admin'?'active-admin':''}`} onClick={()=>setAccountTab('admin')}>
                   🛡️ {currentUser.role==='owner'?'Owner Panel':'Admin Panel'}
@@ -3169,6 +3190,100 @@
                     </div>
                   );
                 })()}
+              </div>
+            )}
+            {/* Research Sessions — synced from Chrome Extension */}
+            {accountTab === 'sessions' && (
+              <div style={{padding:'1.5rem 2rem'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'1.25rem'}}>
+                  <span style={{fontSize:'1.1rem',fontWeight:700,color:'#e2e8f8'}}>Research Sessions</span>
+                  <span style={{fontSize:'0.72rem',color:'#8b92b0',background:'rgba(96,165,250,0.08)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'6px',padding:'2px 8px'}}>from Chrome Extension</span>
+                  <button onClick={()=>{setSessionsLoaded(false);setResearchSessions([]);loadResearchSessions();}} style={{marginLeft:'auto',background:'transparent',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'6px',color:'#60a5fa',fontSize:'0.75rem',padding:'4px 10px',cursor:'pointer'}}>↻ Refresh</button>
+                </div>
+                <p style={{fontSize:'0.8rem',color:'#8b92b0',marginBottom:'1.25rem',lineHeight:1.6}}>
+                  Sessions are saved here when you click <strong style={{color:'#c0c7d8'}}>"End Session"</strong> in the Chrome Extension. Each session shows every page you visited and what you captured.
+                </p>
+                {sessionsLoading && <div style={{color:'#8b92b0',fontSize:'0.85rem',padding:'1rem 0'}}>Loading sessions…</div>}
+                {!sessionsLoading && sessionsLoaded && researchSessions.length === 0 && (
+                  <div style={{background:'rgba(15,19,40,0.6)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'10px',padding:'2rem',textAlign:'center'}}>
+                    <div style={{fontSize:'1.8rem',marginBottom:'0.5rem',opacity:0.5}}>🗺</div>
+                    <div style={{fontSize:'0.9rem',fontWeight:600,color:'#8b92b0',marginBottom:'0.4rem'}}>No sessions yet</div>
+                    <div style={{fontSize:'0.78rem',color:'#4a5270',maxWidth:'340px',margin:'0 auto',lineHeight:1.6}}>
+                      Install the Historical Events Research Assistant Chrome Extension, start a session while you browse, then end it to see your research trail here.
+                    </div>
+                  </div>
+                )}
+                {!sessionsLoading && researchSessions.map(sess => {
+                  const trail = Array.isArray(sess.trail) ? sess.trail : [];
+                  const captures = Array.isArray(sess.captured_items) ? sess.captured_items : [];
+                  const startDate = sess.started_at ? new Date(sess.started_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+                  const endDate = sess.ended_at ? new Date(sess.ended_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+                  const isExpanded = expandedSession === sess.id;
+                  return (
+                    <div key={sess.id} style={{background:'rgba(15,19,40,0.7)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:'10px',marginBottom:'0.75rem',overflow:'hidden'}}>
+                      {/* Session header */}
+                      <div onClick={()=>setExpandedSession(isExpanded?null:sess.id)}
+                        style={{display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.85rem 1rem',cursor:'pointer',background:isExpanded?'rgba(96,165,250,0.05)':'transparent',transition:'background 0.15s'}}>
+                        <span style={{fontSize:'1rem'}}>{isExpanded?'▾':'▸'}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'0.85rem',fontWeight:700,color:'#e2e8f8',marginBottom:'2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sess.session_name||'Unnamed Session'}</div>
+                          <div style={{fontSize:'0.72rem',color:'#8b92b0'}}>{startDate}{endDate&&startDate!==endDate?' → '+endDate:''}</div>
+                        </div>
+                        <div style={{display:'flex',gap:'0.5rem',flexShrink:0}}>
+                          <span style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'5px',padding:'2px 8px',fontSize:'0.7rem',color:'#60a5fa',fontWeight:600}}>{trail.length} pages</span>
+                          {captures.length>0&&<span style={{background:'rgba(74,222,128,0.1)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:'5px',padding:'2px 8px',fontSize:'0.7rem',color:'#4ade80',fontWeight:600}}>{captures.length} captured</span>}
+                        </div>
+                      </div>
+                      {/* Expanded: trail + captures */}
+                      {isExpanded && (
+                        <div style={{padding:'0 1rem 1rem',borderTop:'1px solid rgba(96,165,250,0.1)'}}>
+                          {/* Research trail */}
+                          {trail.length>0 && (
+                            <div style={{marginTop:'0.85rem'}}>
+                              <div style={{fontSize:'0.7rem',fontWeight:700,color:'#4a5270',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'0.5rem'}}>Research Trail</div>
+                              <div style={{display:'flex',flexDirection:'column',gap:'0'}}>
+                                {trail.map((entry,i)=>(
+                                  <div key={entry.id||i} style={{display:'flex',alignItems:'flex-start',gap:'0.6rem',padding:'5px 0'}}>
+                                    <div style={{display:'flex',flexDirection:'column',alignItems:'center',paddingTop:'3px',flexShrink:0,width:'14px'}}>
+                                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:i===0?'#4ade80':'rgba(96,165,250,0.5)',flexShrink:0,boxShadow:i===0?'0 0 5px rgba(74,222,128,0.5)':'none'}}></div>
+                                      {i<trail.length-1&&<div style={{width:'1px',height:'16px',background:'rgba(96,165,250,0.15)',margin:'2px 0'}}></div>}
+                                    </div>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <div style={{fontSize:'0.78rem',color:'#c0c7d8',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.title||entry.url}</div>
+                                      <div style={{fontSize:'0.68rem',color:'#4a5270',fontFamily:'monospace',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.url}</div>
+                                    </div>
+                                    <div style={{fontSize:'0.68rem',color:'#4a5270',flexShrink:0}}>{entry.timestamp?new Date(entry.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):''}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Captured items */}
+                          {captures.length>0 && (
+                            <div style={{marginTop:'0.85rem'}}>
+                              <div style={{fontSize:'0.7rem',fontWeight:700,color:'#4a5270',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'0.5rem'}}>Captured Items</div>
+                              {captures.map((c,i)=>(
+                                <div key={c.id||i} style={{background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.1)',borderRadius:'7px',padding:'0.6rem 0.8rem',marginBottom:'0.4rem'}}>
+                                  <div style={{display:'flex',alignItems:'flex-start',gap:'0.5rem'}}>
+                                    <span style={{fontSize:'0.85rem',flexShrink:0}}>{c.type==='video'?'🎬':c.type==='url'?'🔗':'📝'}</span>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <div style={{fontSize:'0.78rem',color:'#e2e8f8',lineHeight:1.4,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{c.text||c.url}</div>
+                                      <div style={{display:'flex',alignItems:'center',gap:'0.4rem',marginTop:'3px'}}>
+                                        <span style={{fontSize:'0.68rem',color:'#4a5270',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'180px'}}>{c.pageTitle||c.url}</span>
+                                        {c.timecode&&<span style={{fontSize:'0.68rem',color:'#c4b5fd',background:'rgba(196,181,253,0.1)',border:'1px solid rgba(196,181,253,0.2)',borderRadius:'4px',padding:'1px 5px',flexShrink:0,fontFamily:'monospace'}}>⏱ {c.timecode}</span>}
+                                        {c.saved&&<span style={{fontSize:'0.68rem',color:'#4ade80',fontWeight:700,flexShrink:0}}>✓ Saved</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
             {/* Admin / Owner Panel */}
