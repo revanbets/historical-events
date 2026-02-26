@@ -1091,14 +1091,78 @@
 
       // ── Presentation themes & gradient presets ──
       const SLIDE_THEMES = [
-        {id:'dark',    label:'Dark',        bg:'#080d22', swatch:'#0a0f2e'},
-        {id:'navy',    label:'Navy',        bg:'#0d1b2e', swatch:'#0d1b2e'},
-        {id:'slate',   label:'Slate',       bg:'#1e293b', swatch:'#1e293b'},
-        {id:'noir',    label:'Noir',        bg:'#0a0a0a', swatch:'#111'},
-        {id:'forest',  label:'Forest',      bg:'#0d2118', swatch:'#0d2118'},
-        {id:'crimson', label:'Crimson',     bg:'#1a0608', swatch:'#1a0608'},
-        {id:'light',   label:'Light',       bg:'#f0f4ff', swatch:'#e8edf8'},
-        {id:'warm',    label:'Warm',        bg:'#fef3c7', swatch:'#fde68a'},
+        {
+          id:'classic_archivist', label:'Classic Archivist',
+          bg:'#FDF5E6', swatch:'#FDF5E6',
+          textColor:'#3E2723', headingColor:'#3E2723', accentColor:'#5D4037',
+          decorations:[
+            {shapeType:'rectangle',fill:'#5D4037',x:2,y:2,w:96,h:0.7},
+            {shapeType:'rectangle',fill:'#5D4037',x:2,y:4.2,w:96,h:0.25},
+            {shapeType:'rectangle',fill:'#5D4037',x:2,y:93.1,w:96,h:0.25},
+            {shapeType:'rectangle',fill:'#5D4037',x:2,y:95,w:96,h:0.7},
+          ]
+        },
+        {
+          id:'modern_minimalist', label:'Modern Minimalist',
+          bg:'#FFFFFF', swatch:'#FFFFFF',
+          textColor:'#1A1A1A', headingColor:'#000000', accentColor:'#007AFF',
+          decorations:[
+            {shapeType:'rectangle',fill:'#007AFF',x:0,y:0,w:0.75,h:100},
+            {shapeType:'rectangle',fill:'#AAAAAA',x:5,y:16.5,w:90,h:0.15,opacity:35},
+            {shapeType:'rectangle',fill:'#AAAAAA',x:5,y:83,w:90,h:0.15,opacity:35},
+          ]
+        },
+        {
+          id:'midnight_tech', label:'Midnight Tech',
+          bg:'#0B0E14', swatch:'#0B0E14',
+          textColor:'#E0F7FA', headingColor:'#00F2FF', accentColor:'#00F2FF',
+          decorations:[
+            {shapeType:'hexagon',fill:'#00F2FF',x:0,y:0,w:14,h:22,opacity:12},
+            {shapeType:'hexagon',fill:'#00F2FF',x:84,y:72,w:16,h:28,opacity:8},
+          ]
+        },
+        {
+          id:'royal_heritage', label:'Royal Heritage',
+          bg:'#800000', swatch:'#800000',
+          textColor:'#FFF8E1', headingColor:'#D4AF37', accentColor:'#D4AF37',
+          decorations:[
+            {shapeType:'rectangle',fill:'#D4AF37',x:0,y:0,w:5,h:100},
+          ]
+        },
+        {
+          id:'industrial', label:'Industrial',
+          bg:'#2F4F4F', swatch:'#2F4F4F',
+          textColor:'#E8E8E8', headingColor:'#FFFFFF', accentColor:'#FF8C00',
+          decorations:[
+            {shapeType:'rectangle',fill:'#FF8C00',x:0,y:17,w:100,h:2.5},
+            {shapeType:'rectangle',fill:'#FF8C00',x:0,y:88,w:100,h:1.5},
+          ]
+        },
+        {
+          id:'the_newsroom', label:'The Newsroom',
+          bg:'#FFFFFF', swatch:'#FFFFFF',
+          textColor:'#1A1A1A', headingColor:'#FFFFFF', accentColor:'#CE1126',
+          decorations:[
+            {shapeType:'rectangle',fill:'#CE1126',x:0,y:0,w:100,h:18},
+            {shapeType:'rectangle',fill:'#CE1126',x:0,y:0,w:3.5,h:100},
+          ]
+        },
+        {
+          id:'earth_exploration', label:'Earth Exploration',
+          bg:'#2D5A27', swatch:'#2D5A27',
+          textColor:'#C2B280', headingColor:'#F5ECD7', accentColor:'#C2B280',
+          decorations:[
+            {shapeType:'rectangle',fill:'#C2B280',x:2,y:2,w:96,h:96,radius:12,opacity:18},
+          ]
+        },
+        {
+          id:'bold_impact', label:'Bold Impact',
+          bg:'#FFEF00', swatch:'#FFEF00',
+          textColor:'#000000', headingColor:'#000000', accentColor:'#000000',
+          decorations:[
+            {shapeType:'triangle',fill:'#000000',x:58,y:52,w:42,h:48},
+          ]
+        },
       ];
       const GRAD_PRESETS = [
         'linear-gradient(135deg,#080d22 0%,#1a0533 100%)',
@@ -1161,9 +1225,34 @@
         else if(dir==='bwd'&&idx>0) { [arr[idx],arr[idx-1]]=[arr[idx-1],arr[idx]]; }
         setLiveBlocks(arr); _saveBlocks(arr);
       };
-      const applyThemeToPresentation = (pId, bgValue) => {
+      const applyThemeToPresentation = (pId, themeId) => {
         const pres = presentations.find(p=>p.id===pId); if(!pres) return;
-        const ns = pres.slides.map(s=>({...s, bg:bgValue}));
+        const theme = SLIDE_THEMES.find(t=>t.id===themeId); if(!theme) return;
+        const genId = () => Date.now().toString(36)+Math.random().toString(36).slice(2)+'td';
+        const makeDecoBlock = (spec) => ({
+          id: genId(), type:'shape',
+          shapeType: spec.shapeType||'rectangle',
+          fill: spec.fill, stroke:'transparent', strokeWidth:0,
+          radius: spec.radius||0,
+          x:spec.x, y:spec.y, w:spec.w, h:spec.h,
+          opacity: spec.opacity!=null ? spec.opacity : 100,
+          isThemeDecoration: true,
+        });
+        const ns = pres.slides.map(s => {
+          const nonDeco = (s.blocks||[]).filter(b=>!b.isThemeDecoration);
+          const decoBlocks = (theme.decorations||[]).map(makeDecoBlock);
+          const blocks = [...decoBlocks, ...nonDeco.map(b => {
+            if (b.type==='heading') return {...b, color:theme.headingColor};
+            if (b.type==='text') return {...b, color:theme.textColor};
+            return b;
+          })];
+          return {...s, bg:theme.bg, blocks};
+        });
+        saveSlidesToPres(pId, ns);
+      };
+      const clearThemeDecorations = (pId) => {
+        const pres = presentations.find(p=>p.id===pId); if(!pres) return;
+        const ns = pres.slides.map(s=>({...s, blocks:(s.blocks||[]).filter(b=>!b.isThemeDecoration)}));
         saveSlidesToPres(pId, ns);
       };
 
@@ -3460,14 +3549,17 @@
                             <div style={{position:'relative',display:'inline-flex'}}>
                               <button onClick={()=>{setShowThemeMenu(v=>!v);setShowShapeMenu(false);setShowGradMenu(false);}} style={{...btnSm,color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)',background:'rgba(167,139,250,0.08)',fontSize:'0.72rem'}}>🎨 Theme ▾</button>
                               {showThemeMenu && (
-                                <div style={{position:'absolute',top:'100%',right:0,zIndex:200,marginTop:'4px',background:'rgba(15,18,35,0.98)',border:'1px solid rgba(61,69,99,0.6)',borderRadius:'10px',padding:'0.5rem',display:'flex',flexDirection:'column',gap:'0.25rem',width:'160px',boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
+                                <div style={{position:'absolute',top:'100%',right:0,zIndex:200,marginTop:'4px',background:'rgba(15,18,35,0.98)',border:'1px solid rgba(61,69,99,0.6)',borderRadius:'10px',padding:'0.5rem',display:'flex',flexDirection:'column',gap:'0.25rem',width:'215px',boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
                                   <div style={{fontSize:'0.65rem',color:'#5a6180',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'0.2rem',paddingLeft:'0.2rem'}}>Apply to all slides</div>
                                   {SLIDE_THEMES.map(t=>(
-                                    <button key={t.id} onClick={()=>{applyThemeToPresentation(activePres.id,t.bg);setShowThemeMenu(false);}} style={{display:'flex',alignItems:'center',gap:'0.5rem',...btnSm,fontSize:'0.75rem',color:'#e0e6ed',borderColor:'rgba(61,69,99,0.4)'}}>
-                                      <span style={{width:'14px',height:'14px',borderRadius:'3px',background:t.swatch,border:'1px solid rgba(255,255,255,0.15)',flexShrink:0,display:'inline-block'}}/>
-                                      {t.label}
+                                    <button key={t.id} onClick={()=>{applyThemeToPresentation(activePres.id,t.id);setShowThemeMenu(false);}} style={{display:'flex',alignItems:'center',gap:'0.5rem',...btnSm,fontSize:'0.75rem',color:'#e0e6ed',borderColor:'rgba(61,69,99,0.4)'}}>
+                                      <span style={{width:'14px',height:'14px',borderRadius:'3px',background:t.swatch,border:`1px solid ${t.accentColor||'rgba(255,255,255,0.15)'}`,flexShrink:0,display:'inline-block'}}/>
+                                      <span style={{flex:1,textAlign:'left'}}>{t.label}</span>
+                                      <span style={{width:'8px',height:'8px',borderRadius:'50%',background:t.accentColor,flexShrink:0,border:'1px solid rgba(255,255,255,0.2)',display:'inline-block'}}/>
                                     </button>
                                   ))}
+                                  <div style={{height:'1px',background:'rgba(61,69,99,0.4)',margin:'0.15rem 0'}}/>
+                                  <button onClick={()=>{clearThemeDecorations(activePres.id);setShowThemeMenu(false);}} style={{...btnSm,fontSize:'0.7rem',color:'#8b92b0',borderColor:'rgba(61,69,99,0.3)',justifyContent:'center'}}>✕ Clear theme decorations</button>
                                 </div>
                               )}
                             </div>
