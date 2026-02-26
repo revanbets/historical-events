@@ -155,43 +155,71 @@ def condense_text(text: str) -> str:
 def generate_presentation_slides(events: list, focuses: list, detail_level: str, presentation_name: str) -> dict:
     """Generate presentation slides from event data using Claude."""
     if not ANTHROPIC_API_KEY:
-        return {"slides": [{"title": e.get("title", ""), "date": e.get("date", ""), "body": e.get("summary", "")} for e in events]}
+        return {"slides": [{"layout": "content", "title": e.get("title", ""), "date": e.get("date", ""), "bullets": [e.get("summary", "")[:80]]} for e in events]}
 
     import anthropic
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     detail_instructions = {
-        "brief": "Keep each slide concise — 1-2 sentences for the body.",
-        "standard": "Give moderate detail — 3-5 sentences per slide body.",
-        "comprehensive": "Be thorough — provide detailed analysis, 5-8 sentences per slide body.",
+        "brief": "Be concise — 3 bullets max per content slide, each under 7 words.",
+        "standard": "Moderate detail — 4-5 bullets per content slide, each 6-8 words.",
+        "comprehensive": "Be thorough — 5 bullets per content slide, plus richer key_figures and timeline slides when relevant.",
     }
 
     events_text = "\n\n".join([
-        f"Event: {e.get('title', 'Untitled')}\nDate: {e.get('date', 'Unknown')}\nSummary: {e.get('summary', '')}\nTopics: {', '.join(e.get('topics', []))}\nPeople: {', '.join(e.get('people', []))}\nOrganizations: {', '.join(e.get('organizations', []))}"
-        for e in events
+        f"Event {i+1}: {e.get('title', 'Untitled')}\nDate: {e.get('date', 'Unknown')}\nSummary: {e.get('summary', '')}\nTopics: {', '.join(e.get('topics', []))}\nPeople: {', '.join(e.get('people', []))}\nOrganizations: {', '.join(e.get('organizations', []))}"
+        for i, e in enumerate(events)
     ])
 
     focus_text = ""
     if focuses:
-        focus_text = f"\n\nFocus areas the user wants emphasized: {', '.join(focuses)}"
+        focus_text = f"\n\nUser focus areas to emphasize: {', '.join(focuses)}"
 
-    prompt = f"""You are creating slides for a presentation titled "{presentation_name}".
+    prompt = f"""You are a professional presentation designer creating slides for a presentation titled "{presentation_name}" about historical events.
+
 {detail_instructions.get(detail_level, detail_instructions['standard'])}{focus_text}
 
-Create one slide per event. Each slide should have a title, date, and body text written in a clear, presentation-friendly style.
+Create a well-structured, visually engaging presentation using VARIED slide layouts. Cover all events provided.
+
+LAYOUT TYPES — choose the best fit for each slide:
+
+1. "title" — Opening slide. Exactly ONE per presentation, always first.
+   Format: {{"layout": "title", "title": "main title", "subtitle": "brief context phrase", "date": "era/date"}}
+
+2. "overview" — Summary with bullet points. Use for broad context or multi-event overviews.
+   Format: {{"layout": "overview", "title": "...", "date": "...", "bullets": ["point", "point", ...]}}
+
+3. "key_figures" — Person cards. Use ONLY when 2 or more notable people are involved.
+   Format: {{"layout": "key_figures", "title": "Key Figures", "cards": [{{"name": "Full Name", "role": "Their role/title", "detail": "One sentence on what they did."}}]}}
+
+4. "timeline" — Horizontal timeline. Use ONLY when there are 3 or more clearly dated events in sequence.
+   Format: {{"layout": "timeline", "title": "Timeline", "nodes": [{{"year": "1963", "label": "Short label"}}]}}
+
+5. "content" — Standard event slide. Use for each major event.
+   Format: {{"layout": "content", "title": "...", "date": "...", "bullets": ["point", "point", ...]}}
+
+CONTENT RULES (strictly enforce):
+- Bullets: max 5 per slide, max 6-8 words each — punchy and factual
+- Timeline nodes: max 5, year label max 5 words
+- Key figures cards: max 3 cards, detail max 1-2 short sentences
+
+STRUCTURE:
+- Slide 1: Always "title" for the main theme
+- Then: "overview" for context, "content" for each event, "key_figures" if 2+ people, "timeline" if 3+ dated events
 
 Events to cover:
 {events_text}
 
-Respond with a JSON object in this exact format:
-{{"slides": [{{"title": "slide title here", "date": "date string here", "body": "slide body text here"}}]}}
-
-Only respond with the JSON — no other text."""
+Respond with ONLY valid JSON — no other text:
+{{"slides": [
+  {{"layout": "title", "title": "...", "subtitle": "...", "date": "..."}},
+  {{"layout": "content", "title": "...", "date": "...", "bullets": ["...", "...", "...", "...", "..."]}}
+]}}"""
 
     message = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=4096,
+        model="claude-sonnet-4-6",
+        max_tokens=6000,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -202,7 +230,17 @@ Only respond with the JSON — no other text."""
         if raw.startswith("json"):
             raw = raw[4:].strip()
 
-    return json.loads(raw)
+    result = json.loads(raw)
+
+    # Normalize: if any slide still uses old "body" field, convert to bullets
+    for slide in result.get("slides", []):
+        if "body" in slide and "bullets" not in slide:
+            body = slide.pop("body", "")
+            slide["bullets"] = [s.strip() for s in body.split(".") if s.strip()][:5]
+        if "layout" not in slide:
+            slide["layout"] = "content"
+
+    return result
 
 
 def analyze_pending():
