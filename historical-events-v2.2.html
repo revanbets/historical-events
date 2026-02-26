@@ -609,6 +609,7 @@
       const [canvasTextEditId, setCanvasTextEditId] = useState(null);
       const [presentationMode, setPresentationMode] = useState(null); // { pId, idx }
       const [presentationTheme, setPresentationTheme] = useState('dark');
+      const [presThemeMap, setPresThemeMap] = useState({}); // presId → themeId, tracks active theme per presentation
       const [showNewPresentationModal, setShowNewPresentationModal] = useState(false);
       const [newPresentationName, setNewPresentationName] = useState('');
       const [presSelectedEvents, setPresSelectedEvents] = useState(new Set());
@@ -776,10 +777,15 @@
         const pres = presentations.find(p => p.id === pId);
         if (!pres) return;
         const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
-        const s = { id: uid(), bg: '#0a0d1e', blocks: [] };
+        // Inherit current theme if one has been applied to this presentation
+        const themeId = presThemeMap[pId];
+        const theme = themeId ? SLIDE_THEMES.find(t=>t.id===themeId) : null;
+        const decoBlocks = theme ? _makeThemeDecoBlocks(theme) : [];
+        const s = { id: uid(), bg: theme ? theme.bg : '#0a0d1e', blocks: decoBlocks };
         const ns = [...pres.slides, s];
         await saveSlidesToPres(pId, ns);
         setEditingSlideId(s.id);
+        setLiveBlocks(decoBlocks);
       };
       const removeSlide = async (pId, sId) => {
         const pres = presentations.find(p => p.id === pId);
@@ -1225,11 +1231,9 @@
         else if(dir==='bwd'&&idx>0) { [arr[idx],arr[idx-1]]=[arr[idx-1],arr[idx]]; }
         setLiveBlocks(arr); _saveBlocks(arr);
       };
-      const applyThemeToPresentation = (pId, themeId) => {
-        const pres = presentations.find(p=>p.id===pId); if(!pres) return;
-        const theme = SLIDE_THEMES.find(t=>t.id===themeId); if(!theme) return;
+      const _makeThemeDecoBlocks = (theme) => {
         const genId = () => Date.now().toString(36)+Math.random().toString(36).slice(2)+'td';
-        const makeDecoBlock = (spec) => ({
+        return (theme.decorations||[]).map(spec => ({
           id: genId(), type:'shape',
           shapeType: spec.shapeType||'rectangle',
           fill: spec.fill, stroke:'transparent', strokeWidth:0,
@@ -1237,10 +1241,14 @@
           x:spec.x, y:spec.y, w:spec.w, h:spec.h,
           opacity: spec.opacity!=null ? spec.opacity : 100,
           isThemeDecoration: true,
-        });
+        }));
+      };
+      const applyThemeToPresentation = (pId, themeId) => {
+        const pres = presentations.find(p=>p.id===pId); if(!pres) return;
+        const theme = SLIDE_THEMES.find(t=>t.id===themeId); if(!theme) return;
         const ns = pres.slides.map(s => {
           const nonDeco = (s.blocks||[]).filter(b=>!b.isThemeDecoration);
-          const decoBlocks = (theme.decorations||[]).map(makeDecoBlock);
+          const decoBlocks = _makeThemeDecoBlocks(theme);
           const blocks = [...decoBlocks, ...nonDeco.map(b => {
             if (b.type==='heading') return {...b, color:theme.headingColor};
             if (b.type==='text') return {...b, color:theme.textColor};
@@ -1249,11 +1257,23 @@
           return {...s, bg:theme.bg, blocks};
         });
         saveSlidesToPres(pId, ns);
+        setPresThemeMap(prev => ({...prev, [pId]: themeId}));
+        // Immediately refresh liveBlocks so the canvas updates without needing a slide switch
+        if (activePresentationIdRef.current === pId && editingSlideIdRef.current) {
+          const cur = ns.find(s => s.id === editingSlideIdRef.current);
+          if (cur) setLiveBlocks(cur.blocks || []);
+        }
       };
       const clearThemeDecorations = (pId) => {
         const pres = presentations.find(p=>p.id===pId); if(!pres) return;
         const ns = pres.slides.map(s=>({...s, blocks:(s.blocks||[]).filter(b=>!b.isThemeDecoration)}));
         saveSlidesToPres(pId, ns);
+        setPresThemeMap(prev => { const n={...prev}; delete n[pId]; return n; });
+        // Refresh liveBlocks if currently editing a slide in this presentation
+        if (activePresentationIdRef.current === pId && editingSlideIdRef.current) {
+          const cur = ns.find(s => s.id === editingSlideIdRef.current);
+          if (cur) setLiveBlocks(cur.blocks || []);
+        }
       };
 
       // ── Export helpers ──
