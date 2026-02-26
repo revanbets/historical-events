@@ -862,38 +862,22 @@
       const buildOverviewSlide = (uid, s, evt) => {
         const title   = s.title || evt?.title || '';
         const date    = s.date  || evt?.date  || '';
-        const bullets = (s.bullets || []).slice(0, 5);
-        const body    = bullets.length === 0 ? (s.body || evt?.aiSummary || evt?.description || '') : '';
+        const bullets = s.bullets || [];
+        const bodyText = bullets.length > 0 ? bullets.map(b => '• ' + b).join('\n') : (s.body || evt?.aiSummary || evt?.description || '');
         const topics  = evt?.topics || [];
         const people  = evt?.people || [];
         const orgs    = evt?.organizations || [];
         const hasMeta = topics.length > 0 || people.length > 0 || orgs.length > 0;
-        // Build individual bullet blocks in the left column (x:3, y:26, w:57, h:70)
-        const leftX=3, leftY=26, leftW=57, leftH=70;
-        const bulletBlocks = (() => {
-          if (body) return [{ id:uid(), type:'text', x:leftX, y:leftY, w:leftW, h:leftH, text:body, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }];
-          if (bullets.length === 0) return [];
-          if (bullets.length <= 2) {
-            const bh = Math.floor(leftH / bullets.length) - 3;
-            return bullets.map((b,i) => ({ id:uid(), type:'text', x:leftX, y:leftY+i*(bh+3), w:leftW, h:bh, text:'• '+b, fontSize:16, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }));
-          }
-          const lB = bullets.slice(0, Math.ceil(bullets.length/2));
-          const rB = bullets.slice(Math.ceil(bullets.length/2));
-          const cW = Math.floor(leftW/2) - 2;
-          const rx = leftX + cW + 4;
-          const makeCol = (bs, cx) => { const bh=Math.floor(leftH/bs.length)-3; return bs.map((b,i)=>({ id:uid(), type:'text', x:cx, y:leftY+i*(bh+3), w:cW, h:bh, text:'• '+b, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null })); };
-          return [...makeCol(lB, leftX), ...makeCol(rB, rx)];
-        })();
         return {
           id: uid(), bg: PRES_AI_BG,
           blocks: [
-            { id:uid(), type:'shape', x:0, y:0, w:1.5, h:100, shapeType:'rectangle', fill:PRES_ACCENT, stroke:'transparent', strokeWidth:0, radius:0 },
-            { id:uid(), type:'heading', x:3, y:5, w:57, h:16, text:title, fontSize:32, fontWeight:'bold', fontStyle:'normal', color:PRES_ACCENT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:'title' },
+            { id:uid(), type:'shape',   x:0, y:0,  w:1.5, h:100, shapeType:'rectangle', fill:PRES_ACCENT, stroke:'transparent', strokeWidth:0, radius:0 },
+            { id:uid(), type:'heading', x:3, y:5,  w:57,  h:16,  text:title, fontSize:32, fontWeight:'bold', fontStyle:'normal', color:PRES_ACCENT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:'title' },
             ...(date ? [{ id:uid(), type:'text', x:63, y:7, w:35, h:7, text:date, fontSize:13, fontWeight:'normal', fontStyle:'normal', color:PRES_MUTED, textAlign:'right', background:'transparent', eventId:evt?.id||null, eventField:'date' }] : []),
-            { id:uid(), type:'shape', x:3, y:23, w:94, h:0.4, shapeType:'rectangle', fill:'rgba(212,175,55,0.3)', stroke:'transparent', strokeWidth:0, radius:0 },
-            ...bulletBlocks,
+            { id:uid(), type:'shape',   x:3, y:23, w:94,  h:0.4, shapeType:'rectangle', fill:'rgba(212,175,55,0.3)', stroke:'transparent', strokeWidth:0, radius:0 },
+            { id:uid(), type:'text',    x:3, y:26, w:57,  h:70,  text:bodyText, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null },
             ...(hasMeta
-              ? [{ id:uid(), type:'tags', x:63, y:26, w:34, h:70, topics, people, orgs, background:'rgba(212,175,55,0.04)', eventId:evt?.id||null, eventField:null }]
+              ? [{ id:uid(), type:'tags',    x:63, y:26, w:34, h:70, topics, people, orgs, background:'rgba(212,175,55,0.04)', eventId:evt?.id||null, eventField:null }]
               : [{ id:uid(), type:'callout', x:63, y:26, w:34, h:70, text:'Insert image\nor map here', fontSize:13, fontWeight:'normal', fontStyle:'italic', color:'#666688', accentColor:PRES_ACCENT, background:'rgba(212,175,55,0.04)', eventId:null, eventField:null }]
             ),
           ].filter(Boolean)
@@ -982,30 +966,15 @@
         const contentW = hasTags ? 58 : 90;
         const contentH = hasLinks ? 48 : 66;
         const srcY     = contentY + contentH + 2;
-        // Build individual bullet blocks, laid out in two columns for 3+ bullets
-        const bulletBlocks = (() => {
-          if (body) return [{ id:uid(), type:'text', x:contentX, y:contentY, w:contentW, h:contentH, text:body, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }];
-          if (bullets.length === 0) return [];
-          if (bullets.length <= 2) {
-            const bh = Math.floor(contentH / bullets.length) - 3;
-            return bullets.map((b,i) => ({ id:uid(), type:'text', x:contentX, y:contentY+i*(bh+3), w:contentW, h:bh, text:'• '+b, fontSize:16, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null }));
-          }
-          // 3–5 bullets → two columns
-          const lB = bullets.slice(0, Math.ceil(bullets.length/2));
-          const rB = bullets.slice(Math.ceil(bullets.length/2));
-          const cW = Math.floor(contentW/2) - 2;
-          const rx = contentX + cW + 4;
-          const makeCol = (bs, cx) => { const bh=Math.floor(contentH/bs.length)-3; return bs.map((b,i)=>({ id:uid(), type:'text', x:cx, y:contentY+i*(bh+3), w:cW, h:bh, text:'• '+b, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null })); };
-          return [...makeCol(lB, contentX), ...makeCol(rB, rx)];
-        })();
+        const bodyText = bullets.length > 0 ? bullets.map(b => '• ' + b).join('\n') : body;
         return {
           id: uid(), bg: PRES_AI_BG,
           blocks: [
             { id:uid(), type:'shape',   x:0, y:0, w:1.5, h:100, shapeType:'rectangle', fill:PRES_ACCENT, stroke:'transparent', strokeWidth:0, radius:0 },
             { id:uid(), type:'heading', x:3, y:5, w:hasTags?57:90, h:17, text:title, fontSize:32, fontWeight:'bold', fontStyle:'normal', color:'#FFFFFF', textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:'title' },
             ...(date ? [{ id:uid(), type:'text', x:hasTags?62:68, y:7, w:hasTags?35:29, h:7, text:date, fontSize:12, fontWeight:'normal', fontStyle:'normal', color:PRES_ACCENT, textAlign:'right', background:'transparent', eventId:evt?.id||null, eventField:'date' }] : []),
-            { id:uid(), type:'shape', x:3, y:23, w:hasTags?57:93, h:0.4, shapeType:'rectangle', fill:'rgba(212,175,55,0.3)', stroke:'transparent', strokeWidth:0, radius:0 },
-            ...bulletBlocks,
+            { id:uid(), type:'shape',   x:3, y:23, w:hasTags?57:93, h:0.4, shapeType:'rectangle', fill:'rgba(212,175,55,0.3)', stroke:'transparent', strokeWidth:0, radius:0 },
+            { id:uid(), type:'text',    x:contentX, y:contentY, w:contentW, h:contentH, text:bodyText, fontSize:15, fontWeight:'normal', fontStyle:'normal', color:PRES_TEXT, textAlign:'left', background:'transparent', eventId:evt?.id||null, eventField:null },
             ...(hasTags  ? [{ id:uid(), type:'tags',    x:63, y:5,    w:34, h:hasLinks?72:88, topics, people, orgs, background:'transparent', eventId:evt?.id||null, eventField:null }] : []),
             ...(hasLinks ? [{ id:uid(), type:'sources', x:3,  y:srcY, w:92, h:100-srcY-2, items:[...(link?[{url:link,label:'Source'}]:[]),...(evt?[{eventId:evt.id,label:'View Event'}]:[])], background:'transparent', eventId:evt?.id||null, eventField:null }] : []),
           ].filter(Boolean)

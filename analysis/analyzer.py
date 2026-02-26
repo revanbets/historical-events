@@ -199,14 +199,18 @@ LAYOUT TYPES — choose the best fit for each slide:
 5. "content" — Standard event slide. Use for each major event.
    Format: {{"layout": "content", "title": "...", "date": "...", "bullets": ["point", "point", ...]}}
 
-CONTENT RULES (strictly enforce):
-- Bullets: max 5 per slide — each bullet is a concise, complete thought; 1-2 sentences is fine, but avoid walls of text or multi-sentence paragraphs stuffed into a single bullet
-- Timeline nodes: max 5, year label max 6 words
-- Key figures cards: max 3 cards, detail max 2 short sentences
+CONTENT RULES:
+- Bullets: max 5 per slide — keep each bullet a clear, complete thought; a sentence or two is fine, but avoid dumping a whole paragraph into one bullet
+- Timeline nodes: max 5, keep labels short
+- Key figures cards: max 3 cards
 
-STRUCTURE:
-- Slide 1: Always "title" for the main theme
-- Then: "overview" for context, "content" for each event, "key_figures" if 2+ people, "timeline" if 3+ dated events
+STRUCTURE — use your judgment, not a formula:
+You are NOT required to follow a fixed template. Design the slide sequence the way a human presenter would — based on what best serves the content. Some guidance:
+- A title slide is a natural opener but isn't mandatory if the content speaks for itself another way
+- You can give a single complex event multiple slides if it deserves that depth
+- Use key_figures or timeline only when the data genuinely calls for them, not as a checkbox
+- Vary the layout types so consecutive slides don't all look identical
+- If given multiple events, find the narrative thread and build around it
 
 Events to cover:
 {events_text}
@@ -214,7 +218,7 @@ Events to cover:
 Respond with ONLY valid JSON — no other text:
 {{"slides": [
   {{"layout": "title", "title": "...", "subtitle": "...", "date": "..."}},
-  {{"layout": "content", "title": "...", "date": "...", "bullets": ["...", "...", "...", "...", "..."]}}
+  {{"layout": "content", "title": "...", "date": "...", "bullets": ["...", "...", "..."]}}
 ]}}"""
 
     message = client.messages.create(
