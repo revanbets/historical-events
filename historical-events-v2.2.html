@@ -1433,10 +1433,23 @@
             }).filter(e => e.title);
           }
           if (eventsPayload.length === 0) { alert('No content found to regenerate from. Add events via the spreadsheet first.'); setPresAiLoading(false); return; }
-          const payload = { events: eventsPayload, focuses, detail_level: presAiDetail, presentation_name: pres.name };
-          const res = await fetch(`${API_BASE}/api/generate-presentation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          // Truncate long summaries to keep payload manageable
+          const trimmedPayload = eventsPayload.map(e => ({ ...e, summary: e.summary ? e.summary.slice(0, 800) : '' }));
+          const payload = { events: trimmedPayload, focuses, detail_level: presAiDetail, presentation_name: pres.name };
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 120000);
+          let res;
+          try {
+            res = await fetch(`${API_BASE}/api/generate-presentation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
+          } catch (fetchErr) {
+            clearTimeout(timeoutId);
+            if (fetchErr.name === 'AbortError') throw new Error('Request timed out after 2 minutes. The backend (free tier) takes ~30s to wake up — please wait a moment and try again.');
+            throw new Error('Failed to reach the backend. Check your connection or try again in ~30 seconds (server may be waking up).');
+          }
+          clearTimeout(timeoutId);
           if (!res.ok) { const detail = await res.text().catch(()=>''); throw new Error(`Backend returned ${res.status}${detail ? ': ' + detail : ''}`); }
           const result = await res.json();
+          if (!result.slides || result.slides.length === 0) throw new Error('Backend returned no slides. The server may have timed out internally — please try again.');
           if (result.slides) {
             const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
             let evtIdx = 0;
