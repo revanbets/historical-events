@@ -12,6 +12,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/dist/vis-network.min.css" rel="stylesheet">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;600;700&display=swap');
@@ -619,6 +621,10 @@
       const [showShapeMenu, setShowShapeMenu] = useState(false);
       const [showThemeMenu, setShowThemeMenu] = useState(false);
       const [showGradMenu, setShowGradMenu] = useState(false);
+      const [showExportModal, setShowExportModal] = useState(false);
+      const [isExporting, setIsExporting] = useState(false);
+      const [exportProgress, setExportProgress] = useState(0);
+      const [exportTotal, setExportTotal] = useState(0);
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -967,6 +973,171 @@
         const pres = presentations.find(p=>p.id===pId); if(!pres) return;
         const ns = pres.slides.map(s=>({...s, bg:bgValue}));
         saveSlidesToPres(pId, ns);
+      };
+
+      // ── Export helpers ──
+      const _hexNoHash = (c) => {
+        if (!c) return 'FFFFFF';
+        if (c.startsWith('#')) return c.slice(1).toUpperCase().padStart(6,'0');
+        const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (m) return [parseInt(m[1]),parseInt(m[2]),parseInt(m[3])].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase();
+        return 'CCCCCC';
+      };
+
+      const buildSlideEl = (slide, W=1280, H=720) => {
+        const el = document.createElement('div');
+        el.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${W}px;height:${H}px;overflow:hidden;font-family:Karla,sans-serif;`;
+        el.style.background = slide.bg || '#0a0d1e';
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const makeSvgEl = (tag, attrs) => {
+          const e2 = document.createElementNS(svgNs,tag);
+          Object.entries(attrs).forEach(([k,v])=>e2.setAttribute(k,String(v)));
+          return e2;
+        };
+        (slide.blocks || []).forEach(block => {
+          const b = document.createElement('div');
+          b.style.cssText = `position:absolute;left:${block.x}%;top:${block.y}%;width:${block.w}%;height:${block.h}%;box-sizing:border-box;overflow:hidden;`;
+          if (block.type === 'image') {
+            if (block.imageUrl) {
+              const img = document.createElement('img');
+              img.src = block.imageUrl; img.crossOrigin = 'anonymous';
+              img.style.cssText = `width:100%;height:100%;object-fit:${block.imageFit||'cover'};display:block;`;
+              b.appendChild(img);
+            }
+          } else if (block.type === 'shape') {
+            const {shapeType='rectangle',fill='#3b82f6',stroke='transparent',strokeWidth=0,radius=0,opacity} = block;
+            b.style.opacity = opacity != null ? opacity/100 : 1;
+            const svg = document.createElementNS(svgNs,'svg');
+            svg.setAttribute('viewBox','0 0 100 100'); svg.setAttribute('preserveAspectRatio','none');
+            svg.style.cssText = 'width:100%;height:100%;display:block;overflow:visible;';
+            const s = strokeWidth||0;
+            if(shapeType==='circle'){svg.appendChild(makeSvgEl('ellipse',{cx:50,cy:50,rx:50-s,ry:50-s,fill,stroke,'stroke-width':s*2}));}
+            else if(shapeType==='triangle'){svg.appendChild(makeSvgEl('polygon',{points:`50,${s} ${100-s},${100-s} ${s},${100-s}`,fill,stroke,'stroke-width':s}));}
+            else if(shapeType==='diamond'){svg.appendChild(makeSvgEl('polygon',{points:`50,${s} ${100-s},50 50,${100-s} ${s},50`,fill,stroke,'stroke-width':s}));}
+            else if(shapeType==='star'){const pts=[];for(let i=0;i<10;i++){const a=(i*Math.PI/5)-(Math.PI/2),r=i%2===0?50-s:22;pts.push(`${50+r*Math.cos(a)},${50+r*Math.sin(a)}`);}svg.appendChild(makeSvgEl('polygon',{points:pts.join(' '),fill,stroke,'stroke-width':s}));}
+            else if(shapeType==='hexagon'){const pts=[];for(let i=0;i<6;i++){const a=(i*Math.PI/3)-(Math.PI/6);pts.push(`${50+(50-s)*Math.cos(a)},${50+(50-s)*Math.sin(a)}`);}svg.appendChild(makeSvgEl('polygon',{points:pts.join(' '),fill,stroke,'stroke-width':s}));}
+            else if(shapeType==='line'){svg.appendChild(makeSvgEl('line',{x1:0,y1:50,x2:100,y2:50,stroke:fill,'stroke-width':Math.max(s*2,3),'stroke-linecap':'round'}));}
+            else if(shapeType==='arrow'){const defs=document.createElementNS(svgNs,'defs'),mkr=document.createElementNS(svgNs,'marker');mkr.setAttribute('id','ah-x');mkr.setAttribute('viewBox','0 0 8 6');mkr.setAttribute('refX',8);mkr.setAttribute('refY',3);mkr.setAttribute('markerWidth',4);mkr.setAttribute('markerHeight',4);mkr.setAttribute('orient','auto');const poly=document.createElementNS(svgNs,'polygon');poly.setAttribute('points','0 0, 8 3, 0 6');poly.setAttribute('fill',fill);mkr.appendChild(poly);defs.appendChild(mkr);svg.appendChild(defs);svg.appendChild(makeSvgEl('line',{x1:5,y1:50,x2:88,y2:50,stroke:fill,'stroke-width':Math.max(s*2,3),'stroke-linecap':'round','marker-end':'url(#ah-x)'}));}
+            else{svg.appendChild(makeSvgEl('rect',{x:s/2,y:s/2,width:100-s,height:100-s,rx:radius||0,fill,stroke,'stroke-width':s}));}
+            b.appendChild(svg);
+          } else if (block.type === 'callout') {
+            b.style.cssText += `display:flex;align-items:stretch;gap:4%;padding:2% 3%;background:${block.background||'rgba(245,158,11,0.08)'};`;
+            const accent=document.createElement('div'); accent.style.cssText=`width:3px;flex-shrink:0;border-radius:2px;background:${block.accentColor||'#f59e0b'};`; b.appendChild(accent);
+            const txt=document.createElement('div'); txt.style.cssText=`flex:1;color:${block.color||'#f0f4ff'};font-size:${block.fontSize||15}px;font-weight:${block.fontWeight||'normal'};font-style:${block.fontStyle||'italic'};text-align:${block.textAlign||'left'};line-height:1.45;white-space:pre-wrap;word-break:break-word;`; txt.textContent=block.text||''; b.appendChild(txt);
+          } else if (block.type === 'tags') {
+            b.style.cssText += `display:flex;flex-direction:column;gap:0.45em;padding:4% 5%;font-size:${(W/1280)*13}px;`;
+            const addSec=(items,color,bg,border,label)=>{if(!items||!items.length)return;const lbl=document.createElement('div');lbl.style.cssText=`color:${color};font-weight:700;font-size:0.72em;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:0.1em;`;lbl.textContent=label;b.appendChild(lbl);const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;gap:0.3em;margin-bottom:0.25em;';items.forEach(item=>{const pill=document.createElement('span');pill.style.cssText=`padding:0.15em 0.55em;border-radius:4px;background:${bg};color:${color};border:1px solid ${border};font-size:0.9em;white-space:nowrap;`;pill.textContent=item;row.appendChild(pill);});b.appendChild(row);};
+            addSec(block.topics,'#c4b5fd','rgba(124,58,237,0.2)','rgba(124,58,237,0.3)','Topics');
+            addSec(block.people,'#93c5fd','rgba(96,165,250,0.15)','rgba(96,165,250,0.3)','People');
+            addSec(block.orgs,'#6ee7b7','rgba(16,185,129,0.15)','rgba(16,185,129,0.3)','Organizations');
+          } else if (block.type === 'sources') {
+            b.style.cssText += `display:flex;align-items:center;gap:0.6em;flex-wrap:wrap;padding:0 3%;border-top:1px solid rgba(96,165,250,0.12);`;
+            (block.items||[]).forEach(item=>{const pill=document.createElement('div');pill.style.cssText=`padding:0.2em 0.85em;border-radius:6px;${item.eventId?'background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);color:#93c5fd;':'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:#6ee7b7;'}font-size:${(W/1280)*12}px;font-weight:600;`;pill.textContent=(item.eventId?'→ ':'🔗 ')+(item.label||'');b.appendChild(pill);});
+          } else {
+            b.style.cssText += `display:flex;align-items:flex-start;padding:2% 3%;background:${block.background||'transparent'};`;
+            const txt=document.createElement('div');
+            txt.style.cssText=`font-size:${block.fontSize||(block.type==='heading'?32:16)}px;font-weight:${block.fontWeight||(block.type==='heading'?700:400)};font-style:${block.fontStyle||'normal'};color:${block.color||'#e0e6ed'};text-align:${block.textAlign||'left'};line-height:1.45;white-space:pre-wrap;word-break:break-word;width:100%;`;
+            txt.textContent=block.text||''; b.appendChild(txt);
+          }
+          el.appendChild(b);
+        });
+        document.body.appendChild(el);
+        return el;
+      };
+
+      const captureSlide = async (slide, W=1280, H=720, mime='image/png') => {
+        const el = buildSlideEl(slide, W, H);
+        try {
+          const canvas = await window.html2canvas(el, {width:W, height:H, scale:1, useCORS:true, allowTaint:true, backgroundColor:null, logging:false});
+          return canvas.toDataURL(mime, mime==='image/jpeg'?0.92:1);
+        } finally {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }
+      };
+
+      const exportAsPptx = async (pres) => {
+        const PptxGenJS = window.PptxGenJS;
+        if (!PptxGenJS) { alert('PptxGenJS library not loaded yet. Please wait a moment and try again.'); return; }
+        const pptx = new PptxGenJS();
+        pptx.layout = 'LAYOUT_16x9';
+        const W_IN=10, H_IN=5.625;
+        const PPTX_SHAPE_MAP = {rectangle:'rect',circle:'ellipse',triangle:'triangle',diamond:'diamond',line:'line',arrow:'rightArrow',star:'star5Point',hexagon:'hexagon'};
+        for (const slide of pres.slides) {
+          const pSlide = pptx.addSlide();
+          const bg = slide.bg || '#0a0d1e';
+          if (bg.startsWith('#')) { pSlide.background = {color: _hexNoHash(bg)}; }
+          else if (bg.startsWith('linear-gradient')) { const m=bg.match(/#[0-9a-fA-F]{3,8}/g); if(m) pSlide.background={color:_hexNoHash(m[0])}; }
+          else { pSlide.background = {color:'0A0D1E'}; }
+          for (const block of (slide.blocks||[])) {
+            const ox=(block.x/100)*W_IN, oy=(block.y/100)*H_IN, ow=(block.w/100)*W_IN, oh=(block.h/100)*H_IN;
+            try {
+              if (block.type==='image' && block.imageUrl) {
+                pSlide.addImage({x:ox,y:oy,w:ow,h:oh,data:block.imageUrl,sizing:{type:block.imageFit==='contain'?'contain':'crop',w:ow,h:oh}});
+              } else if (block.type==='shape') {
+                const shType = PPTX_SHAPE_MAP[block.shapeType||'rectangle']||'rect';
+                pSlide.addShape(pptx.ShapeType[shType]||shType, {x:ox,y:oy,w:ow,h:oh,fill:{color:_hexNoHash(block.fill||'#3b82f6')},line:block.strokeWidth>0?{color:_hexNoHash(block.stroke||'#000000'),width:block.strokeWidth}:{type:'none'}});
+              } else if (block.type==='callout') {
+                pSlide.addShape(pptx.ShapeType.rect||'rect', {x:ox,y:oy,w:Math.max(ow*0.008,0.03),h:oh,fill:{color:_hexNoHash(block.accentColor||'#f59e0b')},line:{type:'none'}});
+                pSlide.addText(block.text||'', {x:ox+Math.max(ow*0.008,0.03)+0.05,y:oy,w:ow-Math.max(ow*0.008,0.03)-0.05,h:oh,color:_hexNoHash(block.color||'#f0f4ff'),fontSize:block.fontSize||15,bold:block.fontWeight==='bold',italic:block.fontStyle==='italic'||(block.fontWeight!=='bold'&&block.fontStyle!=='normal'),wrap:true,valign:'middle'});
+              } else if (block.type==='tags') {
+                const lines=[];
+                if(block.topics?.length) lines.push('Topics: '+block.topics.join(', '));
+                if(block.people?.length) lines.push('People: '+block.people.join(', '));
+                if(block.orgs?.length) lines.push('Organizations: '+block.orgs.join(', '));
+                if(lines.length) pSlide.addText(lines.join('\n'),{x:ox,y:oy,w:ow,h:oh,color:'C4B5FD',fontSize:11,wrap:true,valign:'top'});
+              } else if (block.type==='sources') {
+                const labels=(block.items||[]).map(item=>(item.eventId?'→ ':'🔗 ')+(item.label||'')).join('  |  ');
+                if(labels) pSlide.addText(labels,{x:ox,y:oy,w:ow,h:oh,color:'93C5FD',fontSize:10,wrap:true,valign:'middle'});
+              } else if (block.type==='text'||block.type==='heading') {
+                pSlide.addText(block.text||'',{x:ox,y:oy,w:ow,h:oh,color:_hexNoHash(block.color||(block.type==='heading'?'#ffffff':'#e0e6ed')),fontSize:block.fontSize||(block.type==='heading'?32:16),bold:block.fontWeight==='bold'||block.type==='heading',italic:block.fontStyle==='italic',align:block.textAlign||'left',wrap:true,valign:'top'});
+              }
+            } catch(e) { console.warn('PPTX block error:', e); }
+          }
+        }
+        await pptx.writeFile({fileName:`${pres.name.replace(/[^a-z0-9]/gi,'_')}.pptx`});
+      };
+
+      const exportAsPdf = async (pres) => {
+        const { jsPDF } = window.jspdf;
+        if (!jsPDF) { alert('jsPDF not loaded'); return; }
+        if (!window.html2canvas) { alert('html2canvas not loaded yet. Please try again in a moment.'); return; }
+        const W=1280, H=720;
+        const pdf = new jsPDF({orientation:'landscape', unit:'px', format:[W,H], hotfixes:['px_scaling']});
+        for (let i=0; i<pres.slides.length; i++) {
+          setExportProgress(i+1);
+          if (i>0) pdf.addPage([W,H],'landscape');
+          const dataUrl = await captureSlide(pres.slides[i], W, H, 'image/jpeg');
+          pdf.addImage(dataUrl,'JPEG',0,0,W,H);
+        }
+        pdf.save(`${pres.name.replace(/[^a-z0-9]/gi,'_')}.pdf`);
+      };
+
+      const exportAsImages = async (pres, format) => {
+        if (!window.html2canvas) { alert('html2canvas not loaded yet. Please try again in a moment.'); return; }
+        const mime = format==='jpeg'?'image/jpeg':'image/png';
+        for (let i=0; i<pres.slides.length; i++) {
+          setExportProgress(i+1);
+          const dataUrl = await captureSlide(pres.slides[i], 1280, 720, mime);
+          const a = document.createElement('a');
+          a.href=dataUrl; a.download=`${pres.name.replace(/[^a-z0-9]/gi,'_')}_slide${i+1}.${format}`;
+          a.click();
+          await new Promise(r=>setTimeout(r,350));
+        }
+      };
+
+      const exportPresentation = async (format) => {
+        const pres = presentations.find(p=>p.id===activePresentationId);
+        if (!pres||!pres.slides?.length) return;
+        setIsExporting(true); setExportProgress(0); setExportTotal(pres.slides.length); setShowExportModal(false);
+        try {
+          if (format==='pptx') await exportAsPptx(pres);
+          else if (format==='pdf') await exportAsPdf(pres);
+          else await exportAsImages(pres, format);
+        } catch(err) {
+          console.error('Export failed:',err); alert('Export failed: '+err.message);
+        } finally {
+          setIsExporting(false); setExportProgress(0);
+        }
       };
 
       // ── Canvas drag handlers ──
@@ -2974,6 +3145,7 @@
                       <button onClick={()=>{setActivePresentationId(null);setEditingSlideId(null);}} style={btnSm}>← Back</button>
                       <h2 style={{flex:1,fontSize:'1.4rem',color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{activePres.name}</h2>
                       {isPresOwner && <button onClick={()=>togglePresentationPublic(activePres.id,activePres.is_public)} style={{...btnSm,background:activePres.is_public?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:activePres.is_public?'#10b981':'#8b92b0',border:`1px solid ${activePres.is_public?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>{activePres.is_public?'🌐 Public':'🔒 Private'}</button>}
+                      {activePres.slides.length>0 && <button onClick={()=>setShowExportModal(true)} style={{padding:'0.5rem 1.1rem',background:'rgba(16,185,129,0.12)',border:'1px solid rgba(16,185,129,0.4)',borderRadius:'10px',color:'#10b981',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>⬇ Export</button>}
                       {activePres.slides.length>0 && <button onClick={()=>setPresentationMode({pId:activePres.id,idx:Math.max(0,activePres.slides.findIndex(s=>s.id===editingSlideId))})} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',flexShrink:0}}>▶ Present</button>}
                     </div>
 
@@ -3852,6 +4024,51 @@
                 <h3 style={{marginBottom:'1rem',color:'#a78bfa'}}>Generating Slides…</h3>
                 <p style={{marginBottom:'0.5rem',color:'#8b92b0'}}>The AI is analyzing your events and building presentation slides.</p>
                 <p style={{color:'#8b92b0',fontSize:'0.82rem'}}>This may take 15–30 seconds.</p>
+              </div>
+            </div>
+          )}
+
+          {/* EXPORT PRESENTATION MODAL */}
+          {showExportModal && (
+            <div className="modal" onClick={()=>setShowExportModal(false)}>
+              <div className="modal-content" onClick={e=>e.stopPropagation()} style={{maxWidth:'500px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
+                  <h3 style={{color:'#e0e6ed',margin:0,fontFamily:"'Space Mono',monospace",fontSize:'1.1rem'}}>Export Presentation</h3>
+                  <button onClick={()=>setShowExportModal(false)} style={{background:'none',border:'none',color:'#8b92b0',fontSize:'1.5rem',cursor:'pointer',lineHeight:1,padding:'0 0.25rem'}}>×</button>
+                </div>
+                <p style={{color:'#8b92b0',fontSize:'0.82rem',marginBottom:'1.4rem',lineHeight:1.5}}>Choose a format to download your presentation. PowerPoint exports produce fully editable elements recognized by PowerPoint and Google Slides.</p>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem',marginBottom:'1.25rem'}}>
+                  {[
+                    {fmt:'pptx',label:'PowerPoint',icon:'📊',desc:'Editable text, shapes & images in PowerPoint & Google Slides',color:'rgba(16,185,129,0.12)',border:'rgba(16,185,129,0.4)',textColor:'#10b981'},
+                    {fmt:'pdf', label:'PDF',        icon:'📄',desc:'All slides compiled into a single PDF document',           color:'rgba(239,68,68,0.1)', border:'rgba(239,68,68,0.35)',textColor:'#f87171'},
+                    {fmt:'png', label:'PNG Images', icon:'🖼',desc:'Each slide as a high-quality PNG (one file per slide)',     color:'rgba(96,165,250,0.1)',border:'rgba(96,165,250,0.35)',textColor:'#60a5fa'},
+                    {fmt:'jpeg',label:'JPEG Images',icon:'🌅',desc:'Each slide as a compressed JPEG (one file per slide)',      color:'rgba(167,139,250,0.1)',border:'rgba(167,139,250,0.35)',textColor:'#a78bfa'},
+                  ].map(({fmt,label,icon,desc,color,border,textColor})=>(
+                    <button key={fmt} onClick={()=>exportPresentation(fmt)}
+                      style={{padding:'1rem',background:color,border:`1px solid ${border}`,borderRadius:'12px',cursor:'pointer',textAlign:'left',display:'flex',flexDirection:'column',gap:'0.4rem',fontFamily:'inherit',transition:'all 0.15s'}}
+                      onMouseEnter={e=>{e.currentTarget.style.transform='scale(1.03)';e.currentTarget.style.boxShadow=`0 6px 20px rgba(0,0,0,0.3)`;}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform='scale(1)';e.currentTarget.style.boxShadow='none';}}>
+                      <div style={{fontSize:'1.7rem',lineHeight:1}}>{icon}</div>
+                      <div style={{color:textColor,fontWeight:700,fontSize:'0.88rem'}}>{label}</div>
+                      <div style={{color:'#8b92b0',fontSize:'0.74rem',lineHeight:1.4}}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={()=>setShowExportModal(false)} style={{width:'100%',padding:'0.55rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* EXPORT PROGRESS OVERLAY */}
+          {isExporting && (
+            <div className="processing-overlay">
+              <div className="processing-card">
+                <div className="processing-spinner" style={{borderTopColor:'#10b981',borderColor:'rgba(16,185,129,0.2)'}}></div>
+                <h3 style={{marginBottom:'0.75rem',color:'#10b981'}}>Exporting…</h3>
+                <p style={{color:'#8b92b0',marginBottom:'1rem',fontSize:'0.85rem'}}>Slide {exportProgress} of {exportTotal}</p>
+                <div style={{width:'220px',height:'6px',background:'rgba(61,69,99,0.5)',borderRadius:'3px',overflow:'hidden'}}>
+                  <div style={{width:`${exportTotal>0?Math.round(exportProgress/exportTotal*100):0}%`,height:'100%',background:'linear-gradient(90deg,#10b981,#34d399)',borderRadius:'3px',transition:'width 0.35s ease'}}/>
+                </div>
               </div>
             </div>
           )}
