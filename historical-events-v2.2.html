@@ -1097,76 +1097,164 @@
 
       // ── Presentation themes & gradient presets ──
       const SLIDE_THEMES = [
+        // ── 1. Classic Archivist (The Scholar) ──
+        // Double-line border frame + L-shaped corner flourishes. Formal, symmetrical.
         {
           id:'classic_archivist', label:'Classic Archivist',
           bg:'#FDF5E6', swatch:'#FDF5E6',
           textColor:'#3E2723', headingColor:'#3E2723', accentColor:'#5D4037',
           decorations:[
-            {shapeType:'rectangle',fill:'#5D4037',x:2,y:2,w:96,h:0.7},
-            {shapeType:'rectangle',fill:'#5D4037',x:2,y:4.2,w:96,h:0.25},
-            {shapeType:'rectangle',fill:'#5D4037',x:2,y:93.1,w:96,h:0.25},
-            {shapeType:'rectangle',fill:'#5D4037',x:2,y:95,w:96,h:0.7},
+            // Outer border (stroke-only rectangle)
+            {shapeType:'rectangle',fill:'transparent',stroke:'#5D4037',strokeWidth:2,x:1.5,y:1.5,w:97,h:97},
+            // Inner border (thinner)
+            {shapeType:'rectangle',fill:'transparent',stroke:'#8D6E63',strokeWidth:1,x:3,y:3,w:94,h:94},
+            // Corner flourish — Top-Left (L-shape: horizontal + vertical bar)
+            {shapeType:'rectangle',fill:'#5D4037',x:1.5,y:1.5,w:11,h:0.55},
+            {shapeType:'rectangle',fill:'#5D4037',x:1.5,y:1.5,w:0.55,h:9},
+            // Corner flourish — Top-Right
+            {shapeType:'rectangle',fill:'#5D4037',x:87.5,y:1.5,w:11,h:0.55},
+            {shapeType:'rectangle',fill:'#5D4037',x:97.95,y:1.5,w:0.55,h:9},
+            // Corner flourish — Bottom-Left
+            {shapeType:'rectangle',fill:'#5D4037',x:1.5,y:97.95,w:11,h:0.55},
+            {shapeType:'rectangle',fill:'#5D4037',x:1.5,y:89.5,w:0.55,h:9},
+            // Corner flourish — Bottom-Right
+            {shapeType:'rectangle',fill:'#5D4037',x:87.5,y:97.95,w:11,h:0.55},
+            {shapeType:'rectangle',fill:'#5D4037',x:97.95,y:89.5,w:0.55,h:9},
           ]
         },
+
+        // ── 2. Modern Minimalist (The Gallery) ──
+        // Asymmetric single accent line on the left. Massive white space. No borders.
         {
           id:'modern_minimalist', label:'Modern Minimalist',
           bg:'#FFFFFF', swatch:'#FFFFFF',
           textColor:'#1A1A1A', headingColor:'#000000', accentColor:'#007AFF',
           decorations:[
-            {shapeType:'rectangle',fill:'#007AFF',x:0,y:0,w:0.75,h:100},
-            {shapeType:'rectangle',fill:'#AAAAAA',x:5,y:16.5,w:90,h:0.15,opacity:35},
-            {shapeType:'rectangle',fill:'#AAAAAA',x:5,y:83,w:90,h:0.15,opacity:35},
+            // Vertical accent bar far left
+            {shapeType:'rectangle',fill:'#007AFF',x:5,y:12,w:0.45,h:56},
+            // Thin horizontal accent line extending right from the bar
+            {shapeType:'rectangle',fill:'#007AFF',x:5,y:12,w:28,h:0.45},
+            // Small square "dot" punctuation at line end
+            {shapeType:'rectangle',fill:'#007AFF',x:32.5,y:11,w:1.8,h:2.5},
           ]
         },
+
+        // ── 3. Midnight Tech (The Data Stream) ──
+        // HUD-style: dark glass panel + neon cyan corner brackets + scan line.
         {
           id:'midnight_tech', label:'Midnight Tech',
           bg:'#0B0E14', swatch:'#0B0E14',
           textColor:'#E0F7FA', headingColor:'#00F2FF', accentColor:'#00F2FF',
           decorations:[
-            {shapeType:'hexagon',fill:'#00F2FF',x:0,y:0,w:14,h:22,opacity:12},
-            {shapeType:'hexagon',fill:'#00F2FF',x:84,y:72,w:16,h:28,opacity:8},
+            // Dark glass panel behind upper content zone (semi-transparent)
+            {shapeType:'rectangle',fill:'#000D1A',x:2,y:2,w:96,h:60,opacity:60},
+            // HUD corner bracket — Top-Left
+            {shapeType:'rectangle',fill:'#00F2FF',x:0,y:0,w:6.5,h:0.5},
+            {shapeType:'rectangle',fill:'#00F2FF',x:0,y:0,w:0.45,h:9},
+            // HUD corner bracket — Top-Right
+            {shapeType:'rectangle',fill:'#00F2FF',x:93.5,y:0,w:6.5,h:0.5},
+            {shapeType:'rectangle',fill:'#00F2FF',x:99.55,y:0,w:0.45,h:9},
+            // HUD corner bracket — Bottom-Left
+            {shapeType:'rectangle',fill:'#00F2FF',x:0,y:99.5,w:6.5,h:0.5},
+            {shapeType:'rectangle',fill:'#00F2FF',x:0,y:91,w:0.45,h:9},
+            // HUD corner bracket — Bottom-Right
+            {shapeType:'rectangle',fill:'#00F2FF',x:93.5,y:99.5,w:6.5,h:0.5},
+            {shapeType:'rectangle',fill:'#00F2FF',x:99.55,y:91,w:0.45,h:9},
+            // Horizontal scan line at panel base
+            {shapeType:'rectangle',fill:'#00F2FF',x:0,y:62,w:100,h:0.2,opacity:45},
           ]
         },
+
+        // ── 4. Royal Heritage (The Epic) ──
+        // Heavy 20%-wide gold sidebar. Gold accent separators. Top/bottom trim bars.
         {
           id:'royal_heritage', label:'Royal Heritage',
           bg:'#800000', swatch:'#800000',
           textColor:'#FFF8E1', headingColor:'#D4AF37', accentColor:'#D4AF37',
           decorations:[
-            {shapeType:'rectangle',fill:'#D4AF37',x:0,y:0,w:5,h:100},
+            // Heavy gold sidebar (20% of slide width)
+            {shapeType:'rectangle',fill:'#D4AF37',x:0,y:0,w:20,h:100},
+            // Deep burgundy inset panel inside sidebar (creates layered depth)
+            {shapeType:'rectangle',fill:'#6B0000',x:1,y:1,w:17.5,h:98},
+            // Thin gold re-border on inset (inner glow edge)
+            {shapeType:'rectangle',fill:'transparent',stroke:'#D4AF37',strokeWidth:1,x:2,y:2,w:15.5,h:96},
+            // Gold top trim bar (full width)
+            {shapeType:'rectangle',fill:'#D4AF37',x:0,y:0,w:100,h:1.2},
+            // Gold bottom trim bar (full width)
+            {shapeType:'rectangle',fill:'#D4AF37',x:0,y:98.8,w:100,h:1.2},
+            // Gold "Gold Leaf" accent separator lines in content area
+            {shapeType:'rectangle',fill:'#D4AF37',x:23,y:34,w:74,h:0.45},
+            {shapeType:'rectangle',fill:'#D4AF37',x:23,y:64,w:74,h:0.45},
           ]
         },
+
+        // ── 5. Industrial (The Blueprint) ──
+        // Top-heavy: thick orange bar covers top 30% (title zone). Grid lines below.
         {
           id:'industrial', label:'Industrial',
           bg:'#2F4F4F', swatch:'#2F4F4F',
           textColor:'#E8E8E8', headingColor:'#FFFFFF', accentColor:'#FF8C00',
           decorations:[
-            {shapeType:'rectangle',fill:'#FF8C00',x:0,y:17,w:100,h:2.5},
-            {shapeType:'rectangle',fill:'#FF8C00',x:0,y:88,w:100,h:1.5},
+            // Thick top bar — title zone (30% of slide height)
+            {shapeType:'rectangle',fill:'#FF8C00',x:0,y:0,w:100,h:30},
+            // Dark shadow bar beneath it (depth effect)
+            {shapeType:'rectangle',fill:'#CC6600',x:0,y:30,w:100,h:2.2},
+            // Secondary thin orange rule
+            {shapeType:'rectangle',fill:'#FF8C00',x:0,y:33,w:100,h:0.9},
+            // Vertical alignment guide (far left grid line)
+            {shapeType:'rectangle',fill:'#FF8C00',x:5,y:33,w:0.4,h:64,opacity:30},
           ]
         },
+
+        // ── 6. The Newsroom (The Headline) ──
+        // "Lower Thirds" red bar at bottom. Title sits in a solid red highlight box at top.
         {
           id:'the_newsroom', label:'The Newsroom',
           bg:'#FFFFFF', swatch:'#FFFFFF',
           textColor:'#1A1A1A', headingColor:'#FFFFFF', accentColor:'#CE1126',
           decorations:[
-            {shapeType:'rectangle',fill:'#CE1126',x:0,y:0,w:100,h:18},
-            {shapeType:'rectangle',fill:'#CE1126',x:0,y:0,w:3.5,h:100},
+            // Title highlight box — "news ticker" style, top
+            {shapeType:'rectangle',fill:'#CE1126',x:0,y:0,w:68,h:19},
+            // Black accent block beside title box (channel logo area)
+            {shapeType:'rectangle',fill:'#111111',x:68,y:0,w:5,h:19},
+            // Thin black rule separating title band from body
+            {shapeType:'rectangle',fill:'#111111',x:0,y:19,w:100,h:0.5},
+            // Lower third bar at bottom
+            {shapeType:'rectangle',fill:'#CE1126',x:0,y:82,w:100,h:18},
+            // Thin black rule above lower third
+            {shapeType:'rectangle',fill:'#111111',x:0,y:81.5,w:100,h:0.5},
           ]
         },
+
+        // ── 7. Earth Exploration (The Field Journal) ──
+        // Large faint "compass" circle. Rounded frame. Organic feel.
         {
           id:'earth_exploration', label:'Earth Exploration',
           bg:'#2D5A27', swatch:'#2D5A27',
           textColor:'#C2B280', headingColor:'#F5ECD7', accentColor:'#C2B280',
           decorations:[
-            {shapeType:'rectangle',fill:'#C2B280',x:2,y:2,w:96,h:96,radius:12,opacity:18},
+            // Large semi-transparent compass/map circle (organic focal point)
+            {shapeType:'circle',fill:'#C2B280',x:18,y:-18,w:72,h:136,opacity:11},
+            // Outer rounded frame
+            {shapeType:'rectangle',fill:'transparent',stroke:'#C2B280',strokeWidth:1.5,x:3,y:3,w:94,h:94,radius:16},
+            // Inner rounded frame (subtle)
+            {shapeType:'rectangle',fill:'transparent',stroke:'#8B7355',strokeWidth:0.6,x:5,y:5,w:90,h:90,radius:13},
           ]
         },
+
+        // ── 8. Bold Impact (The Poster) ──
+        // Large black diagonal triangle covering bottom-left ~1/3. Aggressive geometry.
         {
           id:'bold_impact', label:'Bold Impact',
           bg:'#FFEF00', swatch:'#FFEF00',
           textColor:'#000000', headingColor:'#000000', accentColor:'#000000',
           decorations:[
-            {shapeType:'triangle',fill:'#000000',x:58,y:52,w:42,h:48},
+            // Large right-angle diagonal triangle — bottom-left (extends slightly off-canvas, clipped)
+            {shapeType:'triangle',fill:'#000000',x:-4,y:36,w:58,h:64},
+            // Bold accent rectangle — top-right corner
+            {shapeType:'rectangle',fill:'#000000',x:84,y:2,w:14,h:6},
+            // Thin black rule under the accent rect
+            {shapeType:'rectangle',fill:'#000000',x:84,y:8.5,w:14,h:0.5},
           ]
         },
       ];
@@ -1236,7 +1324,9 @@
         return (theme.decorations||[]).map(spec => ({
           id: genId(), type:'shape',
           shapeType: spec.shapeType||'rectangle',
-          fill: spec.fill, stroke:'transparent', strokeWidth:0,
+          fill: spec.fill||'transparent',
+          stroke: spec.stroke||'transparent',
+          strokeWidth: spec.strokeWidth||0,
           radius: spec.radius||0,
           x:spec.x, y:spec.y, w:spec.w, h:spec.h,
           opacity: spec.opacity!=null ? spec.opacity : 100,
@@ -1376,7 +1466,7 @@
                 pSlide.addImage({x:ox,y:oy,w:ow,h:oh,data:block.imageUrl,sizing:{type:block.imageFit==='contain'?'contain':'crop',w:ow,h:oh}});
               } else if (block.type==='shape') {
                 const shType = PPTX_SHAPE_MAP[block.shapeType||'rectangle']||'rect';
-                const shFill = {color:_hexNoHash(block.fill||'#3b82f6')};
+                const shFill = (!block.fill||block.fill==='transparent'||block.fill==='none') ? {type:'none'} : {color:_hexNoHash(block.fill)};
                 const shLine = block.strokeWidth>0 ? {color:_hexNoHash(block.stroke||'#000000'),width:block.strokeWidth} : {type:'none'};
                 // Use roundRect for rectangles with a radius, otherwise use the mapped shape
                 if (shType==='rect' && block.radius>0) {
