@@ -819,6 +819,88 @@ body {
   margin-top: 2px;
 }
 
+/* ─── PAUSE / RESUME BUTTONS ─────────────────────────────── */
+.btn-session-pause {
+  padding: 5px 10px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 6px;
+  color: var(--yellow);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.btn-session-pause:hover {
+  background: rgba(251, 191, 36, 0.2);
+}
+
+.btn-session-resume {
+  padding: 5px 10px;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 6px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.btn-session-resume:hover {
+  background: rgba(74, 222, 128, 0.2);
+}
+
+.btn-session-pause:disabled,
+.btn-session-resume:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Paused state: amber dot */
+.session-status-dot.paused {
+  background: var(--yellow);
+  box-shadow: 0 0 5px rgba(251, 191, 36, 0.6);
+  animation: pulse-yellow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-yellow {
+  0%, 100% { box-shadow: 0 0 4px rgba(251, 191, 36, 0.4); }
+  50%       { box-shadow: 0 0 9px rgba(251, 191, 36, 0.8); }
+}
+
+/* Pause / resume trail markers */
+.trail-pause-marker,
+.trail-resume-marker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  margin: 3px 0;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.trail-pause-marker {
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  color: var(--yellow);
+}
+
+.trail-resume-marker {
+  background: rgba(74, 222, 128, 0.07);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  color: var(--green);
+}
+
+.trail-marker-label {
+  flex: 1;
+}
+
 /* ─── LOADING SPINNER ────────────────────────────────────── */
 .spinner {
   width: 11px;

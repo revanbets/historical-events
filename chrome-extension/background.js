@@ -76,8 +76,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
-  const { hdb_session_active } = await getStorage(['hdb_session_active']);
-  if (!hdb_session_active) return;
+  const { hdb_session_active, hdb_session_paused } = await getStorage(['hdb_session_active', 'hdb_session_paused']);
+  if (!hdb_session_active || hdb_session_paused) return; // skip if no session or session is paused
 
   const fromUrl = lastUrlByTab[tabId] || null;
   lastUrlByTab[tabId] = tab.url;
@@ -202,14 +202,16 @@ async function handleMessage(msg, sender) {
         'hdb_current_trail',
         'hdb_captured_items',
         'hdb_session_active',
-        'hdb_session_name'
+        'hdb_session_name',
+        'hdb_session_paused'
       ]);
       return {
         session: data.hdb_ext_session || null,
         trail: data.hdb_current_trail || [],
         capturedItems: data.hdb_captured_items || [],
         sessionActive: data.hdb_session_active || false,
-        sessionName: data.hdb_session_name || ''
+        sessionName: data.hdb_session_name || '',
+        sessionPaused: data.hdb_session_paused || false
       };
     }
 
@@ -224,6 +226,7 @@ async function handleMessage(msg, sender) {
       await setStorage({
         hdb_ext_session: null,
         hdb_session_active: false,
+        hdb_session_paused: false,
         hdb_session_name: '',
         hdb_current_trail: [],
         hdb_captured_items: []
@@ -236,6 +239,7 @@ async function handleMessage(msg, sender) {
       const name = msg.name || generateSessionName();
       await setStorage({
         hdb_session_active: true,
+        hdb_session_paused: false,
         hdb_session_name: name,
         hdb_current_trail: [],
         hdb_captured_items: []
@@ -280,6 +284,7 @@ async function handleMessage(msg, sender) {
 
       await setStorage({
         hdb_session_active: false,
+        hdb_session_paused: false,
         hdb_session_name: '',
         hdb_current_trail: [],
         hdb_captured_items: []
@@ -354,6 +359,36 @@ async function handleMessage(msg, sender) {
       await setStorage({ hdb_captured_items: updated });
 
       return { ok: true, eventId: eventObj.id, event: saved };
+    }
+
+    case 'PAUSE_SESSION': {
+      const { hdb_session_active, hdb_current_trail: trail1 = [] } = await getStorage(['hdb_session_active', 'hdb_current_trail']);
+      if (!hdb_session_active) throw new Error('No active session to pause');
+      const pauseMarker = {
+        id: generateCaptureId(),
+        type: 'pause',
+        url: null,
+        title: 'Session paused',
+        favIconUrl: '',
+        timestamp: new Date().toISOString()
+      };
+      await setStorage({ hdb_session_paused: true, hdb_current_trail: [...trail1, pauseMarker] });
+      return { ok: true };
+    }
+
+    case 'RESUME_SESSION': {
+      const { hdb_current_trail: trail2 = [] } = await getStorage(['hdb_current_trail']);
+      const resumeMarker = {
+        id: generateCaptureId(),
+        type: 'resume',
+        url: null,
+        title: 'Session resumed',
+        favIconUrl: '',
+        timestamp: new Date().toISOString()
+      };
+      await setStorage({ hdb_session_paused: false, hdb_current_trail: [...trail2, resumeMarker] });
+      lastUrlByTab = {}; // reset so next page visited is freshly added
+      return { ok: true };
     }
 
     case 'CLEAR_TRAIL': {

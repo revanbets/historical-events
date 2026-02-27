@@ -47,7 +47,8 @@ let state = {
   trail: [],
   capturedItems: [],
   sessionActive: false,
-  sessionName: ''
+  sessionName: '',
+  sessionPaused: false
 };
 
 let currentTab = 'captured';
@@ -120,23 +121,41 @@ function renderSessionBar() {
   const countDisplay = $('session-trail-count');
   const toggleBtn = $('session-toggle-btn');
   const renameBtn = $('rename-session-btn');
+  const pauseBtn = $('session-pause-btn');
 
   if (state.sessionActive) {
     dot.classList.add('active');
-    nameDisplay.textContent = state.sessionName || 'Active session';
-    const pagesCount = state.trail.length;
-    countDisplay.textContent = `${pagesCount} page${pagesCount !== 1 ? 's' : ''} visited`;
+    // Count only real pages (not pause/resume markers)
+    const realPages = (state.trail || []).filter(e => e.type !== 'pause' && e.type !== 'resume');
+    countDisplay.textContent = `${realPages.length} page${realPages.length !== 1 ? 's' : ''} visited`;
     countDisplay.style.display = '';
-    toggleBtn.textContent = 'End Session';
+    toggleBtn.textContent = 'End';
     toggleBtn.className = 'btn-session-end';
     renameBtn.style.display = '';
+    pauseBtn.style.display = '';
+
+    if (state.sessionPaused) {
+      dot.classList.add('paused');
+      nameDisplay.textContent = '⏸ ' + (state.sessionName || 'Session paused');
+      pauseBtn.textContent = '▶ Resume';
+      pauseBtn.className = 'btn-session-resume';
+      pauseBtn.title = 'Resume session — trail tracking will restart';
+    } else {
+      dot.classList.remove('paused');
+      nameDisplay.textContent = state.sessionName || 'Active session';
+      pauseBtn.textContent = '⏸';
+      pauseBtn.className = 'btn-session-pause';
+      pauseBtn.title = 'Pause session — stops tracking pages until resumed';
+    }
   } else {
     dot.classList.remove('active');
+    dot.classList.remove('paused');
     nameDisplay.textContent = 'No active session';
     countDisplay.style.display = 'none';
     toggleBtn.textContent = 'Start Session';
     toggleBtn.className = 'btn-session-start';
     renameBtn.style.display = 'none';
+    pauseBtn.style.display = 'none';
   }
 }
 
@@ -243,8 +262,34 @@ function renderTrail() {
   empty.style.display = 'none';
   list.style.display = '';
 
+  // Track which non-marker entry is "first" for the green dot
+  const realEntries = trail.filter(e => e.type !== 'pause' && e.type !== 'resume');
+  const firstRealId = realEntries[0]?.id;
+
   list.innerHTML = trail.map((entry, idx) => {
-    const isFirst = idx === 0;
+    // ── Pause marker ──
+    if (entry.type === 'pause') {
+      return `
+        <div class="trail-pause-marker">
+          <span>⏸</span>
+          <span class="trail-marker-label">Session paused</span>
+          <span class="trail-time">${timeAgo(entry.timestamp)}</span>
+        </div>
+      `;
+    }
+    // ── Resume marker ──
+    if (entry.type === 'resume') {
+      return `
+        <div class="trail-resume-marker">
+          <span>▶</span>
+          <span class="trail-marker-label">Session resumed</span>
+          <span class="trail-time">${timeAgo(entry.timestamp)}</span>
+        </div>
+      `;
+    }
+
+    // ── Regular trail entry ──
+    const isFirst = entry.id === firstRealId;
     const isLast = idx === trail.length - 1;
     const faviconHtml = entry.favIconUrl
       ? `<img class="trail-favicon" src="${escHtml(entry.favIconUrl)}" alt="" onerror="this.style.display='none'" />`
@@ -314,6 +359,9 @@ function bindEvents() {
       $('tab-' + currentTab).style.display = '';
     });
   });
+
+  // Pause / Resume session
+  $('session-pause-btn').addEventListener('click', handlePauseResume);
 
   // Clear trail
   $('clear-trail-btn').addEventListener('click', handleClearTrail);
@@ -385,6 +433,7 @@ async function handleSessionToggle() {
     try {
       const resp = await send({ type: 'START_SESSION' });
       state.sessionActive = true;
+      state.sessionPaused = false;
       state.sessionName = resp.name;
       state.trail = [];
       state.capturedItems = [];
@@ -485,6 +534,30 @@ async function handleDeleteCapture(itemId) {
     renderCapturedItems();
   } catch (e) {
     console.error('Delete failed:', e);
+  }
+}
+
+async function handlePauseResume() {
+  const btn = $('session-pause-btn');
+  btn.disabled = true;
+  try {
+    if (state.sessionPaused) {
+      await send({ type: 'RESUME_SESSION' });
+      state.sessionPaused = false;
+    } else {
+      await send({ type: 'PAUSE_SESSION' });
+      state.sessionPaused = true;
+    }
+    // Refresh trail to show the pause/resume marker
+    const fresh = await send({ type: 'GET_STATE' });
+    state.trail = fresh.trail;
+    state.sessionPaused = fresh.sessionPaused;
+    renderSessionBar();
+    renderTrail();
+  } catch(e) {
+    console.error('Pause/resume failed:', e);
+  } finally {
+    btn.disabled = false;
   }
 }
 

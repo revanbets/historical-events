@@ -744,7 +744,7 @@ function SessionsView({ username }) {
 
     // ── Process trail URLs not already in captures ────────────────────
     const capturedUrls = new Set(sessCaptures.map(c => c.url).filter(Boolean));
-    const trailOnly = sessTrail.filter(t => t.url && !capturedUrls.has(t.url));
+    const trailOnly = sessTrail.filter(t => t.url && !capturedUrls.has(t.url) && t.type !== 'pause' && t.type !== 'resume');
 
     for (let i = 0; i < trailOnly.length; i++) {
       const t = trailOnly[i];
