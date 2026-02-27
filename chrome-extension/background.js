@@ -340,17 +340,9 @@ async function handleMessage(msg, sender) {
       const captured = hdb_captured_items.find(i => i.id === msg.id);
       if (!captured) throw new Error('Capture item not found');
 
-      // Run AI analysis on the source URL
-      let aiData = null;
-      if (captured.url) {
-        try {
-          aiData = await analyzeWithBackend(captured.url, captured.text);
-        } catch (e) {
-          console.warn('[HDB] AI analysis failed, saving without it:', e.message);
-        }
-      }
-
-      const eventObj = buildEventObject(captured, aiData, session);
+      // Fast metadata-only save — no AI analysis.
+      // Use "Save Session to DB" in the companion app for full AI analysis of a whole session.
+      const eventObj = buildEventObject(captured, null, session);
       const saved = await saveEventToSupabase(eventObj);
 
       // Mark item as saved

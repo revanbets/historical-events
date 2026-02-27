@@ -562,8 +562,8 @@ function CaptureCard({ item, onDelete, onSaveToDb }) {
         {item.saved ? (
           <div style={{ ...S.row(6), color:'#4ade80', fontSize:'11px', fontWeight:700 }}>
             ✓ Saved
-            <a href={WEB_APP_URL} target="_blank" style={{ fontSize:'10px', color:'#60a5fa',
-              textDecoration:'none', opacity:0.7 }}>↗ View</a>
+            <a href={WEB_APP_URL + '#account'} target="_blank" style={{ fontSize:'10px', color:'#60a5fa',
+              textDecoration:'none', opacity:0.7 }} title="View in Account → My Uploads">↗ My Uploads</a>
           </div>
         ) : (
           <div style={{ ...S.col(4) }}>
@@ -573,7 +573,7 @@ function CaptureCard({ item, onDelete, onSaveToDb }) {
                 fontSize:'11px', fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:5,
                 opacity: loading ? 0.6 : 1 }}
               onClick={handleSave} disabled={loading}>
-              {loading ? <><span className="spinner"/>Analyzing…</> : 'Add to DB'}
+              {loading ? <><span className="spinner"/>Saving…</> : 'Add to DB'}
             </button>
             {error && <span style={{ fontSize:'10px', color:'#f87171' }}>{error}</span>}
           </div>
@@ -652,6 +652,8 @@ function SessionsView({ username }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  // savingState: { [sessId]: { progress: string, done: boolean, created: number, error: string } }
+  const [savingState, setSavingState] = useState({});
 
   async function load() {
     setLoading(true);
@@ -666,6 +668,139 @@ function SessionsView({ username }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  // ── Analyze & save a full session to the events DB ───────────────────
+  async function saveSessionToDb(sess) {
+    const sessId = sess.id;
+    const sessCaptures = Array.isArray(sess.captured_items) ? sess.captured_items : [];
+    const sessTrail    = Array.isArray(sess.trail)          ? sess.trail          : [];
+
+    function setProgress(msg) {
+      setSavingState(s => ({ ...s, [sessId]: { ...s[sessId], progress: msg, done: false } }));
+    }
+
+    setSavingState(s => ({ ...s, [sessId]: { progress: 'Starting…', done: false, created: 0 } }));
+    let created = 0;
+
+    // ── Process captured items ────────────────────────────────────────
+    for (let i = 0; i < sessCaptures.length; i++) {
+      const c = sessCaptures[i];
+      setProgress(`Analyzing capture ${i + 1} of ${sessCaptures.length}…`);
+      try {
+        let aiData = null;
+        if (c.url) {
+          const resp = await fetch(`${API_BASE}/api/analyze-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: c.url, mode: 'full', skip_frames: true,
+              skip_analysis: false, search_focus: c.text || '' })
+          });
+          if (resp.ok) { const d = await resp.json(); aiData = d.record || d; }
+        }
+
+        const isVideo = isVideoUrl(c.url);
+        let title = c.pageTitle || domain(c.url) || 'Captured item';
+        if (c.text) { const fl = c.text.split('\n')[0].trim().slice(0,120); if (fl.length > 10) title = fl; }
+        if (aiData?.title) title = aiData.title;
+
+        const eventObj = {
+          id: genEventId(),
+          title,
+          description: c.text || aiData?.description || '',
+          date: '',
+          date_uploaded: new Date().toISOString(),
+          topics: aiData?.topics || [],
+          people: aiData?.people || [],
+          organizations: aiData?.organizations || [],
+          links: c.url ? [c.url] : [],
+          research_level: 2,
+          source_type: 'Session Capture',
+          source: c.pageTitle || sess.session_name || '',
+          primary_source: '',
+          source_sheet: '',
+          main_link: c.url || '',
+          connections: [],
+          ai_summary: aiData?.summary || '',
+          is_major_event: false,
+          uploaded_by: username,
+          is_public: true,
+          event_status: 'unverified',
+          backend_id: aiData?.id || null,
+          ai_analyzed: !!aiData,
+          analysis_mode: aiData ? 'url' : null,
+          has_frames: false, frames_data: [], visual_content: '',
+          transcript_file: null, attachments: [], backend_file_name: null,
+          is_video: isVideo,
+          transcription: c.timecode ? { timecode: c.timecode, url: c.url } : null
+        };
+
+        await sbFetch('/events', { method: 'POST', prefer: 'return=representation',
+          body: JSON.stringify(eventObj) });
+        created++;
+      } catch(e) {
+        console.warn('[HDB] Failed to save session capture:', e.message);
+      }
+    }
+
+    // ── Process trail URLs not already in captures ────────────────────
+    const capturedUrls = new Set(sessCaptures.map(c => c.url).filter(Boolean));
+    const trailOnly = sessTrail.filter(t => t.url && !capturedUrls.has(t.url));
+
+    for (let i = 0; i < trailOnly.length; i++) {
+      const t = trailOnly[i];
+      setProgress(`Analyzing trail page ${i + 1} of ${trailOnly.length}…`);
+      try {
+        const resp = await fetch(`${API_BASE}/api/analyze-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: t.url, mode: 'full', skip_frames: true, skip_analysis: false })
+        });
+        if (!resp.ok) continue;
+        const d = await resp.json();
+        const aiData = d.record || d;
+        if (!aiData || !aiData.title) continue; // skip uninformative pages
+
+        const eventObj = {
+          id: genEventId(),
+          title: aiData.title || t.title || t.url,
+          description: aiData.description || '',
+          date: '',
+          date_uploaded: new Date().toISOString(),
+          topics: aiData.topics || [],
+          people: aiData.people || [],
+          organizations: aiData.organizations || [],
+          links: [t.url],
+          research_level: 2,
+          source_type: 'Session Trail',
+          source: t.title || sess.session_name || '',
+          primary_source: '',
+          source_sheet: '',
+          main_link: t.url,
+          connections: [],
+          ai_summary: aiData.summary || '',
+          is_major_event: false,
+          uploaded_by: username,
+          is_public: true,
+          event_status: 'unverified',
+          backend_id: aiData.id || null,
+          ai_analyzed: true,
+          analysis_mode: 'url',
+          has_frames: false, frames_data: [], visual_content: '',
+          transcript_file: null, attachments: [], backend_file_name: null,
+          is_video: isVideoUrl(t.url),
+          transcription: null
+        };
+
+        await sbFetch('/events', { method: 'POST', prefer: 'return=representation',
+          body: JSON.stringify(eventObj) });
+        created++;
+      } catch(e) {
+        console.warn('[HDB] Failed to save trail page:', e.message);
+      }
+    }
+
+    setSavingState(s => ({ ...s, [sessId]: { done: true, created, progress: '' } }));
+  }
 
   if (loading) {
     return <div style={{ padding:'1.5rem', color:'#8b95b0', fontSize:'13px' }}>Loading sessions…</div>;
@@ -695,6 +830,7 @@ function SessionsView({ username }) {
         const trail = Array.isArray(sess.trail) ? sess.trail : [];
         const captures = Array.isArray(sess.captured_items) ? sess.captured_items : [];
         const isOpen = expanded === sess.id;
+        const saving = savingState[sess.id];
         return (
           <div key={sess.id} style={{ ...S.card, marginBottom:'8px' }}>
             {/* Header */}
@@ -726,6 +862,45 @@ function SessionsView({ username }) {
             {/* Expanded content */}
             {isOpen && (
               <div style={{ borderTop:'1px solid rgba(96,165,250,0.1)', padding:'10px 12px 12px' }}>
+
+                {/* ── Analyze & Save Session button ── */}
+                <div style={{ marginBottom:'12px', padding:'10px 12px',
+                  background:'rgba(96,165,250,0.04)', border:'1px solid rgba(96,165,250,0.15)',
+                  borderRadius:'8px' }}>
+                  {saving?.done ? (
+                    <div style={{ ...S.row(8) }}>
+                      <span style={{ fontSize:'11px', color:'#4ade80', fontWeight:700 }}>
+                        ✓ {saving.created} event{saving.created !== 1 ? 's' : ''} created
+                      </span>
+                      <a href={WEB_APP_URL + '#account'} target="_blank"
+                        style={{ fontSize:'10px', color:'#60a5fa', textDecoration:'none' }}>
+                        → View in My Uploads
+                      </a>
+                    </div>
+                  ) : saving?.progress ? (
+                    <div style={{ ...S.row(8) }}>
+                      <span className="spinner" style={{ width:11, height:11 }}/>
+                      <span style={{ fontSize:'11px', color:'#8b95b0' }}>{saving.progress}</span>
+                    </div>
+                  ) : (
+                    <div style={{ ...S.row(8), justifyContent:'space-between' }}>
+                      <div>
+                        <div style={{ fontSize:'11px', fontWeight:700, color:'#e2e8f8', marginBottom:'2px' }}>
+                          🤖 Analyze & Save to DB
+                        </div>
+                        <div style={{ fontSize:'10px', color:'#8b95b0' }}>
+                          AI analyzes every capture and trail page — creates full event records with topics, people, and organizations.
+                        </div>
+                      </div>
+                      <button
+                        style={{ ...S.btnPrimary, padding:'6px 12px', fontSize:'11px', flexShrink:0, marginLeft:'10px' }}
+                        onClick={e => { e.stopPropagation(); saveSessionToDb(sess); }}>
+                        Analyze
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Trail */}
                 {trail.length > 0 && (
                   <div style={{ marginBottom:'10px' }}>
@@ -734,7 +909,7 @@ function SessionsView({ username }) {
                       <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'7px', padding:'3px 0' }}>
                         <div style={{ display:'flex', flexDirection:'column', alignItems:'center',
                           paddingTop:'3px', flexShrink:0, width:'12px' }}>
-                          <div style={{ width:'7px', height:'7px', borderRadius:'50',
+                          <div style={{ width:'7px', height:'7px', borderRadius:'50%',
                             background: i===0?'#4ade80':'rgba(96,165,250,0.4)' }}/>
                           {i<trail.length-1 && <div style={{ width:'1px', height:'14px',
                             background:'rgba(96,165,250,0.12)', margin:'2px 0' }}/>}
@@ -742,7 +917,8 @@ function SessionsView({ username }) {
                         <div style={{ flex:1, minWidth:0 }}>
                           <a href={entry.url} target="_blank" style={{ fontSize:'11px', color:'#c0c7d8',
                             textDecoration:'none', overflow:'hidden', textOverflow:'ellipsis',
-                            whiteSpace:'nowrap', display:'block' }}>
+                            whiteSpace:'nowrap', display:'block' }}
+                            title={entry.url}>
                             {trunc(entry.title || entry.url, 44)}
                           </a>
                           <div style={{ fontSize:'9px', color:'#4a5270', fontFamily:'monospace' }}>
@@ -775,12 +951,15 @@ function SessionsView({ username }) {
                               WebkitBoxOrient:'vertical', overflow:'hidden' }}>
                               {c.text || c.url}
                             </div>
-                            <div style={{ ...S.row(6), marginTop:'3px' }}>
-                              <span style={{ fontSize:'9px', color:'#4a5270',
-                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                                maxWidth:'160px' }}>
-                                {trunc(c.pageTitle || domain(c.url), 32)}
-                              </span>
+                            <div style={{ ...S.row(6), marginTop:'3px', flexWrap:'wrap' }}>
+                              {c.url && (
+                                <a href={c.url} target="_blank" style={{ fontSize:'9px', color:'#60a5fa',
+                                  textDecoration:'none', overflow:'hidden', textOverflow:'ellipsis',
+                                  whiteSpace:'nowrap', maxWidth:'160px' }}
+                                  title={c.url}>
+                                  {trunc(c.pageTitle || domain(c.url), 32)}
+                                </a>
+                              )}
                               {c.timecode && (
                                 <span style={{ fontSize:'9px', color:'#c4b5fd',
                                   background:'rgba(196,181,253,0.1)', border:'1px solid rgba(196,181,253,0.2)',
@@ -788,7 +967,7 @@ function SessionsView({ username }) {
                                   ⏱ {c.timecode}
                                 </span>
                               )}
-                              {c.saved && <span style={{ fontSize:'9px', color:'#4ade80', fontWeight:700 }}>✓</span>}
+                              {c.saved && <span style={{ fontSize:'9px', color:'#4ade80', fontWeight:700 }}>✓ saved</span>}
                             </div>
                           </div>
                         </div>
@@ -938,36 +1117,24 @@ function App() {
     const item = captures.find(i => i.id === id);
     if (!item) throw new Error('Item not found');
 
-    // AI analysis via backend
-    let aiData = null;
-    if (item.url) {
-      const resp = await fetch(`${API_BASE}/api/analyze-url`, {
-        method:'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ url: item.url, mode:'full', skip_frames:true,
-          skip_analysis:false, search_focus: item.text || '' })
-      });
-      if (resp.ok) { const d = await resp.json(); aiData = d.record || d; }
-    }
-
-    // Build event object
+    // Fast metadata-only save — no AI analysis.
+    // Use "Analyze & Save to DB" on a saved session for full AI analysis.
     const isVideo = isVideoUrl(item.url);
-    let title = item.pageTitle || item.url;
+    let title = item.pageTitle || domain(item.url) || item.url || 'Captured item';
     if (item.text) {
       const fl = item.text.split('\n')[0].trim().slice(0, 120);
       if (fl.length > 10) title = fl;
     }
-    if (aiData?.title) title = aiData.title;
 
     const eventObj = {
       id: genEventId(),
       title,
-      description: item.text || aiData?.description || '',
+      description: item.text || '',
       date: '',
       date_uploaded: new Date().toISOString(),
-      topics: aiData?.topics || [],
-      people: aiData?.people || [],
-      organizations: aiData?.organizations || [],
+      topics: [],
+      people: [],
+      organizations: [],
       links: item.url ? [item.url] : [],
       research_level: 2,
       source_type: 'Companion Capture',
@@ -976,14 +1143,14 @@ function App() {
       source_sheet: '',
       main_link: item.url || '',
       connections: [],
-      ai_summary: aiData?.summary || '',
+      ai_summary: '',
       is_major_event: false,
       uploaded_by: session.username,
       is_public: true,
       event_status: 'unverified',
-      backend_id: aiData?.id || null,
-      ai_analyzed: !!aiData,
-      analysis_mode: aiData ? 'url' : null,
+      backend_id: null,
+      ai_analyzed: false,
+      analysis_mode: null,
       has_frames: false, frames_data: [], visual_content: '',
       transcript_file: null, attachments: [], backend_file_name: null,
       is_video: isVideo,

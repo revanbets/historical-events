@@ -191,7 +191,7 @@ function renderCaptureCard(item) {
   const savedHtml = item.saved
     ? `<div class="saved-badge">
         ✓ Saved
-        <a href="${WEB_APP_URL}" target="_blank" title="Open database">↗ View</a>
+        <a href="${WEB_APP_URL}#account" target="_blank" title="View in Account → My Uploads">↗ My Uploads</a>
        </div>`
     : `<button class="btn-save-db" data-id="${escHtml(item.id)}">
         <span>Add to DB</span>
@@ -450,7 +450,7 @@ async function handleSaveToDb(itemId) {
 
   // Show loading state
   saveBtn.disabled = true;
-  saveBtn.innerHTML = '<span class="spinner"></span><span>Analyzing…</span>';
+  saveBtn.innerHTML = '<span class="spinner"></span><span>Saving…</span>';
 
   try {
     const resp = await send({ type: 'SAVE_TO_DB', id: itemId });
@@ -465,7 +465,7 @@ async function handleSaveToDb(itemId) {
     footer.querySelector('.btn-save-db').outerHTML = `
       <div class="saved-badge">
         ✓ Saved
-        <a href="${WEB_APP_URL}" target="_blank" title="Open database">↗ View</a>
+        <a href="${WEB_APP_URL}#account" target="_blank" title="View in Account → My Uploads">↗ My Uploads</a>
       </div>
     `;
     card.classList.add('saved');
