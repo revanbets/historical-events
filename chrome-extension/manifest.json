@@ -3,7 +3,7 @@
   "name": "Historical Events Research Assistant",
   "short_name": "HDB Research",
   "version": "1.0.0",
-  "description": "Capture URLs, highlighted text, and video timecodes while researching — then save directly to the Historical Events Database with AI analysis.",
+  "description": "Capture URLs, highlighted text, and video timecodes — save to the Historical Events Database with AI analysis.",
   "permissions": [
     "storage",
     "tabs",
