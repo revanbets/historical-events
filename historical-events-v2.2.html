@@ -463,6 +463,13 @@
       const [rsLoaded, setRsLoaded] = React.useState(false);
       const [rsExpanded, setRsExpanded] = React.useState(null);
       const [rsSaving, setRsSaving] = React.useState({});
+      const [rsCaptureModal, setRsCaptureModal] = React.useState(null);
+      const [rsCaptureAnalyzing, setRsCaptureAnalyzing] = React.useState(false);
+      const [rsCaptureAiResult, setRsCaptureAiResult] = React.useState(null);
+      const [rsTrailModal, setRsTrailModal] = React.useState(null);
+      const [rsSelectMode, setRsSelectMode] = React.useState(false);
+      const [rsSelected, setRsSelected] = React.useState(new Set());
+      const [rsCombining, setRsCombining] = React.useState(false);
 
       async function rsLoad() {
         setRsLoading(true);
@@ -587,6 +594,55 @@
         setRsSaving(s => ({ ...s, [sid]: { done: true, created, progress: '' } }));
       }
 
+      async function rsCombineSelected() {
+        const selected = rsSessions.filter(s => rsSelected.has(s.id));
+        if (selected.length < 2) return;
+        setRsCombining(true);
+        const allTrail = selected.flatMap(s => Array.isArray(s.trail) ? s.trail : []);
+        const trailByUrl = new Map();
+        allTrail.forEach(t => { if (t.url && !trailByUrl.has(t.url)) trailByUrl.set(t.url, t); });
+        const mergedTrail = Array.from(trailByUrl.values()).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+        const allCaptures = selected.flatMap(s => Array.isArray(s.captured_items) ? s.captured_items : []);
+        const capKeys = new Set();
+        const mergedCaptures = allCaptures.filter(c => {
+          const key = c.id || (c.url + '||' + (c.text||'').slice(0,60));
+          if (capKeys.has(key)) return false;
+          capKeys.add(key); return true;
+        });
+        const names = selected.map(s => s.session_name || 'Unnamed').join(' + ');
+        const starts = selected.map(s => s.started_at).filter(Boolean).sort();
+        const ends = selected.map(s => s.ended_at).filter(Boolean).sort();
+        const newSess = {
+          session_name: 'Combined: ' + names,
+          uploaded_by: currentUser.username,
+          started_at: starts[0] || new Date().toISOString(),
+          ended_at: ends[ends.length-1] || new Date().toISOString(),
+          trail: mergedTrail,
+          captured_items: mergedCaptures
+        };
+        try {
+          await supabaseClient.from('research_sessions').insert(newSess);
+          setRsSelectMode(false);
+          setRsSelected(new Set());
+          await rsLoad();
+        } catch(e) { console.error('[HDB] Combine failed:', e); }
+        setRsCombining(false);
+      }
+
+      async function rsCaptureAnalyze(capture) {
+        setRsCaptureAnalyzing(true);
+        setRsCaptureAiResult(null);
+        try {
+          const r = await fetch(API_BASE + '/api/analyze-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: capture.url, mode: 'full', skip_frames: true, skip_analysis: false, search_focus: capture.text || '' })
+          });
+          if (r.ok) { const d = await r.json(); setRsCaptureAiResult(d.record || d); }
+        } catch(e) { console.warn('[HDB] Single capture analysis failed:', e); }
+        setRsCaptureAnalyzing(false);
+      }
+
       const fmtDate = iso => iso
         ? new Date(iso).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
         : '';
@@ -597,8 +653,18 @@
           <div style={{display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem', flexWrap:'wrap'}}>
             <span style={{fontSize:'1.1rem', fontWeight:700, color:'#e2e8f8'}}>&#128506; Research Sessions</span>
             <span style={{fontSize:'0.72rem', color:'#8b92b0', background:'rgba(96,165,250,0.08)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:'6px', padding:'2px 8px'}}>Chrome Extension &amp; Companion App</span>
-            <button onClick={()=>{setRsLoaded(false);setRsSessions([]);rsLoad();}}
-              style={{marginLeft:'auto', background:'transparent', border:'1px solid rgba(96,165,250,0.25)', borderRadius:'6px', color:'#60a5fa', fontSize:'0.75rem', padding:'4px 10px', cursor:'pointer'}}>&#8635; Refresh</button>
+          {rsSelectMode && rsSelected.size >= 2 && (
+            <button onClick={rsCombineSelected} disabled={rsCombining}
+              style={{background:'linear-gradient(135deg,#3b82f6,#6366f1)', border:'none', borderRadius:'6px', color:'white', fontSize:'0.75rem', fontWeight:700, padding:'4px 12px', cursor:'pointer', opacity:rsCombining?0.6:1}}>
+              {rsCombining ? 'Combining\u2026' : '\uD83D\uDD17 Combine ' + rsSelected.size + ' Sessions'}
+            </button>
+          )}
+          <button onClick={()=>{ setRsSelectMode(m=>!m); setRsSelected(new Set()); }}
+            style={{background: rsSelectMode ? 'rgba(96,165,250,0.15)' : 'transparent', border:'1px solid rgba(96,165,250,0.25)', borderRadius:'6px', color:'#60a5fa', fontSize:'0.75rem', fontWeight: rsSelectMode ? 700 : 400, padding:'4px 10px', cursor:'pointer'}}>
+            {rsSelectMode ? '\u2715 Cancel' : '\u2610 Select to Combine'}
+          </button>
+          <button onClick={()=>{setRsLoaded(false);setRsSessions([]);rsLoad();}}
+            style={{marginLeft: rsSelectMode ? '0' : 'auto', background:'transparent', border:'1px solid rgba(96,165,250,0.25)', borderRadius:'6px', color:'#60a5fa', fontSize:'0.75rem', padding:'4px 10px', cursor:'pointer'}}>&#8635; Refresh</button>
           </div>
           <p style={{fontSize:'0.82rem', color:'#8b92b0', marginBottom:'1.5rem', lineHeight:1.6, maxWidth:'700px'}}>
             Sessions are saved when you click <strong style={{color:'#c0c7d8'}}>"End Session"</strong> in the Chrome Extension or Research Companion app.
@@ -631,10 +697,22 @@
               <div key={sess.id} style={{background:'rgba(15,19,40,0.7)', border:'1px solid rgba(96,165,250,0.15)', borderRadius:'10px', marginBottom:'0.75rem', overflow:'hidden'}}>
 
                 {/* ── Session header ── */}
-                <div onClick={()=>setRsExpanded(isExp ? null : sess.id)}
+                <div onClick={()=>{
+                    if (rsSelectMode) {
+                      setRsSelected(prev => {
+                        const next = new Set(prev);
+                        if (next.has(sess.id)) next.delete(sess.id); else next.add(sess.id);
+                        return next;
+                      });
+                    } else { setRsExpanded(isExp ? null : sess.id); }
+                  }}
                   style={{display:'flex', alignItems:'center', gap:'0.75rem', padding:'0.85rem 1rem', cursor:'pointer',
-                    background:isExp ? 'rgba(96,165,250,0.05)' : 'transparent', transition:'background 0.15s'}}>
-                  <span style={{fontSize:'0.9rem', color:'#8b92b0'}}>{isExp ? '&#9662;' : '&#9656;'}</span>
+                    background: rsSelectMode && rsSelected.has(sess.id) ? 'rgba(99,102,241,0.1)' : isExp ? 'rgba(96,165,250,0.05)' : 'transparent',
+                    outline: rsSelectMode && rsSelected.has(sess.id) ? '1px solid rgba(99,102,241,0.35)' : 'none',
+                    transition:'background 0.15s'}}>
+                  <span style={{fontSize:'0.9rem', color: rsSelectMode ? (rsSelected.has(sess.id) ? '#6366f1' : '#4a5270') : '#8b92b0'}}>
+                    {rsSelectMode ? (rsSelected.has(sess.id) ? '&#9745;' : '&#9744;') : (isExp ? '&#9662;' : '&#9656;')}
+                  </span>
                   <div style={{flex:1, minWidth:0}}>
                     <div style={{fontSize:'0.88rem', fontWeight:700, color:'#e2e8f8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
                       {sess.session_name || 'Unnamed Session'}
@@ -715,25 +793,36 @@
                             );
                             // Regular trail entry
                             const isFirst = entry.id === firstRealId;
+                            const trailCaptures = captures.filter(c => c.url && entry.url && c.url === entry.url);
+                            const hasTrailCaptures = trailCaptures.length > 0;
                             return (
                               <div key={entry.id || i} style={{display:'flex', alignItems:'flex-start', gap:'0.6rem', padding:'4px 0'}}>
                                 <div style={{display:'flex', flexDirection:'column', alignItems:'center', paddingTop:'4px', flexShrink:0, width:'14px'}}>
                                   <div style={{width:'7px', height:'7px', borderRadius:'50%',
-                                    background: isFirst ? '#4ade80' : 'rgba(96,165,250,0.45)',
-                                    boxShadow: isFirst ? '0 0 5px rgba(74,222,128,0.4)' : 'none'}}></div>
+                                    background: isFirst ? '#4ade80' : hasTrailCaptures ? '#c4b5fd' : 'rgba(96,165,250,0.45)',
+                                    boxShadow: isFirst ? '0 0 5px rgba(74,222,128,0.4)' : hasTrailCaptures ? '0 0 5px rgba(196,181,253,0.4)' : 'none'}}></div>
                                   {i < trail.length - 1 && (
                                     <div style={{width:'1px', height:'16px', background:'rgba(96,165,250,0.13)', margin:'2px 0'}}></div>
                                   )}
                                 </div>
                                 <div style={{flex:1, minWidth:0}}>
-                                  <a href={entry.url} target="_blank" rel="noreferrer"
-                                    style={{fontSize:'0.78rem', color:'#c0c7d8', textDecoration:'none',
-                                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block'}}
-                                    title={entry.url}
-                                    onMouseEnter={e => e.currentTarget.style.color = '#93c5fd'}
-                                    onMouseLeave={e => e.currentTarget.style.color = '#c0c7d8'}>
-                                    {entry.title || entry.url}
-                                  </a>
+                                  <div style={{display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap'}}>
+                                    <a href={entry.url} target="_blank" rel="noreferrer"
+                                      onClick={hasTrailCaptures ? e => { e.preventDefault(); setRsTrailModal({entry, captures: trailCaptures, session: sess}); } : undefined}
+                                      style={{fontSize:'0.78rem', color: hasTrailCaptures ? '#c4b5fd' : '#c0c7d8', textDecoration:'none',
+                                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block'}}
+                                      title={hasTrailCaptures ? 'Click to see ' + trailCaptures.length + ' highlight(s) from this page' : entry.url}
+                                      onMouseEnter={e => e.currentTarget.style.color = hasTrailCaptures ? '#e9d5ff' : '#93c5fd'}
+                                      onMouseLeave={e => e.currentTarget.style.color = hasTrailCaptures ? '#c4b5fd' : '#c0c7d8'}>
+                                      {entry.title || entry.url}
+                                    </a>
+                                    {hasTrailCaptures && (
+                                      <span style={{fontSize:'0.63rem', color:'#c4b5fd', background:'rgba(196,181,253,0.12)', border:'1px solid rgba(196,181,253,0.25)', borderRadius:'4px', padding:'1px 5px', flexShrink:0, fontWeight:600, cursor:'pointer'}}
+                                        onClick={()=>setRsTrailModal({entry, captures: trailCaptures, session: sess})}>
+                                        {trailCaptures.length} highlight{trailCaptures.length !== 1 ? 's' : ''}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div style={{fontSize:'0.67rem', color:'#4a5270', fontFamily:'monospace',
                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{entry.url}</div>
                                 </div>
@@ -754,8 +843,13 @@
                           Captured Items &mdash; {captures.length} item{captures.length !== 1 ? 's' : ''}
                         </div>
                         {captures.map((c, i) => (
-                          <div key={c.id || i} style={{background:'rgba(10,13,28,0.5)', border:'1px solid rgba(96,165,250,0.1)',
-                            borderRadius:'7px', padding:'0.6rem 0.8rem', marginBottom:'0.4rem'}}>
+                          <div key={c.id || i}
+                            onClick={() => { setRsCaptureModal({capture: c, session: sess}); setRsCaptureAiResult(null); }}
+                            style={{background:'rgba(10,13,28,0.5)', border:'1px solid rgba(96,165,250,0.1)',
+                              borderRadius:'7px', padding:'0.6rem 0.8rem', marginBottom:'0.4rem', cursor:'pointer',
+                              transition:'border-color 0.15s, background 0.15s'}}
+                            onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(96,165,250,0.3)';e.currentTarget.style.background='rgba(10,13,28,0.75)';}}
+                            onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(96,165,250,0.1)';e.currentTarget.style.background='rgba(10,13,28,0.5)';}}>
                             <div style={{display:'flex', alignItems:'flex-start', gap:'0.5rem'}}>
                               <span style={{fontSize:'0.85rem', flexShrink:0, paddingTop:'1px'}}>
                                 {c.type==='video' ? '&#127916;' : c.type==='url' ? '&#128279;' : '&#128221;'}
@@ -767,12 +861,9 @@
                                 </div>
                                 <div style={{display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap'}}>
                                   {c.url && (
-                                    <a href={c.url} target="_blank" rel="noreferrer"
-                                      style={{fontSize:'0.7rem', color:'#60a5fa', textDecoration:'none',
-                                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'260px'}}
-                                      title={c.url}>
+                                    <span style={{fontSize:'0.7rem', color:'#60a5fa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'260px'}}>
                                       {c.pageTitle || c.url}
-                                    </a>
+                                    </span>
                                   )}
                                   {c.timecode && (
                                     <span style={{fontSize:'0.68rem', color:'#c4b5fd', background:'rgba(196,181,253,0.1)',
@@ -782,11 +873,14 @@
                                   {c.saved && <span style={{fontSize:'0.68rem', color:'#4ade80', fontWeight:700, flexShrink:0}}>&#10003; saved</span>}
                                 </div>
                               </div>
-                              {c.timestamp && (
-                                <div style={{fontSize:'0.67rem', color:'#4a5270', flexShrink:0, paddingTop:'2px'}}>
-                                  {new Date(c.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
-                                </div>
-                              )}
+                              <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'3px', flexShrink:0}}>
+                                {c.timestamp && (
+                                  <div style={{fontSize:'0.67rem', color:'#4a5270', paddingTop:'2px'}}>
+                                    {new Date(c.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+                                  </div>
+                                )}
+                                <span style={{fontSize:'0.6rem', color:'#60a5fa', opacity:0.5}}>details \u2192</span>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -798,6 +892,154 @@
               </div>
             );
           })}
+
+          {/* ── Capture Detail Modal ── */}
+          {rsCaptureModal && (
+            <div style={{position:'fixed', inset:0, background:'rgba(5,8,20,0.88)', zIndex:9998, display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem'}}
+              onClick={()=>setRsCaptureModal(null)}>
+              <div style={{background:'rgba(15,19,40,0.98)', border:'1px solid rgba(96,165,250,0.25)', borderRadius:'14px', padding:'1.5rem', maxWidth:'620px', width:'100%', maxHeight:'82vh', overflowY:'auto', position:'relative'}}
+                onClick={e=>e.stopPropagation()}>
+                <button onClick={()=>setRsCaptureModal(null)}
+                  style={{position:'absolute', top:'0.75rem', right:'0.75rem', background:'transparent', border:'none', color:'#4a5270', fontSize:'1.1rem', cursor:'pointer', lineHeight:1}}>&#10005;</button>
+
+                {/* Header */}
+                <div style={{display:'flex', alignItems:'center', gap:'0.6rem', marginBottom:'1rem'}}>
+                  <span style={{fontSize:'1.2rem'}}>{rsCaptureModal.capture.type==='video' ? '\uD83C\uDFAC' : rsCaptureModal.capture.type==='url' ? '\uD83D\uDD17' : '\uD83D\uDCDD'}</span>
+                  <div>
+                    <div style={{fontSize:'0.85rem', fontWeight:700, color:'#e2e8f8'}}>Captured Item</div>
+                    <div style={{fontSize:'0.72rem', color:'#8b92b0'}}>{rsCaptureModal.session.session_name || 'Unnamed Session'}</div>
+                  </div>
+                  {rsCaptureModal.capture.saved && (
+                    <span style={{marginLeft:'auto', fontSize:'0.72rem', color:'#4ade80', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.2)', borderRadius:'5px', padding:'2px 8px', fontWeight:700}}>&#10003; Saved to DB</span>
+                  )}
+                </div>
+
+                {/* Metadata badges */}
+                <div style={{display:'flex', gap:'0.5rem', flexWrap:'wrap', marginBottom:'1rem'}}>
+                  {rsCaptureModal.capture.type && (
+                    <span style={{fontSize:'0.68rem', color:'#60a5fa', background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:'4px', padding:'2px 7px', fontWeight:600, textTransform:'uppercase'}}>{rsCaptureModal.capture.type}</span>
+                  )}
+                  {rsCaptureModal.capture.timecode && (
+                    <span style={{fontSize:'0.68rem', color:'#c4b5fd', background:'rgba(196,181,253,0.1)', border:'1px solid rgba(196,181,253,0.2)', borderRadius:'4px', padding:'2px 7px', fontFamily:'monospace', fontWeight:600}}>&#9201; {rsCaptureModal.capture.timecode}</span>
+                  )}
+                  {rsCaptureModal.capture.timestamp && (
+                    <span style={{fontSize:'0.68rem', color:'#4a5270', padding:'2px 0'}}>{new Date(rsCaptureModal.capture.timestamp).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                  )}
+                </div>
+
+                {/* Highlighted text */}
+                {rsCaptureModal.capture.text && (
+                  <div style={{background:'rgba(10,13,28,0.6)', border:'1px solid rgba(96,165,250,0.12)', borderRadius:'8px', padding:'0.9rem', marginBottom:'1rem'}}>
+                    <div style={{fontSize:'0.68rem', color:'#4a5270', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'0.5rem'}}>Highlighted Text</div>
+                    <div style={{fontSize:'0.82rem', color:'#e2e8f8', lineHeight:1.6, whiteSpace:'pre-wrap'}}>{rsCaptureModal.capture.text}</div>
+                  </div>
+                )}
+
+                {/* Source info */}
+                {rsCaptureModal.capture.url && (
+                  <div style={{background:'rgba(10,13,28,0.4)', border:'1px solid rgba(96,165,250,0.1)', borderRadius:'8px', padding:'0.75rem 0.9rem', marginBottom:'1rem'}}>
+                    <div style={{fontSize:'0.68rem', color:'#4a5270', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'0.4rem'}}>Source</div>
+                    <div style={{fontSize:'0.85rem', fontWeight:600, color:'#c0c7d8', marginBottom:'3px'}}>{rsCaptureModal.capture.pageTitle || 'Unknown Page'}</div>
+                    <a href={rsCaptureModal.capture.url} target="_blank" rel="noreferrer"
+                      style={{fontSize:'0.72rem', color:'#60a5fa', textDecoration:'none', fontFamily:'monospace', wordBreak:'break-all'}}
+                      onMouseEnter={e=>e.currentTarget.style.textDecoration='underline'}
+                      onMouseLeave={e=>e.currentTarget.style.textDecoration='none'}>
+                      {rsCaptureModal.capture.url}
+                    </a>
+                    {rsCaptureModal.capture.timecode && rsCaptureModal.capture.url && (rsCaptureModal.capture.url.includes('youtube.com') || rsCaptureModal.capture.url.includes('youtu.be')) && (
+                      <div style={{marginTop:'0.4rem'}}>
+                        <a href={rsCaptureModal.capture.url + '&t=' + rsCaptureModal.capture.timecode.replace(':','m') + 's'} target="_blank" rel="noreferrer"
+                          style={{fontSize:'0.72rem', color:'#c4b5fd', textDecoration:'none'}}
+                          onMouseEnter={e=>e.currentTarget.style.textDecoration='underline'}
+                          onMouseLeave={e=>e.currentTarget.style.textDecoration='none'}>
+                          &#9654; Jump to {rsCaptureModal.capture.timecode}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* AI Analysis result */}
+                {rsCaptureAiResult && (
+                  <div style={{background:'rgba(99,102,241,0.07)', border:'1px solid rgba(99,102,241,0.2)', borderRadius:'8px', padding:'0.9rem', marginBottom:'1rem'}}>
+                    <div style={{fontSize:'0.68rem', color:'#a5b4fc', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'0.5rem'}}>\uD83E\uDD16 AI Analysis</div>
+                    {rsCaptureAiResult.summary && <div style={{fontSize:'0.82rem', color:'#c0c7d8', lineHeight:1.6, marginBottom:'0.5rem'}}>{rsCaptureAiResult.summary}</div>}
+                    {rsCaptureAiResult.topics && rsCaptureAiResult.topics.length > 0 && (
+                      <div style={{marginBottom:'0.3rem'}}><span style={{fontSize:'0.7rem', color:'#4a5270', fontWeight:700}}>Topics: </span><span style={{fontSize:'0.78rem', color:'#60a5fa'}}>{rsCaptureAiResult.topics.join(', ')}</span></div>
+                    )}
+                    {rsCaptureAiResult.people && rsCaptureAiResult.people.length > 0 && (
+                      <div style={{marginBottom:'0.3rem'}}><span style={{fontSize:'0.7rem', color:'#4a5270', fontWeight:700}}>People: </span><span style={{fontSize:'0.78rem', color:'#4ade80'}}>{rsCaptureAiResult.people.join(', ')}</span></div>
+                    )}
+                    {rsCaptureAiResult.organizations && rsCaptureAiResult.organizations.length > 0 && (
+                      <div><span style={{fontSize:'0.7rem', color:'#4a5270', fontWeight:700}}>Organizations: </span><span style={{fontSize:'0.78rem', color:'#fbbf24'}}>{rsCaptureAiResult.organizations.join(', ')}</span></div>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div style={{display:'flex', gap:'0.6rem', flexWrap:'wrap', justifyContent:'flex-end', marginTop:'0.5rem'}}>
+                  {rsCaptureModal.capture.url && (
+                    <a href={rsCaptureModal.capture.url} target="_blank" rel="noreferrer"
+                      style={{background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.25)', borderRadius:'7px', color:'#60a5fa', fontSize:'0.8rem', fontWeight:600, padding:'0.45rem 1rem', cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:'0.4rem'}}>
+                      \uD83D\uDD17 Open Source
+                    </a>
+                  )}
+                  {rsCaptureModal.capture.url && !rsCaptureAiResult && (
+                    <button onClick={()=>rsCaptureAnalyze(rsCaptureModal.capture)} disabled={rsCaptureAnalyzing}
+                      style={{background: rsCaptureAnalyzing ? 'rgba(99,102,241,0.15)' : 'linear-gradient(135deg,#3b82f6,#6366f1)', border:'1px solid rgba(99,102,241,0.4)', borderRadius:'7px', color:'white', fontSize:'0.8rem', fontWeight:700, padding:'0.45rem 1rem', cursor: rsCaptureAnalyzing ? 'wait' : 'pointer', display:'inline-flex', alignItems:'center', gap:'0.4rem'}}>
+                      {rsCaptureAnalyzing ? '\u23F3 Analyzing\u2026' : '\uD83E\uDD16 Analyze with AI'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Trail Highlights Modal ── */}
+          {rsTrailModal && (
+            <div style={{position:'fixed', inset:0, background:'rgba(5,8,20,0.88)', zIndex:9998, display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem'}}
+              onClick={()=>setRsTrailModal(null)}>
+              <div style={{background:'rgba(15,19,40,0.98)', border:'1px solid rgba(196,181,253,0.25)', borderRadius:'14px', padding:'1.5rem', maxWidth:'580px', width:'100%', maxHeight:'80vh', overflowY:'auto', position:'relative'}}
+                onClick={e=>e.stopPropagation()}>
+                <button onClick={()=>setRsTrailModal(null)}
+                  style={{position:'absolute', top:'0.75rem', right:'0.75rem', background:'transparent', border:'none', color:'#4a5270', fontSize:'1.1rem', cursor:'pointer', lineHeight:1}}>&#10005;</button>
+
+                <div style={{marginBottom:'1.1rem'}}>
+                  <div style={{fontSize:'0.68rem', color:'#c4b5fd', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'0.35rem'}}>Highlights from this page</div>
+                  <div style={{fontSize:'0.9rem', fontWeight:700, color:'#e2e8f8', marginBottom:'3px'}}>{rsTrailModal.entry.title || 'Unknown Page'}</div>
+                  <div style={{fontSize:'0.7rem', color:'#4a5270', fontFamily:'monospace', wordBreak:'break-all'}}>{rsTrailModal.entry.url}</div>
+                </div>
+
+                {rsTrailModal.captures.map((c, i) => (
+                  <div key={c.id || i} style={{background:'rgba(10,13,28,0.5)', border:'1px solid rgba(196,181,253,0.12)', borderRadius:'8px', padding:'0.75rem', marginBottom:'0.5rem'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:'0.5rem', marginBottom: c.text ? '0.4rem' : 0}}>
+                      <span style={{fontSize:'0.8rem'}}>{c.type==='video' ? '\uD83C\uDFAC' : c.type==='url' ? '\uD83D\uDD17' : '\uD83D\uDCDD'}</span>
+                      {c.timecode && (
+                        <span style={{fontSize:'0.68rem', color:'#c4b5fd', background:'rgba(196,181,253,0.1)', border:'1px solid rgba(196,181,253,0.2)', borderRadius:'4px', padding:'1px 5px', fontFamily:'monospace', fontWeight:600}}>&#9201; {c.timecode}</span>
+                      )}
+                      <span style={{fontSize:'0.67rem', color:'#4a5270', marginLeft:'auto'}}>
+                        {c.timestamp ? new Date(c.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : ''}
+                      </span>
+                    </div>
+                    {c.text && (
+                      <div style={{fontSize:'0.8rem', color:'#e2e8f8', lineHeight:1.55, background:'rgba(196,181,253,0.05)', borderRadius:'5px', padding:'0.5rem 0.65rem', borderLeft:'2px solid rgba(196,181,253,0.3)', whiteSpace:'pre-wrap'}}>
+                        {c.text}
+                      </div>
+                    )}
+                    {c.saved && <div style={{marginTop:'5px', fontSize:'0.67rem', color:'#4ade80', fontWeight:700}}>&#10003; Saved to database</div>}
+                  </div>
+                ))}
+
+                <div style={{display:'flex', gap:'0.6rem', justifyContent:'flex-end', marginTop:'0.9rem'}}>
+                  <a href={rsTrailModal.entry.url} target="_blank" rel="noreferrer"
+                    style={{background:'rgba(196,181,253,0.12)', border:'1px solid rgba(196,181,253,0.3)', borderRadius:'7px', color:'#c4b5fd', fontSize:'0.8rem', fontWeight:700, padding:'0.45rem 1.1rem', cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center', gap:'0.4rem'}}>
+                    &#8599; Visit Page
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       );
     };
