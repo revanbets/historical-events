@@ -563,6 +563,45 @@ def download_uploaded_file(filename: str):
     return FileResponse(file_path, filename=filename)
 
 
+# --- Health Check ---
+
+@app.get("/api/health")
+def health_check():
+    """
+    Lightweight health check — reports server status and validates config.
+    Used by the frontend keep-alive ping and the owner system monitor.
+    Does NOT make any external API calls; only inspects local environment.
+    """
+    checks = {}
+
+    # Anthropic API key
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        checks["anthropic"] = {
+            "status": "error",
+            "message": "ANTHROPIC_API_KEY is not set. AI analysis will fail until this is added to analysis/.env on Render.",
+        }
+    elif not api_key.startswith("sk-ant-"):
+        checks["anthropic"] = {
+            "status": "error",
+            "message": "ANTHROPIC_API_KEY looks malformed (unexpected prefix). Re-copy the key from console.anthropic.com → API Keys.",
+        }
+    else:
+        checks["anthropic"] = {"status": "ok", "message": "API key present and correctly formatted."}
+
+    # Disk — warn if uploads or downloads dirs are missing
+    for label, path in [("uploads_dir", UPLOADS_DIR), ("frames_dir", FRAMES_DIR), ("transcripts_dir", TRANSCRIPTS_DIR)]:
+        checks[label] = {"status": "ok" if os.path.isdir(path) else "warning", "path": path}
+
+    overall = "ok" if all(v.get("status") == "ok" for v in checks.values()) else "degraded"
+
+    return JSONResponse(content={
+        "status": overall,
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
