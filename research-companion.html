@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HDB Research Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;500;600;700&display=swap" />
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+  <style>
+    /* ── Reset & Variables ─────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-deep:    #070a18;
+      --bg-base:    #0a0d1c;
+      --bg-card:    #0f1328;
+      --bg-hover:   #141830;
+      --bg-input:   #0c1020;
+      --border:     rgba(96,165,250,0.14);
+      --border-mid: rgba(96,165,250,0.26);
+      --border-hi:  rgba(96,165,250,0.48);
+      --accent:     #60a5fa;
+      --accent-dim: rgba(96,165,250,0.18);
+      --text-hi:    #e2e8f8;
+      --text-mid:   #8b95b0;
+      --text-dim:   #4a5270;
+      --green:      #4ade80;
+      --green-dim:  rgba(74,222,128,0.14);
+      --red:        #f87171;
+      --red-dim:    rgba(248,113,113,0.14);
+      --purple:     #c4b5fd;
+      --purple-dim: rgba(196,181,253,0.14);
+      --yellow:     #fbbf24;
+    }
+    html, body, #root {
+      height: 100%;
+      background: var(--bg-base);
+      color: var(--text-hi);
+      font-family: 'Karla', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+    }
+    body { overflow: hidden; }
+
+    /* ── Scrollbar ─────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+
+    /* ── Base elements ─────────────────────────────────────── */
+    button { font-family: 'Karla', sans-serif; cursor: pointer; }
+    input, textarea { font-family: 'Karla', sans-serif; }
+    a { color: var(--accent); }
+
+    /* ── Spinner ───────────────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 13px; height: 13px;
+      border: 2px solid rgba(96,165,250,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block; flex-shrink: 0;
+    }
+
+    /* ── Fade-in ───────────────────────────────────────────── */
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .fade-in { animation: fadeIn 0.2s ease forwards; }
+
+    /* ── Pulse dot ─────────────────────────────────────────── */
+    @keyframes pulse { 0%,100%{box-shadow:0 0 4px rgba(74,222,128,0.4);} 50%{box-shadow:0 0 10px rgba(74,222,128,0.8);} }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ══════════════════════════════════════════════════════════════
+// Config
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://dfkxdbkjrfarjudlpqbw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRma3hkYmtqcmZhcmp1ZGxwcWJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NDQzMzIsImV4cCI6MjA4NzUyMDMzMn0.A5XuY5C9X5Il6EizS84tKY1Ls3Jyl6Xmi0hKbqQg2qo';
+const API_BASE          = 'https://historical-events-api-n45u.onrender.com';
+const WEB_APP_URL       = 'https://historical-events-databse.netlify.app/';
+const COMPANION_URL     = 'https://historical-events-databse.netlify.app/research-companion.html';
+
+// ══════════════════════════════════════════════════════════════
+// Supabase REST helpers
+// ══════════════════════════════════════════════════════════════
+async function sbFetch(path, options = {}) {
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1${path}`, {
+    ...options,
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': options.prefer || 'return=representation',
+      ...options.headers
+    }
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error(`Supabase ${resp.status}: ${t}`); }
+  const text = await resp.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Utilities
+// ══════════════════════════════════════════════════════════════
+function randomHex(n) {
+  const a = new Uint8Array(n/2);
+  crypto.getRandomValues(a);
+  return Array.from(a, b => b.toString(16).padStart(2,'0')).join('');
+}
+const genEventId   = () => 'EVT-' + randomHex(8);
+const genCaptureId = () => 'CAP-' + randomHex(6);
+
+function sessionNameNow() {
+  return 'Session — ' + new Date().toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const d = Date.now() - new Date(iso).getTime();
+  if (d < 60000) return 'just now';
+  if (d < 3600000) return Math.floor(d/60000) + 'm ago';
+  if (d < 86400000) return Math.floor(d/3600000) + 'h ago';
+  return Math.floor(d/86400000) + 'd ago';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function domain(url) {
+  try { return new URL(url).hostname.replace('www.',''); }
+  catch { return url || ''; }
+}
+
+function trunc(str, n) {
+  if (!str) return '';
+  return str.length <= n ? str : str.slice(0,n) + '…';
+}
+
+function isVideoUrl(url) {
+  return url && (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com'));
+}
+
+// localStorage helpers (all companion state lives in localStorage)
+const KEYS = {
+  session:       'hdb_companion_session',
+  trail:         'hdb_companion_trail',
+  captures:      'hdb_companion_captures',
+  sessActive:    'hdb_companion_sess_active',
+  sessName:      'hdb_companion_sess_name',
+  bookmarkletAck:'hdb_companion_bm_ack',
+};
+
+function lsGet(key, fallback = null) {
+  try { const v = localStorage.getItem(key); return v != null ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+function lsDel(key) { try { localStorage.removeItem(key); } catch {} }
+
+// ══════════════════════════════════════════════════════════════
+// The bookmarklet JS source (will be displayed for user to drag)
+// ══════════════════════════════════════════════════════════════
+const BOOKMARKLET_SRC = `javascript:(function(){
+  var sel='';
+  try{sel=window.getSelection().toString().trim();}catch(e){}
+  var tc='';
+  try{var v=document.querySelector('video');if(v&&!isNaN(v.currentTime)){var s=Math.floor(v.currentTime);tc=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}}catch(e){}
+  var d={url:location.href,title:document.title,text:sel,timecode:tc,ts:Date.now()};
+  var w=window.open('','hdb_companion');
+  if(w&&w.location&&w.location.href.indexOf('research-companion')!==-1){
+    w.postMessage({type:'HDB_CAPTURE',data:d},'*');
+    w.focus();
+  } else {
+    var encoded=encodeURIComponent(JSON.stringify(d));
+    window.open('${COMPANION_URL}#bm='+encoded,'hdb_companion','width=450,height=680,resizable=yes,scrollbars=yes');
+  }
+})();`;
+
+// ══════════════════════════════════════════════════════════════
+// CSS-in-JS helper — just string styles as objects
+// ══════════════════════════════════════════════════════════════
+const S = {
+  // Layout
+  col:  (gap=0) => ({ display:'flex', flexDirection:'column', gap }),
+  row:  (gap=0, align='center') => ({ display:'flex', flexDirection:'row', gap, alignItems:align }),
+  flex1: { flex:1, minWidth:0, minHeight:0 },
+
+  // Buttons
+  btnPrimary: {
+    padding:'8px 16px', background:'linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))',
+    border:'1px solid rgba(96,165,250,0.5)', borderRadius:'8px', color:'#60a5fa',
+    fontSize:'13px', fontWeight:700, cursor:'pointer', transition:'background 0.15s',
+    fontFamily:'Karla,sans-serif'
+  },
+  btnGhost: {
+    padding:'7px 14px', background:'transparent', border:'1px solid rgba(96,165,250,0.18)',
+    borderRadius:'8px', color:'#8b95b0', fontSize:'12px', cursor:'pointer',
+    transition:'background 0.12s', fontFamily:'Karla,sans-serif'
+  },
+  btnGreen: {
+    padding:'6px 12px', background:'rgba(74,222,128,0.13)', border:'1px solid rgba(74,222,128,0.3)',
+    borderRadius:'7px', color:'#4ade80', fontSize:'12px', fontWeight:700, cursor:'pointer',
+    fontFamily:'Karla,sans-serif'
+  },
+  btnRed: {
+    padding:'6px 12px', background:'rgba(248,113,113,0.13)', border:'1px solid rgba(248,113,113,0.3)',
+    borderRadius:'7px', color:'#f87171', fontSize:'12px', fontWeight:700, cursor:'pointer',
+    fontFamily:'Karla,sans-serif'
+  },
+  btnText: (color='#60a5fa') => ({
+    background:'none', border:'none', color, fontSize:'12px', cursor:'pointer',
+    padding:'2px 5px', borderRadius:'4px', fontFamily:'Karla,sans-serif'
+  }),
+  input: {
+    padding:'8px 11px', background:'#0c1020', border:'1px solid rgba(96,165,250,0.22)',
+    borderRadius:'7px', color:'#e2e8f8', fontSize:'13px', outline:'none', width:'100%',
+    fontFamily:'Karla,sans-serif', transition:'border-color 0.15s'
+  },
+  textarea: {
+    padding:'9px 11px', background:'#0c1020', border:'1px solid rgba(96,165,250,0.22)',
+    borderRadius:'7px', color:'#e2e8f8', fontSize:'12px', outline:'none', width:'100%',
+    fontFamily:'Karla,sans-serif', resize:'vertical', minHeight:'72px', lineHeight:1.5,
+    transition:'border-color 0.15s'
+  },
+  label: {
+    fontSize:'10px', fontWeight:700, color:'#8b95b0',
+    textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'4px', display:'block'
+  },
+  card: {
+    background:'rgba(15,19,40,0.8)', border:'1px solid rgba(96,165,250,0.13)',
+    borderRadius:'10px', overflow:'hidden'
+  },
+  sectionLabel: {
+    fontSize:'10px', fontWeight:700, color:'#4a5270',
+    textTransform:'uppercase', letterSpacing:'0.8px'
+  },
+};
+
+// ══════════════════════════════════════════════════════════════
+// LOGIN SCREEN
+// ══════════════════════════════════════════════════════════════
+function LoginScreen({ onLogin }) {
+  const [u, setU] = useState('');
+  const [p, setP] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    if (!u || !p) { setErr('Enter username and password.'); return; }
+    setLoading(true); setErr('');
+    try {
+      const rows = await sbFetch(
+        `/users?username=eq.${encodeURIComponent(u.toLowerCase())}&password=eq.${encodeURIComponent(p)}&select=username,role`,
+        { method:'GET' }
+      );
+      if (!rows || rows.length === 0) throw new Error('Invalid credentials');
+      onLogin({ username: rows[0].username, role: rows[0].role });
+    } catch (e) {
+      setErr(e.message || 'Login failed.');
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      minHeight:'100vh', padding:'2rem', background:'var(--bg-base)' }}>
+
+      {/* Logo */}
+      <div style={{ textAlign:'center', marginBottom:'2rem' }}>
+        <div style={{ fontSize:'2.5rem', color:'#60a5fa', marginBottom:'0.5rem',
+          textShadow:'0 0 24px rgba(96,165,250,0.5)' }}>◈</div>
+        <div style={{ fontFamily:'Space Mono,monospace', fontSize:'18px', fontWeight:700,
+          color:'#e2e8f8', letterSpacing:'0.5px' }}>HDB Research Companion</div>
+        <div style={{ fontSize:'12px', color:'#8b95b0', marginTop:'4px' }}>
+          Works in every browser
+        </div>
+      </div>
+
+      <div style={{ ...S.card, padding:'1.75rem', width:'100%', maxWidth:'340px' }}>
+        <div style={{ ...S.col(14) }}>
+          <div>
+            <label style={S.label}>Username</label>
+            <input style={S.input} value={u} onChange={e=>setU(e.target.value)}
+              placeholder="Enter username" autoComplete="username"
+              onFocus={e=>e.target.style.borderColor='#60a5fa'}
+              onBlur={e=>e.target.style.borderColor='rgba(96,165,250,0.22)'}
+            />
+          </div>
+          <div>
+            <label style={S.label}>Password</label>
+            <input style={S.input} type="password" value={p} onChange={e=>setP(e.target.value)}
+              placeholder="Enter password" autoComplete="current-password"
+              onFocus={e=>e.target.style.borderColor='#60a5fa'}
+              onBlur={e=>e.target.style.borderColor='rgba(96,165,250,0.22)'}
+              onKeyDown={e=>e.key==='Enter'&&handleLogin()}
+            />
+          </div>
+          {err && (
+            <div style={{ fontSize:'12px', color:'#f87171', background:'rgba(248,113,113,0.12)',
+              border:'1px solid rgba(248,113,113,0.25)', borderRadius:'7px', padding:'8px 11px' }}>
+              {err}
+            </div>
+          )}
+          <button style={S.btnPrimary} onClick={handleLogin} disabled={loading}>
+            {loading ? 'Logging in…' : 'Log In'}
+          </button>
+          <p style={{ fontSize:'11px', color:'#4a5270', textAlign:'center' }}>
+            Use your Historical Events Database credentials
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOOKMARKLET INSTALLER BANNER
+// ══════════════════════════════════════════════════════════════
+function BookmarkletBanner({ onDismiss }) {
+  const [copied, setCopied] = useState(false);
+
+  function copyBookmarklet() {
+    navigator.clipboard?.writeText(BOOKMARKLET_SRC).then(() => {
+      setCopied(true);
+      setTimeout(()=>setCopied(false), 2000);
+    }).catch(() => {});
+  }
+
+  return (
+    <div className="fade-in" style={{ margin:'12px 14px 0',
+      background:'linear-gradient(135deg,rgba(96,165,250,0.08),rgba(96,165,250,0.03))',
+      border:'1px solid rgba(96,165,250,0.3)', borderRadius:'10px', padding:'12px 14px' }}>
+      <div style={{ ...S.row(8), marginBottom:'8px' }}>
+        <span style={{ fontSize:'16px' }}>🔖</span>
+        <span style={{ fontSize:'12px', fontWeight:700, color:'#e2e8f8' }}>Set up your bookmarklet</span>
+        <button onClick={onDismiss} style={{ ...S.btnText('#4a5270'), marginLeft:'auto', fontSize:'14px' }}>✕</button>
+      </div>
+      <p style={{ fontSize:'11px', color:'#8b95b0', lineHeight:1.6, marginBottom:'10px' }}>
+        Drag the button below to your bookmarks bar. Then click it on any page to instantly
+        capture the URL, highlighted text, and video timecodes here.
+      </p>
+
+      {/* Draggable bookmarklet link */}
+      <div style={{ ...S.row(8), flexWrap:'wrap', gap:'8px' }}>
+        <a
+          href={BOOKMARKLET_SRC}
+          draggable="true"
+          style={{
+            display:'inline-flex', alignItems:'center', gap:'6px',
+            padding:'7px 14px', background:'rgba(96,165,250,0.18)',
+            border:'2px dashed rgba(96,165,250,0.5)', borderRadius:'8px',
+            color:'#93c5fd', fontSize:'12px', fontWeight:700, textDecoration:'none',
+            cursor:'grab', userSelect:'none'
+          }}
+          onClick={e => { e.preventDefault(); alert('Drag this button to your bookmarks bar — don\'t click it here!'); }}
+        >
+          📎 HDB Capture
+        </a>
+        <span style={{ fontSize:'11px', color:'#4a5270', alignSelf:'center' }}>← drag to bookmarks bar</span>
+      </div>
+
+      {/* Fallback instructions */}
+      <details style={{ marginTop:'10px' }}>
+        <summary style={{ fontSize:'11px', color:'#60a5fa', cursor:'pointer' }}>Can't drag? Click here for manual instructions</summary>
+        <div style={{ marginTop:'8px', ...S.col(6) }}>
+          <p style={{ fontSize:'11px', color:'#8b95b0', lineHeight:1.6 }}>
+            1. Create a new bookmark in your browser<br/>
+            2. Set the URL to the code below<br/>
+            3. Name it "HDB Capture"
+          </p>
+          <div style={{ position:'relative' }}>
+            <textarea readOnly style={{ ...S.textarea, fontSize:'9px', minHeight:'56px',
+              fontFamily:'monospace', color:'#4a5270', background:'rgba(0,0,0,0.3)' }}
+              value={BOOKMARKLET_SRC}
+            />
+            <button onClick={copyBookmarklet}
+              style={{ position:'absolute', top:'6px', right:'6px', padding:'3px 8px',
+                background:'rgba(96,165,250,0.2)', border:'1px solid rgba(96,165,250,0.4)',
+                borderRadius:'5px', color:'#60a5fa', fontSize:'10px', cursor:'pointer' }}>
+              {copied ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// CAPTURE FORM
+// ══════════════════════════════════════════════════════════════
+function CaptureForm({ onCapture, prefill }) {
+  const [url, setUrl] = useState(prefill?.url || '');
+  const [text, setText] = useState(prefill?.text || '');
+  const [timecode, setTimecode] = useState(prefill?.timecode || '');
+  const [saving, setSaving] = useState(false);
+  const urlRef = useRef();
+
+  // When prefill changes (from bookmarklet), update fields
+  useEffect(() => {
+    if (prefill) {
+      setUrl(prefill.url || '');
+      setText(prefill.text || '');
+      setTimecode(prefill.timecode || '');
+    }
+  }, [prefill?.ts]); // ts changes every time bookmarklet fires
+
+  // Focus URL field when prefill arrives
+  useEffect(() => {
+    if (prefill?.ts) urlRef.current?.focus();
+  }, [prefill?.ts]);
+
+  function handleCapture() {
+    if (!url && !text) return;
+    setSaving(true);
+    const type = timecode ? 'video' : text ? 'text' : 'url';
+    onCapture({ url, text, timecode, type });
+    setUrl('');
+    setText('');
+    setTimecode('');
+    setTimeout(()=>setSaving(false), 400);
+  }
+
+  const hasContent = url || text;
+
+  return (
+    <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+      <div style={{ ...S.row(6), marginBottom:'8px' }}>
+        <span style={S.sectionLabel}>Quick Capture</span>
+        <div style={{ ...S.row(4), marginLeft:'auto' }}>
+          {prefill?.url && (
+            <span style={{ fontSize:'10px', color:'#4ade80', background:'rgba(74,222,128,0.1)',
+              border:'1px solid rgba(74,222,128,0.2)', borderRadius:'4px', padding:'1px 6px' }}>
+              ↓ From bookmarklet
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...S.col(8) }}>
+        {/* URL */}
+        <div>
+          <label style={S.label}>URL</label>
+          <input ref={urlRef} style={S.input} value={url} onChange={e=>setUrl(e.target.value)}
+            placeholder="https://…"
+            onFocus={e=>e.target.style.borderColor='#60a5fa'}
+            onBlur={e=>e.target.style.borderColor='rgba(96,165,250,0.22)'}
+          />
+        </div>
+
+        {/* Text */}
+        <div>
+          <label style={S.label}>Highlighted Text <span style={{color:'#4a5270',textTransform:'none',letterSpacing:0}}>(optional)</span></label>
+          <textarea style={S.textarea} value={text} onChange={e=>setText(e.target.value)}
+            placeholder="Paste or type the text you want to save…"
+            onFocus={e=>e.target.style.borderColor='#60a5fa'}
+            onBlur={e=>e.target.style.borderColor='rgba(96,165,250,0.22)'}
+          />
+        </div>
+
+        {/* Timecode (only shown if URL looks like a video) */}
+        {(isVideoUrl(url) || timecode) && (
+          <div>
+            <label style={S.label}>Video Timecode <span style={{color:'#4a5270',textTransform:'none',letterSpacing:0}}>(optional)</span></label>
+            <input style={{ ...S.input, width:'140px' }} value={timecode} onChange={e=>setTimecode(e.target.value)}
+              placeholder="1:23 or 0:45:12"
+              onFocus={e=>e.target.style.borderColor='#60a5fa'}
+              onBlur={e=>e.target.style.borderColor='rgba(96,165,250,0.22)'}
+            />
+          </div>
+        )}
+
+        <button
+          style={{ ...S.btnPrimary, opacity: hasContent ? 1 : 0.45 }}
+          onClick={handleCapture}
+          disabled={!hasContent || saving}
+        >
+          {saving ? <><span className="spinner" style={{marginRight:6}}/> Saving…</> : '📎 Capture'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// CAPTURE CARD
+// ══════════════════════════════════════════════════════════════
+function CaptureCard({ item, onDelete, onSaveToDb }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const typeIcon = item.type === 'video' ? '🎬' : item.type === 'url' ? '🔗' : '📝';
+
+  async function handleSave() {
+    setLoading(true); setError('');
+    try { await onSaveToDb(item.id); }
+    catch(e) { setError(e.message || 'Save failed'); }
+    setLoading(false);
+  }
+
+  return (
+    <div className="fade-in" style={{
+      ...S.card, padding:'10px 12px',
+      ...(item.saved ? { borderColor:'rgba(74,222,128,0.28)', background:'rgba(74,222,128,0.02)' } : {})
+    }}>
+      {/* Top row */}
+      <div style={{ ...S.row(8, 'flex-start'), marginBottom:'7px' }}>
+        <span style={{ fontSize:'14px', flexShrink:0 }}>{typeIcon}</span>
+        <div style={{ ...S.flex1, fontSize:'12px', color:'#e2e8f8', lineHeight:1.45,
+          display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden',
+          wordBreak:'break-word' }}>
+          {item.text || item.url}
+        </div>
+        <button onClick={()=>onDelete(item.id)}
+          style={{ background:'none', border:'none', color:'#4a5270', fontSize:'13px',
+            cursor:'pointer', padding:'2px 4px', borderRadius:'4px', flexShrink:0,
+            lineHeight:1, marginTop:'-1px', transition:'color 0.1s, background 0.1s' }}
+          onMouseEnter={e=>{e.target.style.color='#f87171'; e.target.style.background='rgba(248,113,113,0.12)'}}
+          onMouseLeave={e=>{e.target.style.color='#4a5270'; e.target.style.background='transparent'}}>
+          ✕
+        </button>
+      </div>
+
+      {/* Meta */}
+      <div style={{ ...S.row(6), flexWrap:'wrap', marginBottom:'8px' }}>
+        {item.favIconUrl && (
+          <img src={item.favIconUrl} alt="" style={{ width:12, height:12, borderRadius:2, objectFit:'contain' }}
+            onError={e=>e.target.style.display='none'} />
+        )}
+        <span style={{ fontSize:'10px', color:'#4a5270', overflow:'hidden', textOverflow:'ellipsis',
+          whiteSpace:'nowrap', maxWidth:'180px' }} title={item.url}>
+          {trunc(item.pageTitle || domain(item.url), 38)}
+        </span>
+        {item.timecode && (
+          <span style={{ fontSize:'10px', color:'#c4b5fd', background:'rgba(196,181,253,0.12)',
+            border:'1px solid rgba(196,181,253,0.22)', borderRadius:'4px',
+            padding:'1px 6px', flexShrink:0, fontFamily:'monospace' }}>
+            ⏱ {item.timecode}
+          </span>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ ...S.row(8), justifyContent:'space-between' }}>
+        <span style={{ fontSize:'10px', color:'#4a5270' }}>{timeAgo(item.timestamp)}</span>
+        {item.saved ? (
+          <div style={{ ...S.row(6), color:'#4ade80', fontSize:'11px', fontWeight:700 }}>
+            ✓ Saved
+            <a href={WEB_APP_URL} target="_blank" style={{ fontSize:'10px', color:'#60a5fa',
+              textDecoration:'none', opacity:0.7 }}>↗ View</a>
+          </div>
+        ) : (
+          <div style={{ ...S.col(4) }}>
+            <button
+              style={{ padding:'4px 11px', background:'linear-gradient(135deg,rgba(96,165,250,0.2),rgba(96,165,250,0.1))',
+                border:'1px solid rgba(96,165,250,0.5)', borderRadius:'6px', color:'#60a5fa',
+                fontSize:'11px', fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:5,
+                opacity: loading ? 0.6 : 1 }}
+              onClick={handleSave} disabled={loading}>
+              {loading ? <><span className="spinner"/>Analyzing…</> : 'Add to DB'}
+            </button>
+            {error && <span style={{ fontSize:'10px', color:'#f87171' }}>{error}</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// TRAIL LIST
+// ══════════════════════════════════════════════════════════════
+function TrailList({ trail, onClear }) {
+  if (trail.length === 0) {
+    return (
+      <div style={{ textAlign:'center', padding:'2rem 1.5rem', ...S.col(6) }}>
+        <div style={{ fontSize:'1.8rem', opacity:0.4 }}>🗺</div>
+        <div style={{ fontSize:'13px', fontWeight:700, color:'#8b95b0' }}>No trail yet</div>
+        <div style={{ fontSize:'11px', color:'#4a5270', lineHeight:1.5, maxWidth:'240px', margin:'0 auto' }}>
+          Use the bookmarklet on pages you visit — they'll appear here as your research trail.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding:'8px 14px 12px' }}>
+      <div style={{ ...S.row(0), justifyContent:'space-between', marginBottom:'8px' }}>
+        <span style={S.sectionLabel}>{trail.length} pages visited</span>
+        <button onClick={onClear} style={S.btnText('#f87171')}>Clear</button>
+      </div>
+      {trail.map((entry, i) => (
+        <div key={entry.id || i} style={{ display:'flex', alignItems:'flex-start', gap:'8px', padding:'4px 0' }}>
+          {/* Timeline dot + connector */}
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:'3px',
+            flexShrink:0, width:'14px' }}>
+            <div style={{ width:'8px', height:'8px', borderRadius:'50%', flexShrink:0,
+              background: i===0 ? '#4ade80' : 'rgba(96,165,250,0.45)',
+              boxShadow: i===0 ? '0 0 6px rgba(74,222,128,0.5)' : 'none',
+              animation: i===0 ? 'pulse 2s infinite' : 'none' }}/>
+            {i < trail.length-1 && (
+              <div style={{ width:'1px', minHeight:'16px', flex:1, background:'rgba(96,165,250,0.14)', margin:'2px 0' }}/>
+            )}
+          </div>
+          {/* Favicon */}
+          {entry.favIconUrl
+            ? <img src={entry.favIconUrl} alt="" style={{ width:14, height:14, borderRadius:2,
+                objectFit:'contain', marginTop:'2px', flexShrink:0 }}
+                onError={e=>e.target.style.display='none'}/>
+            : <div style={{ width:14, height:14, borderRadius:2, background:'rgba(96,165,250,0.08)',
+                flexShrink:0, marginTop:'2px' }}/>
+          }
+          {/* Info */}
+          <div style={{ flex:1, minWidth:0 }}>
+            <a href={entry.url} target="_blank" style={{ fontSize:'12px', color:'#c0c7d8',
+              textDecoration:'none', display:'block', overflow:'hidden', textOverflow:'ellipsis',
+              whiteSpace:'nowrap' }} title={entry.url}>
+              {trunc(entry.title || entry.url, 45)}
+            </a>
+            <div style={{ fontSize:'10px', color:'#4a5270', fontFamily:'monospace',
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {domain(entry.url)}
+            </div>
+          </div>
+          <div style={{ fontSize:'10px', color:'#4a5270', flexShrink:0 }}>{fmtTime(entry.timestamp)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// PAST SESSIONS VIEW
+// ══════════════════════════════════════════════════════════════
+function SessionsView({ username }) {
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const rows = await sbFetch(
+        `/research_sessions?uploaded_by=eq.${encodeURIComponent(username)}&order=started_at.desc`,
+        { method:'GET' }
+      );
+      if (rows) setSessions(rows);
+    } catch(e) { /* table may not exist yet */ }
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  if (loading) {
+    return <div style={{ padding:'1.5rem', color:'#8b95b0', fontSize:'13px' }}>Loading sessions…</div>;
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div style={{ textAlign:'center', padding:'2.5rem 1.5rem', ...S.col(8) }}>
+        <div style={{ fontSize:'2rem', opacity:0.4 }}>📚</div>
+        <div style={{ fontSize:'13px', fontWeight:700, color:'#8b95b0' }}>No saved sessions</div>
+        <div style={{ fontSize:'11px', color:'#4a5270', lineHeight:1.6, maxWidth:'260px', margin:'0 auto' }}>
+          When you end a research session it gets saved here and in the main database app.
+        </div>
+        <button onClick={load} style={{ ...S.btnGhost, fontSize:'11px', padding:'5px 12px',
+          marginTop:'8px', alignSelf:'center' }}>↻ Refresh</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding:'10px 14px 16px' }}>
+      <div style={{ ...S.row(0), justifyContent:'space-between', marginBottom:'10px' }}>
+        <span style={S.sectionLabel}>{sessions.length} session{sessions.length!==1?'s':''}</span>
+        <button onClick={load} style={S.btnText()}>↻ Refresh</button>
+      </div>
+      {sessions.map(sess => {
+        const trail = Array.isArray(sess.trail) ? sess.trail : [];
+        const captures = Array.isArray(sess.captured_items) ? sess.captured_items : [];
+        const isOpen = expanded === sess.id;
+        return (
+          <div key={sess.id} style={{ ...S.card, marginBottom:'8px' }}>
+            {/* Header */}
+            <div onClick={()=>setExpanded(isOpen ? null : sess.id)}
+              style={{ ...S.row(10), padding:'10px 12px', cursor:'pointer',
+                background: isOpen ? 'rgba(96,165,250,0.04)' : 'transparent' }}>
+              <span style={{ fontSize:'11px', color:'#4a5270' }}>{isOpen?'▾':'▸'}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#e2e8f8',
+                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {sess.session_name || 'Unnamed Session'}
+                </div>
+                <div style={{ fontSize:'10px', color:'#8b95b0', marginTop:'2px' }}>
+                  {fmtDateTime(sess.started_at)}
+                </div>
+              </div>
+              <div style={{ ...S.row(5), flexShrink:0 }}>
+                <span style={{ fontSize:'10px', color:'#60a5fa', background:'rgba(96,165,250,0.1)',
+                  border:'1px solid rgba(96,165,250,0.2)', borderRadius:'4px', padding:'1px 7px',
+                  fontWeight:600 }}>{trail.length} pages</span>
+                {captures.length > 0 && (
+                  <span style={{ fontSize:'10px', color:'#4ade80', background:'rgba(74,222,128,0.1)',
+                    border:'1px solid rgba(74,222,128,0.2)', borderRadius:'4px', padding:'1px 7px',
+                    fontWeight:600 }}>{captures.length} captured</span>
+                )}
+              </div>
+            </div>
+
+            {/* Expanded content */}
+            {isOpen && (
+              <div style={{ borderTop:'1px solid rgba(96,165,250,0.1)', padding:'10px 12px 12px' }}>
+                {/* Trail */}
+                {trail.length > 0 && (
+                  <div style={{ marginBottom:'10px' }}>
+                    <div style={{ ...S.sectionLabel, marginBottom:'6px' }}>Research Trail</div>
+                    {trail.map((entry, i) => (
+                      <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'7px', padding:'3px 0' }}>
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center',
+                          paddingTop:'3px', flexShrink:0, width:'12px' }}>
+                          <div style={{ width:'7px', height:'7px', borderRadius:'50',
+                            background: i===0?'#4ade80':'rgba(96,165,250,0.4)' }}/>
+                          {i<trail.length-1 && <div style={{ width:'1px', height:'14px',
+                            background:'rgba(96,165,250,0.12)', margin:'2px 0' }}/>}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <a href={entry.url} target="_blank" style={{ fontSize:'11px', color:'#c0c7d8',
+                            textDecoration:'none', overflow:'hidden', textOverflow:'ellipsis',
+                            whiteSpace:'nowrap', display:'block' }}>
+                            {trunc(entry.title || entry.url, 44)}
+                          </a>
+                          <div style={{ fontSize:'9px', color:'#4a5270', fontFamily:'monospace' }}>
+                            {domain(entry.url)}
+                          </div>
+                        </div>
+                        <span style={{ fontSize:'9px', color:'#4a5270', flexShrink:0 }}>
+                          {fmtTime(entry.timestamp)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Captures */}
+                {captures.length > 0 && (
+                  <div>
+                    <div style={{ ...S.sectionLabel, marginBottom:'6px' }}>Captured Items</div>
+                    {captures.map((c, i) => (
+                      <div key={i} style={{ background:'rgba(10,13,28,0.5)',
+                        border:'1px solid rgba(96,165,250,0.1)', borderRadius:'7px',
+                        padding:'8px 10px', marginBottom:'5px' }}>
+                        <div style={{ ...S.row(7, 'flex-start') }}>
+                          <span style={{ fontSize:'12px', flexShrink:0 }}>
+                            {c.type==='video'?'🎬':c.type==='url'?'🔗':'📝'}
+                          </span>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:'11px', color:'#e2e8f8', lineHeight:1.4,
+                              display:'-webkit-box', WebkitLineClamp:2,
+                              WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                              {c.text || c.url}
+                            </div>
+                            <div style={{ ...S.row(6), marginTop:'3px' }}>
+                              <span style={{ fontSize:'9px', color:'#4a5270',
+                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                                maxWidth:'160px' }}>
+                                {trunc(c.pageTitle || domain(c.url), 32)}
+                              </span>
+                              {c.timecode && (
+                                <span style={{ fontSize:'9px', color:'#c4b5fd',
+                                  background:'rgba(196,181,253,0.1)', border:'1px solid rgba(196,181,253,0.2)',
+                                  borderRadius:'3px', padding:'0 4px', fontFamily:'monospace', flexShrink:0 }}>
+                                  ⏱ {c.timecode}
+                                </span>
+                              )}
+                              {c.saved && <span style={{ fontSize:'9px', color:'#4ade80', fontWeight:700 }}>✓</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAIN APP
+// ══════════════════════════════════════════════════════════════
+function App() {
+  // Auth
+  const [session, setSession] = useState(() => lsGet(KEYS.session));
+
+  // Session tracking state
+  const [trail, setTrail] = useState(() => lsGet(KEYS.trail, []));
+  const [captures, setCaptures] = useState(() => lsGet(KEYS.captures, []));
+  const [sessActive, setSessActive] = useState(() => lsGet(KEYS.sessActive, false));
+  const [sessName, setSessName] = useState(() => lsGet(KEYS.sessName, ''));
+
+  // UI state
+  const [tab, setTab] = useState('captures'); // captures | trail | sessions
+  const [showBookmarklet, setShowBookmarklet] = useState(() => !lsGet(KEYS.bookmarkletAck, false));
+  const [prefill, setPrefill] = useState(null);
+  const [renamingSession, setRenamingSession] = useState(false);
+  const [renameVal, setRenameVal] = useState('');
+  const [endingSession, setEndingSession] = useState(false);
+
+  // Persist state to localStorage whenever it changes
+  useEffect(() => { lsSet(KEYS.trail, trail); }, [trail]);
+  useEffect(() => { lsSet(KEYS.captures, captures); }, [captures]);
+  useEffect(() => { lsSet(KEYS.sessActive, sessActive); }, [sessActive]);
+  useEffect(() => { lsSet(KEYS.sessName, sessName); }, [sessName]);
+
+  // ── Bookmarklet receiver ──────────────────────────────────
+  useEffect(() => {
+    // Method 1: Read from URL hash on page load
+    function readFromHash() {
+      const hash = window.location.hash;
+      if (hash.startsWith('#bm=')) {
+        try {
+          const data = JSON.parse(decodeURIComponent(hash.slice(4)));
+          if (data && (data.url || data.text)) {
+            handleBookmarkletData(data);
+            // Clear the hash so refresh doesn't re-trigger
+            history.replaceState(null, '', window.location.pathname);
+          }
+        } catch(e) {}
+      }
+    }
+
+    // Method 2: Listen for postMessage from bookmarklet
+    function handleMessage(e) {
+      if (e.data && e.data.type === 'HDB_CAPTURE' && e.data.data) {
+        handleBookmarkletData(e.data.data);
+      }
+    }
+
+    readFromHash();
+    window.addEventListener('message', handleMessage);
+    window.addEventListener('hashchange', readFromHash);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('hashchange', readFromHash);
+    };
+  }, []);
+
+  function handleBookmarkletData(data) {
+    // Switch to captures tab so user sees the pre-filled form
+    setTab('captures');
+    setPrefill({ ...data, ts: data.ts || Date.now() });
+
+    // Auto-add to trail if session is active
+    setSessActive(prev => {
+      if (prev && data.url) {
+        setTrail(t => {
+          const last = t[t.length-1];
+          if (last && last.url === data.url) return t;
+          const entry = {
+            id: genCaptureId(),
+            url: data.url,
+            title: data.title || data.url,
+            favIconUrl: '',
+            timestamp: new Date().toISOString()
+          };
+          return [...t, entry];
+        });
+      }
+      return prev;
+    });
+  }
+
+  // ── Auth handlers ─────────────────────────────────────────
+  function handleLogin(user) {
+    setSession(user);
+    lsSet(KEYS.session, user);
+  }
+
+  function handleLogout() {
+    setSession(null);
+    lsDel(KEYS.session);
+  }
+
+  // ── Capture handlers ──────────────────────────────────────
+  function handleCapture({ url, text, timecode, type }) {
+    const item = {
+      id: genCaptureId(),
+      type,
+      text,
+      url,
+      pageTitle: prefill?.title || domain(url),
+      favIconUrl: '',
+      timecode: timecode || null,
+      timestamp: new Date().toISOString(),
+      saved: false,
+      savedEventId: null
+    };
+    setCaptures(c => [...c, item]);
+    setPrefill(null);
+
+    // Also add to trail if session active
+    if (sessActive && url) {
+      setTrail(t => {
+        const last = t[t.length-1];
+        if (last && last.url === url) return t;
+        return [...t, { id: genCaptureId(), url, title: prefill?.title || domain(url),
+          favIconUrl:'', timestamp: new Date().toISOString() }];
+      });
+    }
+  }
+
+  function handleDeleteCapture(id) {
+    setCaptures(c => c.filter(i => i.id !== id));
+  }
+
+  async function handleSaveToDb(id) {
+    const item = captures.find(i => i.id === id);
+    if (!item) throw new Error('Item not found');
+
+    // AI analysis via backend
+    let aiData = null;
+    if (item.url) {
+      const resp = await fetch(`${API_BASE}/api/analyze-url`, {
+        method:'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ url: item.url, mode:'full', skip_frames:true,
+          skip_analysis:false, search_focus: item.text || '' })
+      });
+      if (resp.ok) { const d = await resp.json(); aiData = d.record || d; }
+    }
+
+    // Build event object
+    const isVideo = isVideoUrl(item.url);
+    let title = item.pageTitle || item.url;
+    if (item.text) {
+      const fl = item.text.split('\n')[0].trim().slice(0, 120);
+      if (fl.length > 10) title = fl;
+    }
+    if (aiData?.title) title = aiData.title;
+
+    const eventObj = {
+      id: genEventId(),
+      title,
+      description: item.text || aiData?.description || '',
+      date: '',
+      date_uploaded: new Date().toISOString(),
+      topics: aiData?.topics || [],
+      people: aiData?.people || [],
+      organizations: aiData?.organizations || [],
+      links: item.url ? [item.url] : [],
+      research_level: 2,
+      source_type: 'Companion Capture',
+      source: item.pageTitle || '',
+      primary_source: '',
+      source_sheet: '',
+      main_link: item.url || '',
+      connections: [],
+      ai_summary: aiData?.summary || '',
+      is_major_event: false,
+      uploaded_by: session.username,
+      is_public: true,
+      event_status: 'unverified',
+      backend_id: aiData?.id || null,
+      ai_analyzed: !!aiData,
+      analysis_mode: aiData ? 'url' : null,
+      has_frames: false, frames_data: [], visual_content: '',
+      transcript_file: null, attachments: [], backend_file_name: null,
+      is_video: isVideo,
+      transcription: item.timecode ? { timecode: item.timecode, url: item.url } : null
+    };
+
+    await sbFetch('/events', { method:'POST', prefer:'return=representation',
+      body: JSON.stringify(eventObj) });
+
+    setCaptures(c => c.map(i => i.id === id ? { ...i, saved:true, savedEventId:eventObj.id } : i));
+  }
+
+  // ── Session handlers ──────────────────────────────────────
+  function startSession() {
+    const name = sessionNameNow();
+    setSessActive(true);
+    setSessName(name);
+    setTrail([]);
+    setCaptures([]);
+  }
+
+  async function endSession() {
+    setEndingSession(true);
+    try {
+      const record = {
+        session_name: sessName || sessionNameNow(),
+        uploaded_by: session.username,
+        started_at: trail[0]?.timestamp || new Date().toISOString(),
+        ended_at: new Date().toISOString(),
+        trail,
+        captured_items: captures
+      };
+      await sbFetch('/research_sessions', { method:'POST', prefer:'return=representation',
+        body: JSON.stringify(record) });
+    } catch(e) {
+      console.warn('[HDB Companion] Could not save session:', e.message);
+    }
+    setSessActive(false);
+    setSessName('');
+    setTrail([]);
+    setCaptures([]);
+    setEndingSession(false);
+    setTab('sessions');
+  }
+
+  function handleClearTrail() {
+    setTrail([]);
+  }
+
+  function dismissBookmarklet() {
+    setShowBookmarklet(false);
+    lsSet(KEYS.bookmarkletAck, true);
+  }
+
+  if (!session) return <LoginScreen onLogin={handleLogin} />;
+
+  const captureCount = captures.length;
+  const trailCount = trail.length;
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden',
+      background:'var(--bg-base)' }}>
+
+      {/* ── Header ───────────────────────────────────────── */}
+      <div style={{ ...S.row(10), padding:'10px 14px',
+        borderBottom:'1px solid var(--border)', background:'var(--bg-deep)',
+        flexShrink:0 }}>
+        <span style={{ fontSize:'18px', color:'#60a5fa' }}>◈</span>
+        <div>
+          <div style={{ fontFamily:'Space Mono,monospace', fontSize:'12px',
+            fontWeight:700, color:'#e2e8f8', letterSpacing:'0.3px' }}>
+            HDB Research Companion
+          </div>
+          <div style={{ fontSize:'10px', color:'#8b95b0' }}>
+            {session.username} · {session.role}
+          </div>
+        </div>
+        <div style={{ marginLeft:'auto', ...S.row(5) }}>
+          <a href={WEB_APP_URL} target="_blank"
+            style={{ ...S.row(0), width:28, height:28, alignItems:'center', justifyContent:'center',
+              background:'transparent', border:'1px solid var(--border)', borderRadius:6,
+              color:'#8b95b0', textDecoration:'none', fontSize:13, transition:'all 0.12s' }}
+            title="Open Database" onMouseEnter={e=>{e.currentTarget.style.background='var(--bg-hover)';e.currentTarget.style.color='#e2e8f8'}}
+            onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#8b95b0'}}>
+            ↗
+          </a>
+          <button onClick={handleLogout}
+            style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center',
+              background:'transparent', border:'1px solid var(--border)', borderRadius:6,
+              color:'#8b95b0', fontSize:13, cursor:'pointer', transition:'all 0.12s' }}
+            title="Log out"
+            onMouseEnter={e=>{e.style.background='var(--bg-hover)';e.style.color='#e2e8f8'}}
+            onMouseLeave={e=>{e.style.background='transparent';e.style.color='#8b95b0'}}>
+            ⏏
+          </button>
+        </div>
+      </div>
+
+      {/* ── Bookmarklet Banner ───────────────────────────── */}
+      {showBookmarklet && <BookmarkletBanner onDismiss={dismissBookmarklet} />}
+
+      {/* ── Session Bar ──────────────────────────────────── */}
+      <div style={{ ...S.row(10), padding:'9px 14px',
+        borderBottom:'1px solid var(--border)', background:'var(--bg-card)', flexShrink:0 }}>
+        <div style={{ width:8, height:8, borderRadius:'50%', flexShrink:0, transition:'all 0.2s',
+          background: sessActive ? '#4ade80' : '#4a5270',
+          boxShadow: sessActive ? '0 0 6px rgba(74,222,128,0.6)' : 'none',
+          animation: sessActive ? 'pulse 2s infinite' : 'none' }}/>
+        <div style={{ flex:1, minWidth:0 }}>
+          {renamingSession ? (
+            <div style={{ ...S.row(6) }}>
+              <input style={{ ...S.input, padding:'4px 8px', fontSize:'12px', flex:1 }}
+                value={renameVal} onChange={e=>setRenameVal(e.target.value)}
+                autoFocus
+                onKeyDown={e=>{
+                  if (e.key==='Enter') { setSessName(renameVal); setRenamingSession(false); }
+                  if (e.key==='Escape') setRenamingSession(false);
+                }} />
+              <button style={{ ...S.btnPrimary, padding:'4px 10px', fontSize:'11px' }}
+                onClick={()=>{ setSessName(renameVal); setRenamingSession(false); }}>Save</button>
+              <button style={{ ...S.btnGhost, padding:'4px 8px', fontSize:'11px' }}
+                onClick={()=>setRenamingSession(false)}>✕</button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize:'12px', fontWeight:600, color: sessActive ? '#e2e8f8' : '#8b95b0',
+                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                display:'flex', alignItems:'center', gap:'6px' }}>
+                {sessActive ? (sessName || 'Active session') : 'No active session'}
+                {sessActive && (
+                  <button onClick={()=>{ setRenameVal(sessName); setRenamingSession(true); }}
+                    style={{ background:'none', border:'none', color:'#60a5fa', fontSize:'11px',
+                      cursor:'pointer', padding:'0 2px', lineHeight:1 }}>✎</button>
+                )}
+              </div>
+              {sessActive && trailCount > 0 && (
+                <div style={{ fontSize:'10px', color:'#8b95b0', marginTop:'1px' }}>
+                  {trailCount} page{trailCount!==1?'s':''} in trail
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {!renamingSession && (
+          sessActive ? (
+            <button style={S.btnRed} onClick={endSession} disabled={endingSession}>
+              {endingSession ? 'Saving…' : 'End Session'}
+            </button>
+          ) : (
+            <button style={S.btnGreen} onClick={startSession}>Start Session</button>
+          )
+        )}
+      </div>
+
+      {/* ── Tab Nav ──────────────────────────────────────── */}
+      <div style={{ display:'flex', borderBottom:'1px solid var(--border)',
+        background:'var(--bg-deep)', flexShrink:0 }}>
+        {[
+          { id:'captures', label:'Captures', count: captureCount },
+          { id:'trail',    label:'Trail',    count: trailCount },
+          { id:'sessions', label:'Sessions', count: 0 },
+        ].map(t => (
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{
+              flex:1, padding:'8px 10px', background:'transparent', border:'none',
+              borderBottom: tab===t.id ? '2px solid #60a5fa' : '2px solid transparent',
+              color: tab===t.id ? '#60a5fa' : '#8b95b0',
+              fontSize:'12px', fontWeight:600, cursor:'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+              transition:'color 0.12s, border-color 0.12s', fontFamily:'Karla,sans-serif'
+            }}>
+            {t.label}
+            {t.count > 0 && (
+              <span style={{ background:'rgba(96,165,250,0.15)', border:'1px solid rgba(96,165,250,0.3)',
+                borderRadius:10, color:'#60a5fa', fontSize:10, fontWeight:700,
+                padding:'1px 6px', minWidth:18, textAlign:'center' }}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab Content ──────────────────────────────────── */}
+      <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
+
+        {/* Captures Tab */}
+        {tab === 'captures' && (
+          <div style={{ ...S.col(0) }}>
+            <CaptureForm onCapture={handleCapture} prefill={prefill} />
+            {captures.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'2rem 1.5rem', ...S.col(6) }}>
+                <div style={{ fontSize:'2rem', opacity:0.4 }}>📎</div>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#8b95b0' }}>No captures yet</div>
+                <div style={{ fontSize:'11px', color:'#4a5270', lineHeight:1.5,
+                  maxWidth:'240px', margin:'0 auto' }}>
+                  Use the bookmarklet on any page, or paste a URL above to start capturing.
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding:'10px 12px', ...S.col(8) }}>
+                <div style={{ ...S.row(0), justifyContent:'space-between', marginBottom:'4px' }}>
+                  <span style={S.sectionLabel}>{captures.length} item{captures.length!==1?'s':''}</span>
+                  <button onClick={()=>setCaptures([])} style={S.btnText('#f87171')}>Clear all</button>
+                </div>
+                {[...captures].reverse().map(item => (
+                  <CaptureCard key={item.id} item={item}
+                    onDelete={handleDeleteCapture}
+                    onSaveToDb={handleSaveToDb} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Trail Tab */}
+        {tab === 'trail' && (
+          <TrailList trail={trail} onClear={handleClearTrail} />
+        )}
+
+        {/* Sessions Tab */}
+        {tab === 'sessions' && (
+          <SessionsView username={session.username} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Mount
+// ══════════════════════════════════════════════════════════════
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
