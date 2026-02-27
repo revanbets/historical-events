@@ -56,6 +56,21 @@ CONDENSE_PROMPT = """Condense the following text into 2-3 concise sentences whil
 Text:
 {text}"""
 
+ENTITY_ANALYSIS_PROMPT = """You are building an encyclopedic profile for a {entity_type} named "{entity_name}" in a historical events research database focused on controversial, censored, or under-reported topics.
+
+Based on the related events below, write a detailed, research-grade profile. Synthesize the information — do not just repeat event descriptions.
+
+Return a JSON object with these fields:
+- "description": A comprehensive profile using bullet points ("- " prefix for each). Include 5-8 bullets covering: who/what this {entity_type} is, their significance to the research topics, key roles they played, major events they are connected to, and any controversies or noteworthy aspects. Write for a serious researcher audience.
+- "date_start": {date_start_label}. Format as "Month Day, Year", or just "Year", or "" if unknown.
+- "date_end": {date_end_label}. Format as "Month Day, Year", "Present" if still active/alive, or "" if unknown.
+
+Return ONLY valid JSON, no markdown fences, no explanation.
+Example: {{"description": "- Bullet 1\\n- Bullet 2\\n- Bullet 3", "date_start": "1950", "date_end": "Present"}}
+
+Related events:
+{events_text}"""
+
 
 def analyze_text(text: str, file_name: str, mode: str = "long", search_focus: str = "") -> dict:
     """Send text to Anthropic API for analysis. Returns structured dict."""
@@ -152,7 +167,61 @@ def condense_text(text: str) -> str:
     return message.content[0].text.strip()
 
 
-def generate_presentation_slides(events: list, focuses: list, detail_level: str, presentation_name: str) -> dict:
+def analyze_entity_profile(entity_type: str, entity_name: str, related_events: list) -> dict:
+    """Generate a profile for a person, organization, or topic based on related events."""
+    if not ANTHROPIC_API_KEY:
+        return {"description": "[Analysis unavailable — set ANTHROPIC_API_KEY]", "date_start": "", "date_end": ""}
+
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    date_labels = {
+        "person": ("Birth date", "Death date (use 'Present' if still alive)"),
+        "org":    ("Founding date", "Dissolution date (use 'Present' if still active)"),
+        "topic":  ("Date topic first became relevant", "Date topic ceased being relevant (use 'Present' if still ongoing)"),
+    }
+    date_start_label, date_end_label = date_labels.get(entity_type, ("Start date", "End date"))
+
+    type_label = {"person": "person", "org": "organization", "topic": "topic"}.get(entity_type, entity_type)
+
+    events_text = "\n\n".join([
+        f"Event: {e.get('title', 'Untitled')}\nDate: {e.get('date', 'Unknown')}\nSummary: {(e.get('summary') or e.get('description') or '')[:500]}\nTopics: {', '.join(e.get('topics', []))}\nPeople: {', '.join(e.get('people', []))}\nOrgs: {', '.join(e.get('organizations', []))}"
+        for e in related_events[:25]
+    ]) or "No related events found."
+
+    prompt = ENTITY_ANALYSIS_PROMPT.format(
+        entity_type=type_label,
+        entity_name=entity_name,
+        date_start_label=date_start_label,
+        date_end_label=date_end_label,
+        events_text=events_text,
+    )
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = message.content[0].text.strip()
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        raw = "\n".join(lines[1:-1])
+
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        result = {"description": raw[:1000], "date_start": "", "date_end": ""}
+
+    return {
+        "description": result.get("description", ""),
+        "date_start":  result.get("date_start", ""),
+        "date_end":    result.get("date_end", ""),
+    }
+
+
+def generate_presentation_slides(events: list, focuses: list, detail_level: str, presentation_name: str, entity_profiles: dict = None) -> dict:
     """Generate presentation slides from event data using Claude."""
     if not ANTHROPIC_API_KEY:
         return {"slides": [{"layout": "content", "title": e.get("title", ""), "date": e.get("date", ""), "bullets": [e.get("summary", "")[:80]]} for e in events]}
@@ -175,6 +244,26 @@ def generate_presentation_slides(events: list, focuses: list, detail_level: str,
     focus_text = ""
     if focuses:
         focus_text = f"\n\nUser focus areas to emphasize: {', '.join(focuses)}"
+
+    # Build entity profiles section if provided
+    entity_profiles_text = ""
+    if entity_profiles:
+        profile_lines = []
+        for key, profile in entity_profiles.items():
+            if not isinstance(profile, dict):
+                continue
+            desc = profile.get("description", "").strip()
+            if not desc:
+                continue
+            etype = profile.get("entity_type", "")
+            ename = profile.get("entity_name", "")
+            date_start = profile.get("date_start", "")
+            date_end = profile.get("date_end", "")
+            type_label = "Person" if etype == "person" else "Organization" if etype == "org" else "Topic"
+            dates = f" ({date_start}{'–'+date_end if date_end else ''})" if date_start or date_end else ""
+            profile_lines.append(f"[{type_label}] {ename}{dates}: {desc[:500]}")
+        if profile_lines:
+            entity_profiles_text = "\n\nEntity Profiles — use these for accurate details when referencing these people, organizations, and topics in slides:\n" + "\n".join(profile_lines)
 
     prompt = f"""You are a professional presentation designer creating slides for a presentation titled "{presentation_name}" about historical events.
 
@@ -223,7 +312,7 @@ Design the slide sequence the way a human presenter would:
 - Find the narrative thread and build around it
 
 Events to cover:
-{events_text}
+{events_text}{entity_profiles_text}
 
 Respond with ONLY valid JSON — no other text:
 {{"slides": [

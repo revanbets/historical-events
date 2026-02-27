@@ -1453,6 +1453,7 @@
       const [entityModalEditing, setEntityModalEditing] = useState(false);
       const [entityModalDraft, setEntityModalDraft] = useState({description:'',date_start:'',date_end:''});
       const [entityProfiles, setEntityProfiles] = useState({});
+      const [entityModalAnalyzing, setEntityModalAnalyzing] = useState(false);
       const [urlInput, setUrlInput] = useState('');
       const [timestampStart, setTimestampStart] = useState('');
       const [timestampEnd, setTimestampEnd] = useState('');
@@ -2583,7 +2584,21 @@
           if (eventsPayload.length === 0) { alert('No content found to regenerate from. Add events via the spreadsheet first.'); setPresAiLoading(false); return; }
           // Truncate long summaries to keep payload manageable
           const trimmedPayload = eventsPayload.map(e => ({ ...e, summary: e.summary ? e.summary.slice(0, 800) : '' }));
-          const payload = { events: trimmedPayload, focuses, detail_level: presAiDetail, presentation_name: pres.name };
+
+          // Gather entity profiles for all people/topics/orgs in these events
+          const entityProfilesMap = { ...entityProfiles };
+          if (supabaseClient) {
+            const allNames = [...new Set(trimmedPayload.flatMap(e => [...(e.people||[]), ...(e.topics||[]), ...(e.organizations||[])]))];
+            if (allNames.length > 0) {
+              const { data: fetchedProfiles } = await supabaseClient.from('entity_profiles').select('*').in('entity_name', allNames);
+              if (fetchedProfiles) {
+                fetchedProfiles.forEach(p => { entityProfilesMap[`${p.entity_type}:${p.entity_name}`] = p; });
+                setEntityProfiles(prev => ({ ...prev, ...entityProfilesMap }));
+              }
+            }
+          }
+
+          const payload = { events: trimmedPayload, focuses, detail_level: presAiDetail, presentation_name: pres.name, entity_profiles: entityProfilesMap };
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 120000);
           let res;
@@ -3371,6 +3386,51 @@
         setEntityModalEditing(false);
       };
 
+      const analyzeEntityProfile = async () => {
+        if (!entityModalData) return;
+        const { type, name, relEvents } = entityModalData;
+        setEntityModalAnalyzing(true);
+        try {
+          const eventsPayload = relEvents.slice(0, 25).map(e => ({
+            title: e.title, date: e.date,
+            summary: (e.aiSummary || e.description || '').slice(0, 500),
+            topics: e.topics || [], people: e.people || [], organizations: e.organizations || []
+          }));
+          const resp = await fetch(`${API_BASE}/api/analyze-entity`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_type: type, entity_name: name, related_events: eventsPayload })
+          });
+          if (!resp.ok) {
+            const detail = await resp.text().catch(() => '');
+            throw new Error(`Backend returned ${resp.status}${detail ? ': ' + detail : ''}`);
+          }
+          const result = await resp.json();
+          const cacheKey = `${type}:${name}`;
+          const profileData = {
+            entity_type: type, entity_name: name,
+            description: result.description || '',
+            date_start: result.date_start || '',
+            date_end: result.date_end || '',
+            updated_by: 'ai',
+            updated_at: new Date().toISOString()
+          };
+          const { data: saved, error } = await supabaseClient.from('entity_profiles')
+            .upsert(profileData, { onConflict: 'entity_type,entity_name' }).select().single();
+          if (error) throw new Error('Supabase save failed: ' + error.message);
+          const prof = saved || profileData;
+          setEntityProfiles(prev => ({ ...prev, [cacheKey]: prof }));
+          setEntityModalData(prev => prev ? { ...prev, profile: prof } : prev);
+          setUploadMessage('✓ AI profile generated and saved!');
+          setTimeout(() => setUploadMessage(''), 3000);
+        } catch (err) {
+          setUploadMessage('❌ AI profile failed: ' + err.message);
+          setTimeout(() => setUploadMessage(''), 5000);
+        } finally {
+          setEntityModalAnalyzing(false);
+        }
+      };
+
       const goBack = () => {
         setSelectedEntity(null);
         setBreadcrumbs(prev => prev.slice(0,-1));
@@ -3897,7 +3957,20 @@
                 </div>
                 <div className="modal-actions">
                   {canEdit && !entityModalEditing && (
-                    <button className="edit-btn" onClick={() => { setEntityModalDraft({description:profile.description||'', date_start:profile.date_start||'', date_end:profile.date_end||''}); setEntityModalEditing(true); }}>✏️ Edit</button>
+                    <>
+                      <div className="tooltip-wrapper">
+                        <button className="btn btn-primary" style={{padding:'0.5rem 1rem',fontSize:'0.875rem',opacity:entityModalAnalyzing||em.relEvents.length===0?0.55:1,cursor:entityModalAnalyzing||em.relEvents.length===0?'not-allowed':'pointer',background:profile.description?'rgba(96,165,250,0.15)':undefined,border:profile.description?'1px solid rgba(96,165,250,0.4)':undefined}} onClick={analyzeEntityProfile} disabled={entityModalAnalyzing||em.relEvents.length===0}>
+                          {entityModalAnalyzing ? '⏳ Analyzing…' : profile.description ? '🔄 Refresh AI Profile' : '✨ AI Profile'}
+                        </button>
+                        <div className="tooltip-content" style={{right:0,width:'260px'}}>
+                          {profile.description
+                            ? 'Re-run AI analysis using the latest related events. This will overwrite the current profile description and dates.'
+                            : 'Auto-generate a research profile using Claude AI. It will synthesize all related events to create a summary, key facts, and dates for this ' + (em.type==='person'?'person':em.type==='org'?'organization':'topic') + '.'}
+                          {em.relEvents.length===0 && ' (Disabled — no related events found.)'}
+                        </div>
+                      </div>
+                      <button className="edit-btn" onClick={() => { setEntityModalDraft({description:profile.description||'', date_start:profile.date_start||'', date_end:profile.date_end||''}); setEntityModalEditing(true); }}>✏️ Edit</button>
+                    </>
                   )}
                   {entityModalEditing && <>
                     <button className="btn btn-primary" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={saveEntityProfile}>💾 Save</button>
@@ -3937,7 +4010,7 @@
                         ? <ul style={{color:'#e0e6ed',lineHeight:1.8,paddingLeft:'1.25rem',margin:0}}>{profile.description.split('\n').filter(l=>l.trim()).map((line,i)=><li key={i} style={{marginBottom:'0.3rem'}}>{line.replace(/^[-•]\s*/,'')}</li>)}</ul>
                         : <p style={{color:'#e0e6ed',lineHeight:1.7}}>{profile.description}</p>
                       )
-                    : <p style={{color:'#4a5270',fontStyle:'italic',fontSize:'0.875rem'}}>{canEdit?'No description yet — click ✏️ Edit to add one.':'No description available.'}</p>
+                    : <p style={{color:'#4a5270',fontStyle:'italic',fontSize:'0.875rem'}}>{canEdit?'No description yet — click ✨ AI Profile to auto-generate one, or ✏️ Edit to write one manually.':'No description available.'}</p>
                 }
               </div>
 

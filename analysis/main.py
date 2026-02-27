@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import init_db, insert_record, update_record, get_record, get_all_records, get_pending_records
 from extractors import extract, get_file_type
-from analyzer import analyze_text, condense_text, generate_presentation_slides
+from analyzer import analyze_text, condense_text, generate_presentation_slides, analyze_entity_profile
 from video_analyzer import analyze_video_url, fetch_video_metadata_only, is_video_url, save_frames_to_disk, save_transcript_to_disk
 from web_scraper import scrape_url
 
@@ -499,6 +499,27 @@ async def delete_attachment(record_id: int, filename: str):
     return JSONResponse(content={"record": updated})
 
 
+# --- Entity Profile Analysis ---
+
+@app.post("/api/analyze-entity")
+async def analyze_entity(body: dict):
+    """Generate an AI profile for a person, organization, or topic based on related events."""
+    entity_type = body.get("entity_type", "").strip()
+    entity_name = body.get("entity_name", "").strip()
+    related_events = body.get("related_events", [])
+
+    if not entity_type or not entity_name:
+        raise HTTPException(status_code=400, detail="entity_type and entity_name are required")
+    if entity_type not in ("person", "org", "topic"):
+        raise HTTPException(status_code=400, detail="entity_type must be 'person', 'org', or 'topic'")
+
+    try:
+        result = analyze_entity_profile(entity_type, entity_name, related_events)
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Entity analysis failed: {e}")
+
+
 # --- Condense ---
 
 @app.post("/api/condense")
@@ -523,12 +544,13 @@ async def generate_presentation(body: dict):
     focuses = [f for f in body.get("focuses", []) if f.strip()]
     detail_level = body.get("detail_level", "standard")
     presentation_name = body.get("presentation_name", "Untitled Presentation")
+    entity_profiles = body.get("entity_profiles", {})
 
     if not events:
         raise HTTPException(status_code=400, detail="No events provided")
 
     try:
-        result = generate_presentation_slides(events, focuses, detail_level, presentation_name)
+        result = generate_presentation_slides(events, focuses, detail_level, presentation_name, entity_profiles=entity_profiles)
         return JSONResponse(content=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
