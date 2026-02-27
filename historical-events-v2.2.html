@@ -4012,6 +4012,11 @@
                   🛡️ {currentUser.role==='owner'?'Owner Panel':'Admin Panel'}
                 </button>
               )}
+              {currentUser.role === 'owner' && (
+                <button className={`account-tab ${accountTab==='manual'?'active-admin':''}`} onClick={()=>setAccountTab('manual')}>
+                  📖 Owner's Manual
+                </button>
+              )}
             </div>
             {/* My Uploads — Pages nav + FiltersComponent + page content, scoped to user's own uploads */}
             {accountTab === 'uploads' && (
@@ -4258,6 +4263,211 @@
             )}
                         {/* Admin / Owner Panel */}
             {accountTab === 'admin' && isAdminOrOwner && <AdminPanel />}
+
+            {/* Owner's Manual Tab */}
+            {accountTab === 'manual' && currentUser.role === 'owner' && (
+              <div style={{padding:'1.5rem 2rem',maxWidth:'860px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'0.75rem',marginBottom:'1.5rem'}}>
+                  <span style={{fontSize:'1.1rem',fontWeight:700,color:'#e2e8f8'}}>Owner's Manual</span>
+                  <span style={{fontSize:'0.72rem',color:'#8b92b0',background:'rgba(96,165,250,0.08)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'6px',padding:'2px 8px'}}>Last Updated: February 2026</span>
+                </div>
+
+                {/* Quick System Map */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem',marginBottom:'1rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 1 — Quick System Map</div>
+                  <div style={{fontSize:'0.82rem',color:'#8b92b0',marginBottom:'0.6rem'}}>5 external services power the database:</div>
+                  {[
+                    {num:'1',name:'GitHub',desc:'Stores the code. The "master copy" of the project.'},
+                    {num:'2',name:'Netlify',desc:'Puts the website online. Reads from GitHub automatically.'},
+                    {num:'3',name:'Supabase',desc:'The database. Stores all events, research, and user data.'},
+                    {num:'4',name:'Render',desc:'The AI brain server. Runs the Python backend (analysis, video transcription, file reading).'},
+                    {num:'5',name:'Anthropic',desc:'The AI company (makes Claude). Used for document & video analysis. You pay per use.'},
+                  ].map(s => (
+                    <div key={s.num} style={{display:'flex',gap:'0.75rem',alignItems:'flex-start',marginBottom:'0.4rem'}}>
+                      <span style={{minWidth:'22px',height:'22px',borderRadius:'50%',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'1px'}}>{s.num}</span>
+                      <span style={{fontSize:'0.82rem',color:'#c0c7d8'}}><strong style={{color:'#e2e8f8'}}>{s.name}</strong> — {s.desc}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Flowchart */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem',marginBottom:'1rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 2 — How Everything Connects</div>
+                  <div style={{display:'flex',flexDirection:'column',gap:'0.5rem',alignItems:'flex-start'}}>
+                    <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap',alignItems:'center'}}>
+                      {['GitHub','→ auto-deploy on push →','Netlify (live site)','→ user saves/loads data →','Supabase (database)'].map((s,i) => (
+                        <span key={i} style={{fontSize:'0.82rem',color:s.startsWith('→')?'#8b92b0':'#e2e8f8',background:s.startsWith('→')?'transparent':'rgba(96,165,250,0.08)',border:s.startsWith('→')?'none':'1px solid rgba(96,165,250,0.2)',borderRadius:'6px',padding:s.startsWith('→')?'0':'3px 10px'}}>{s}</span>
+                      ))}
+                    </div>
+                    <div style={{fontSize:'0.75rem',color:'#8b92b0',margin:'0.25rem 0 0.25rem 0'}}>When a user uploads a file or URL, a separate path fires:</div>
+                    <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap',alignItems:'center'}}>
+                      {['Browser upload','→','Render (backend server)','→ sends text →','Anthropic (Claude AI)','→ results →','Supabase'].map((s,i) => (
+                        <span key={i} style={{fontSize:'0.82rem',color:s==='→'?'#8b92b0':'#e2e8f8',background:s==='→'?'transparent':'rgba(96,165,250,0.08)',border:s==='→'?'none':'1px solid rgba(96,165,250,0.2)',borderRadius:'6px',padding:s==='→'?'0':'3px 10px'}}>{s}</span>
+                      ))}
+                    </div>
+                    <div style={{fontSize:'0.75rem',color:'#8b92b0',marginTop:'0.4rem'}}>Render also runs: yt-dlp (YouTube download) · Whisper (transcription) · OpenCV (video frames) · pdfplumber · pytesseract</div>
+                  </div>
+                </div>
+
+                {/* Service Details */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem',marginBottom:'1rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 3 — Service Details (Logins, Limits, Billing)</div>
+                  {[
+                    {
+                      name:'GitHub', url:'github.com', emoji:'🐙',
+                      what:'Stores all project code with full version history. Every push here auto-updates the live site via Netlify.',
+                      signup:'Email/password or Google account.',
+                      limit:'Free forever for public repos. No concerns at this project scale.',
+                      connected:'Netlify (watches GitHub and auto-deploys)',
+                      check:'If the live site doesn\'t update after a code change.',
+                    },
+                    {
+                      name:'Netlify', url:'app.netlify.com', emoji:'🟩',
+                      what:'Makes the HTML file available as a live website. Auto-rebuilds (~1-2 min) whenever GitHub is updated.',
+                      signup:'Almost certainly "Sign in with GitHub."',
+                      limit:'100 GB bandwidth/month · 300 build minutes/month · 1 free site. Very generous — thousands of users before hitting limits.',
+                      connected:'GitHub (reads code) · Your browser (serves the website)',
+                      check:'If site is down or showing an old version. Go to app.netlify.com → Deploys tab.',
+                    },
+                    {
+                      name:'Supabase', url:'supabase.com/dashboard', emoji:'🗄️',
+                      what:'The actual database — stores all events, people, topics, orgs, and user data.',
+                      signup:'GitHub OAuth or email/password.',
+                      limit:'500 MB database · 5 GB file storage · 5 GB bandwidth/month · 50k monthly active users. ⚠ Free projects PAUSE after 7 days of inactivity. Fix: Dashboard → your project → "Restore project" (takes ~2 min).',
+                      connected:'Netlify frontend (read/write events) · Render backend (writes analysis results)',
+                      check:'If events aren\'t loading — likely paused. Also check monthly database size under Database settings.',
+                    },
+                    {
+                      name:'Render', url:'dashboard.render.com', emoji:'⚙️',
+                      what:'Hosts the Python backend server that handles file reading, web scraping, video transcription, and AI calls.',
+                      signup:'Almost certainly "Sign in with GitHub."',
+                      limit:'⚠ SERVICE SLEEPS after 15 min of inactivity — first request after sleep takes ~30 sec (normal). 750 hrs/month free (enough for 1 service running 24/7). No persistent disk on free plan (uploaded temp files wiped on restart — event data is safe in Supabase).',
+                      connected:'Supabase (writes results) · Anthropic (sends text for AI) · Netlify frontend (receives upload requests)',
+                      check:'If AI analysis is failing repeatedly. Go to dashboard.render.com → your service → Logs tab for error details.',
+                    },
+                    {
+                      name:'Anthropic (Claude AI)', url:'console.anthropic.com', emoji:'🤖',
+                      what:'Provides the AI that reads and analyzes uploaded documents, web pages, and video transcripts. Returns structured summaries, topics, people, and orgs.',
+                      signup:'Email/password only — Anthropic does NOT offer GitHub login.',
+                      limit:'⚠ NO FREE TIER — pay per use. Approx. costs: short doc ~$0.01–0.05 · long doc/web page ~$0.05–0.15 · video with transcript ~$0.10–0.30. Pre-load credits and set a monthly spending cap at console.anthropic.com → Settings → Limits.',
+                      connected:'Render (Render calls Anthropic on every analysis)',
+                      check:'Monthly — review spending at console.anthropic.com → Usage. If analysis fails with "invalid API key" — regenerate at console.anthropic.com → API Keys.',
+                    },
+                  ].map(s => (
+                    <div key={s.name} style={{marginBottom:'1rem',paddingBottom:'1rem',borderBottom:'1px solid rgba(96,165,250,0.1)'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.5rem'}}>
+                        <span style={{fontSize:'1rem'}}>{s.emoji}</span>
+                        <span style={{fontSize:'0.9rem',fontWeight:700,color:'#e2e8f8'}}>{s.name}</span>
+                        <span style={{fontSize:'0.72rem',color:'#60a5fa',fontFamily:"'Space Mono',monospace"}}>{s.url}</span>
+                      </div>
+                      {[
+                        {label:'What it does',val:s.what},
+                        {label:'Signed up with',val:s.signup},
+                        {label:'Free limits',val:s.limit},
+                        {label:'Connected to',val:s.connected},
+                        {label:'When to check',val:s.check},
+                      ].map(row => (
+                        <div key={row.label} style={{display:'grid',gridTemplateColumns:'110px 1fr',gap:'0.4rem',marginBottom:'0.2rem'}}>
+                          <span style={{fontSize:'0.72rem',color:'#8b92b0',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px',paddingTop:'1px'}}>{row.label}</span>
+                          <span style={{fontSize:'0.8rem',color:'#c0c7d8',lineHeight:1.5}}>{row.val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                {/* App Accounts */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem',marginBottom:'1rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 4 — App User Accounts</div>
+                  <div style={{fontSize:'0.82rem',color:'#8b92b0',marginBottom:'0.75rem'}}>The database has its own internal login system (separate from all platforms above). Default hardcoded accounts:</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 2fr',gap:'0.5rem',marginBottom:'0.75rem'}}>
+                    <div style={{fontSize:'0.7rem',color:'#8b92b0',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px'}}>Username</div>
+                    <div style={{fontSize:'0.7rem',color:'#8b92b0',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px'}}>Password</div>
+                    <div style={{fontSize:'0.7rem',color:'#8b92b0',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px'}}>Role</div>
+                    {[
+                      {u:'owner',p:'owner123',r:'Full access. Your main account.',c:'#60a5fa'},
+                      {u:'admin',p:'admin123',r:'Can manage users and events',c:'#a78bfa'},
+                      {u:'testuser',p:'test123',r:'Basic user — for testing only',c:'#9ca3af'},
+                    ].map(a=>(
+                      <React.Fragment key={a.u}>
+                        <div style={{fontSize:'0.82rem',color:a.c,fontFamily:"'Space Mono',monospace"}}>{a.u}</div>
+                        <div style={{fontSize:'0.82rem',color:'#c0c7d8',fontFamily:"'Space Mono',monospace"}}>{a.p}</div>
+                        <div style={{fontSize:'0.82rem',color:'#8b92b0'}}>{a.r}</div>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:'8px',padding:'0.6rem 0.85rem',fontSize:'0.8rem',color:'#f87171'}}>
+                    ⚠ Change these passwords before sharing the site. Open <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.75rem'}}>historical-events-v2.2.html</span> and search for <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.75rem'}}>HARDCODED_USERS</span>.
+                  </div>
+                </div>
+
+                {/* Monthly Checklist */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem',marginBottom:'1rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 5 — Monthly Maintenance Checklist</div>
+                  {[
+                    {task:'Check Anthropic usage + spending',where:'console.anthropic.com → Usage · Make sure you have credits and haven\'t hit your limit'},
+                    {task:'Check Netlify bandwidth',where:'app.netlify.com → your site → Analytics · Stays well under 100 GB unless thousands of daily users'},
+                    {task:'Check Supabase database size',where:'supabase.com/dashboard → your project → Database · 500 MB free, text data is tiny'},
+                    {task:'Check Render logs if AI has been failing',where:'dashboard.render.com → your service → Logs tab'},
+                    {task:'If Supabase paused (site loads but no data)',where:'supabase.com/dashboard → your project → click "Restore project"'},
+                  ].map((item,i) => (
+                    <div key={i} style={{display:'flex',gap:'0.75rem',alignItems:'flex-start',marginBottom:'0.6rem'}}>
+                      <span style={{minWidth:'18px',height:'18px',borderRadius:'3px',border:'1px solid rgba(96,165,250,0.3)',flexShrink:0,marginTop:'2px'}}></span>
+                      <div>
+                        <div style={{fontSize:'0.82rem',color:'#e2e8f8',fontWeight:600}}>{item.task}</div>
+                        <div style={{fontSize:'0.76rem',color:'#8b92b0',marginTop:'1px'}}>{item.where}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Troubleshooting */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem',marginBottom:'1rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 6 — Quick Troubleshooting</div>
+                  {[
+                    {problem:'Site is down / won\'t load',cause:'Netlify outage or deploy failed',fix:'app.netlify.com → look for failed deploy in red'},
+                    {problem:'Events not loading / blank database',cause:'Supabase paused (inactive 7+ days)',fix:'supabase.com/dashboard → restore the project'},
+                    {problem:'AI analysis not working',cause:'Render asleep OR Anthropic API key/credits issue',fix:'Wait 30 sec and retry · then check console.anthropic.com → API Keys + Usage'},
+                    {problem:'First upload takes ~30 seconds',cause:'Normal — Render backend is waking from sleep',fix:'Nothing is broken. Retry once it\'s awake.'},
+                    {problem:'Code changes not showing on live site',cause:'GitHub push may have failed or Netlify deploy errored',fix:'Check GitHub push was successful · then app.netlify.com → Deploys'},
+                  ].map((item,i) => (
+                    <div key={i} style={{marginBottom:'0.75rem',paddingBottom:'0.75rem',borderBottom:'1px solid rgba(96,165,250,0.08)'}}>
+                      <div style={{fontSize:'0.82rem',color:'#f87171',fontWeight:700,marginBottom:'0.2rem'}}>Problem: {item.problem}</div>
+                      <div style={{display:'grid',gridTemplateColumns:'80px 1fr',gap:'0.3rem'}}>
+                        <span style={{fontSize:'0.72rem',color:'#8b92b0',fontWeight:600}}>Cause</span>
+                        <span style={{fontSize:'0.78rem',color:'#c0c7d8'}}>{item.cause}</span>
+                        <span style={{fontSize:'0.72rem',color:'#8b92b0',fontWeight:600}}>Fix</span>
+                        <span style={{fontSize:'0.78rem',color:'#c0c7d8'}}>{item.fix}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* All URLs */}
+                <div style={{background:'rgba(15,18,35,0.6)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'12px',padding:'1.25rem 1.5rem'}}>
+                  <div style={{fontSize:'0.72rem',color:'#60a5fa',textTransform:'uppercase',letterSpacing:'1px',fontWeight:700,marginBottom:'0.75rem'}}>Section 7 — All Important URLs</div>
+                  {[
+                    {label:'YOUR LIVE WEBSITE',url:'https://historical-events-databse.netlify.app',highlight:true},
+                    {label:'YOUR BACKEND API',url:'https://historical-events-api-n45u.onrender.com',highlight:true},
+                    {label:'GitHub dashboard',url:'https://github.com'},
+                    {label:'Netlify dashboard',url:'https://app.netlify.com'},
+                    {label:'Supabase dashboard',url:'https://supabase.com/dashboard'},
+                    {label:'Render dashboard',url:'https://dashboard.render.com'},
+                    {label:'Anthropic / Claude console',url:'https://console.anthropic.com'},
+                  ].map(item => (
+                    <div key={item.url} style={{display:'grid',gridTemplateColumns:'200px 1fr',gap:'0.5rem',marginBottom:'0.35rem',alignItems:'center'}}>
+                      <span style={{fontSize:'0.75rem',color: item.highlight?'#e2e8f8':'#8b92b0',fontWeight:item.highlight?700:400}}>{item.label}</span>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer"
+                        style={{fontSize:'0.78rem',color:'#60a5fa',fontFamily:"'Space Mono',monospace",textDecoration:'none',wordBreak:'break-all'}}
+                        onMouseOver={e=>e.target.style.textDecoration='underline'}
+                        onMouseOut={e=>e.target.style.textDecoration='none'}>
+                        {item.url}
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       };
