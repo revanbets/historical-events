@@ -71,6 +71,28 @@
       </button>
     </div>
 
+    <!-- Video Range Capture Panel (shown only on video pages) -->
+    <div id="video-capture-panel" class="video-capture-panel" style="display:none;">
+      <div class="video-panel-header">🎬 Video Range Capture</div>
+      <div class="video-panel-body">
+        <div class="video-ts-row">
+          <div class="video-ts-slot">
+            <span class="video-ts-label">Start</span>
+            <span id="vc-start-display" class="video-ts-value">—</span>
+            <button id="vc-mark-start" class="btn-vc-mark">Mark</button>
+          </div>
+          <span class="video-ts-arrow">→</span>
+          <div class="video-ts-slot">
+            <span class="video-ts-label">End</span>
+            <span id="vc-end-display" class="video-ts-value">—</span>
+            <button id="vc-mark-end" class="btn-vc-mark">Mark</button>
+          </div>
+        </div>
+        <button id="vc-capture-btn" class="btn-vc-capture" disabled>📷 Capture Frames</button>
+        <div id="vc-status" class="vc-status" style="display:none;"></div>
+      </div>
+    </div>
+
     <!-- Session Bar -->
     <div class="session-bar">
       <div class="session-bar-left">

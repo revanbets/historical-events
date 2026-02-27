@@ -51,6 +51,10 @@ let state = {
   sessionPaused: false
 };
 
+// Video range capture state (for popup panel)
+let vcStart = null;  // seconds
+let vcEnd = null;    // seconds (optional)
+
 let currentTab = 'captured';
 
 // ─── Boot ─────────────────────────────────────────────────────
@@ -89,6 +93,15 @@ async function loadCurrentPageInfo() {
     $('capture-url-btn').dataset.url = tab.url || '';
     $('capture-url-btn').dataset.title = tab.title || '';
     $('capture-url-btn').dataset.favicon = tab.favIconUrl || '';
+
+    // Show video capture panel if on a video page
+    const isVideo = tab.url && (
+      tab.url.includes('youtube.com') ||
+      tab.url.includes('youtu.be') ||
+      tab.url.includes('vimeo.com') ||
+      tab.url.includes('twitch.tv')
+    );
+    $('video-capture-panel').style.display = (isVideo && state.session) ? '' : 'none';
   } catch (e) {
     console.warn('Could not get current tab info:', e);
   }
@@ -204,7 +217,16 @@ function renderCaptureCard(item) {
     : '';
 
   const timecodeHtml = item.timecode
-    ? `<span class="card-timecode">⏱ ${escHtml(item.timecode)}</span>`
+    ? `<span class="card-timecode">⏱ ${escHtml(item.timecode)}${item.timecodeEnd ? ' → ' + escHtml(item.timecodeEnd) : ''}</span>`
+    : '';
+
+  const framesHtml = item.frames && item.frames.length > 0
+    ? `<div class="card-frames">
+        ${item.frames.slice(0, 5).map(f =>
+          `<img class="card-frame-thumb" src="${escHtml(f.dataUrl)}" alt="@${escHtml(f.timecode)}" title="Frame at ${escHtml(f.timecode)}" />`
+        ).join('')}
+        ${item.frames.length > 5 ? `<span class="card-frames-more">+${item.frames.length - 5} more</span>` : ''}
+      </div>`
     : '';
 
   const savedHtml = item.saved
@@ -228,6 +250,7 @@ function renderCaptureCard(item) {
         <span class="card-source" title="${escHtml(item.url)}">${escHtml(truncate(item.pageTitle || getDomain(item.url), 36))}</span>
         ${timecodeHtml}
       </div>
+      ${framesHtml}
       <div class="card-footer">
         <span class="card-timestamp">${timeAgo(item.timestamp)}</span>
         ${savedHtml}
@@ -365,6 +388,11 @@ function bindEvents() {
 
   // Clear trail
   $('clear-trail-btn').addEventListener('click', handleClearTrail);
+
+  // Video range capture panel
+  $('vc-mark-start').addEventListener('click', handleVcMarkStart);
+  $('vc-mark-end').addEventListener('click', handleVcMarkEnd);
+  $('vc-capture-btn').addEventListener('click', handleVcCapture);
 }
 
 // ─── Handlers ──────────────────────────────────────────────────
@@ -586,6 +614,102 @@ function escHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ─── Video Range Capture ────────────────────────────────────────
+async function handleVcMarkStart() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const resp = await chrome.tabs.sendMessage(tab.id, { type: 'GET_VIDEO_TIME' });
+    if (resp && resp.timecode) {
+      vcStart = resp.secs;
+      $('vc-start-display').textContent = resp.timecode;
+      $('vc-capture-btn').disabled = false;
+    }
+  } catch (e) {
+    console.warn('[HDB] Could not get video time:', e);
+  }
+}
+
+async function handleVcMarkEnd() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const resp = await chrome.tabs.sendMessage(tab.id, { type: 'GET_VIDEO_TIME' });
+    if (resp && resp.timecode) {
+      vcEnd = resp.secs;
+      $('vc-end-display').textContent = resp.timecode;
+    }
+  } catch (e) {
+    console.warn('[HDB] Could not get video time:', e);
+  }
+}
+
+async function handleVcCapture() {
+  if (vcStart === null) return;
+
+  const btn = $('vc-capture-btn');
+  const status = $('vc-status');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Capturing…';
+  status.style.display = '';
+  status.textContent = 'Seeking and capturing frames…';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    // Ask content script to capture frames across the range
+    const frameResp = await new Promise((resolve, reject) => {
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'CAPTURE_FRAMES_IN_RANGE',
+        startSecs: vcStart,
+        endSecs: vcEnd !== null ? vcEnd : vcStart
+      }, resp => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(resp);
+      });
+    });
+
+    const frames = frameResp?.frames || [];
+    status.textContent = `Got ${frames.length} frame${frames.length !== 1 ? 's' : ''}… saving`;
+
+    const startTc = $('vc-start-display').textContent;
+    const endTc = $('vc-end-display').textContent;
+
+    // Save as a captured item
+    const result = await send({
+      type: 'CAPTURE_TEXT',
+      text: '',
+      url: tab.url || '',
+      pageTitle: tab.title || '',
+      favIconUrl: tab.favIconUrl || '',
+      timecode: startTc !== '—' ? startTc : null,
+      timecodeEnd: (endTc !== '—' && endTc !== startTc) ? endTc : null,
+      frames
+    });
+
+    state.capturedItems = [...(state.capturedItems || []), result.item];
+    renderCapturedItems();
+
+    // Reset panel
+    vcStart = null;
+    vcEnd = null;
+    $('vc-start-display').textContent = '—';
+    $('vc-end-display').textContent = '—';
+
+    status.textContent = `✓ ${frames.length} frame${frames.length !== 1 ? 's' : ''} captured`;
+    setTimeout(() => {
+      status.style.display = 'none';
+      btn.textContent = '📷 Capture Frames';
+      btn.disabled = true;
+    }, 2500);
+
+  } catch (e) {
+    console.error('[HDB] Video range capture failed:', e);
+    status.textContent = 'Capture failed — try again';
+    btn.textContent = '📷 Capture Frames';
+    btn.disabled = vcStart === null;
+  }
 }
 
 // ─── Auto-refresh state when popup is open ─────────────────────

@@ -541,10 +541,10 @@
               event_status: 'unverified',
               backend_id: (ai && ai.id) || null,
               ai_analyzed: !!ai, analysis_mode: ai ? 'url' : null,
-              has_frames: false, frames_data: [], visual_content: '',
+              has_frames: !!(c.frames && c.frames.length > 0), frames_data: c.frames || [], visual_content: '',
               transcript_file: null, attachments: [], backend_file_name: null,
               is_video: rsIsVideo(c.url),
-              transcription: c.timecode ? { timecode: c.timecode, url: c.url } : null
+              transcription: c.timecode ? { timecode: c.timecode, timecodeEnd: c.timecodeEnd || null, url: c.url } : null
             };
             await supabaseClient.from('events').insert(ev);
             created++;
@@ -952,10 +952,37 @@
                           style={{fontSize:'0.72rem', color:'#c4b5fd', textDecoration:'none'}}
                           onMouseEnter={e=>e.currentTarget.style.textDecoration='underline'}
                           onMouseLeave={e=>e.currentTarget.style.textDecoration='none'}>
-                          &#9654; Jump to {rsCaptureModal.capture.timecode}
+                          &#9654; Jump to {rsCaptureModal.capture.timecode}{rsCaptureModal.capture.timecodeEnd ? ' → ' + rsCaptureModal.capture.timecodeEnd : ''}
                         </a>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Frame strip */}
+                {rsCaptureModal.capture.frames && rsCaptureModal.capture.frames.length > 0 && (
+                  <div style={{marginBottom:'1rem'}}>
+                    <div style={{fontSize:'0.68rem', color:'#4a5270', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'0.5rem'}}>
+                      Captured Frames &mdash; {rsCaptureModal.capture.frames.length} frame{rsCaptureModal.capture.frames.length !== 1 ? 's' : ''}
+                      {rsCaptureModal.capture.timecodeEnd && (
+                        <span style={{marginLeft:'0.5rem', color:'#c4b5fd', fontWeight:400, textTransform:'none', letterSpacing:0}}>
+                          ({rsCaptureModal.capture.timecode} → {rsCaptureModal.capture.timecodeEnd})
+                        </span>
+                      )}
+                    </div>
+                    <div style={{display:'flex', gap:'5px', flexWrap:'wrap'}}>
+                      {rsCaptureModal.capture.frames.map((f, fi) => (
+                        <a key={fi} href={rsCaptureModal.capture.url} target="_blank" rel="noreferrer" style={{display:'block', flexShrink:0}}>
+                          <img src={f.dataUrl} alt={'Frame at ' + f.timecode} title={'Frame at ' + f.timecode}
+                            style={{width:'96px', height:'54px', objectFit:'cover', borderRadius:'5px',
+                              border:'1px solid rgba(196,181,253,0.2)', display:'block', cursor:'pointer',
+                              transition:'border-color 0.12s'}}
+                            onMouseEnter={e=>e.currentTarget.style.borderColor='rgba(196,181,253,0.5)'}
+                            onMouseLeave={e=>e.currentTarget.style.borderColor='rgba(196,181,253,0.2)'} />
+                          <div style={{fontSize:'0.6rem', color:'#4a5270', textAlign:'center', fontFamily:'monospace', marginTop:'2px'}}>{f.timecode}</div>
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
 

@@ -917,5 +917,150 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* ─── VIDEO CAPTURE PANEL ────────────────────────────────── */
+.video-capture-panel {
+  background: rgba(196, 181, 253, 0.04);
+  border-bottom: 1px solid rgba(196, 181, 253, 0.18);
+  flex-shrink: 0;
+}
+
+.video-panel-header {
+  padding: 6px 14px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--purple);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.video-panel-body {
+  padding: 4px 14px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.video-ts-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.video-ts-slot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 7px;
+}
+
+.video-ts-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.video-ts-value {
+  flex: 1;
+  font-size: 11px;
+  font-family: 'Space Mono', monospace;
+  color: var(--purple);
+  text-align: center;
+}
+
+.video-ts-arrow {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.btn-vc-mark {
+  padding: 2px 7px;
+  background: var(--purple-dim);
+  border: 1px solid rgba(196, 181, 253, 0.3);
+  border-radius: 4px;
+  color: var(--purple);
+  font-family: 'Karla', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-vc-mark:hover {
+  background: rgba(196, 181, 253, 0.25);
+}
+
+.btn-vc-capture {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, rgba(196, 181, 253, 0.18), rgba(196, 181, 253, 0.08));
+  border: 1px solid rgba(196, 181, 253, 0.32);
+  border-radius: 7px;
+  color: var(--purple);
+  font-family: 'Karla', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, opacity 0.12s;
+}
+
+.btn-vc-capture:hover:not(:disabled) {
+  background: rgba(196, 181, 253, 0.28);
+}
+
+.btn-vc-capture:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.vc-status {
+  font-size: 11px;
+  color: var(--text-mid);
+  text-align: center;
+  padding: 1px 0;
+}
+
+/* ─── FRAME THUMBNAILS IN CAPTURE CARDS ──────────────────── */
+.card-frames {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+  margin-bottom: 1px;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.card-frame-thumb {
+  width: 52px;
+  height: 30px;
+  border-radius: 3px;
+  object-fit: cover;
+  border: 1px solid rgba(196, 181, 253, 0.2);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 0.1s;
+}
+
+.card-frame-thumb:hover {
+  border-color: var(--purple);
+}
+
+.card-frames-more {
+  font-size: 10px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ─── UTILITY ────────────────────────────────────────────── */
 .hidden { display: none !important; }

@@ -142,15 +142,15 @@ function buildEventObject(captured, aiData, session) {
     backend_id: aiData?.id || null,
     ai_analyzed: !!aiData,
     analysis_mode: aiData ? 'url' : null,
-    has_frames: aiData?.has_frames || false,
+    has_frames: (captured.frames && captured.frames.length > 0) || aiData?.has_frames || false,
     visual_content: '',
-    frames_data: aiData?.frames || [],
+    frames_data: (captured.frames && captured.frames.length > 0) ? captured.frames : (aiData?.frames || []),
     transcript_file: aiData?.transcript_file || null,
     attachments: [],
     backend_file_name: null,
     is_video: isVideo,
     transcription: captured.timecode
-      ? { timecode: captured.timecode, url: captured.url }
+      ? { timecode: captured.timecode, timecodeEnd: captured.timecodeEnd || null, url: captured.url }
       : null
   };
 }
@@ -304,6 +304,8 @@ async function handleMessage(msg, sender) {
         pageTitle: msg.pageTitle || '',
         favIconUrl: msg.favIconUrl || '',
         timecode: msg.timecode || null,
+        timecodeEnd: msg.timecodeEnd || null,
+        frames: msg.frames || [],
         timestamp: new Date().toISOString(),
         saved: false,
         savedEventId: null
