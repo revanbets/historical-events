@@ -1448,6 +1448,11 @@
       const [uploadMessage, setUploadMessage] = useState('');
       const [saveStatus, setSaveStatus] = useState('');
       const [selectedEntity, setSelectedEntity] = useState(null);
+      const [entityModalOpen, setEntityModalOpen] = useState(false);
+      const [entityModalData, setEntityModalData] = useState(null);
+      const [entityModalEditing, setEntityModalEditing] = useState(false);
+      const [entityModalDraft, setEntityModalDraft] = useState({description:'',date_start:'',date_end:''});
+      const [entityProfiles, setEntityProfiles] = useState({});
       const [urlInput, setUrlInput] = useState('');
       const [timestampStart, setTimestampStart] = useState('');
       const [timestampEnd, setTimestampEnd] = useState('');
@@ -2784,7 +2789,8 @@
               const id = params.nodes[0];
               if (id.startsWith('p-')) openEntityDetail('person', id.substring(2));
               else if (id.startsWith('o-')) openEntityDetail('org', id.substring(2));
-              else if (!id.startsWith('t-')) { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, activeTab); }
+              else if (id.startsWith('t-')) openEntityDetail('topic', id.substring(2));
+              else { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, activeTab); }
             }
           });
         }
@@ -2828,7 +2834,8 @@
             const id = params.nodes[0];
             if (id.startsWith('p-')) openEntityDetail('person', id.substring(2));
             else if (id.startsWith('o-')) openEntityDetail('org', id.substring(2));
-            else if (!id.startsWith('t-')) { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, 'account'); }
+            else if (id.startsWith('t-')) openEntityDetail('topic', id.substring(2));
+            else { const ev = eventsToShow.find(e => e.id === id); if (ev) openEventModal(ev, 'account'); }
           }
         });
       };
@@ -3240,19 +3247,62 @@
       };
 
       const openEntityDetail = (type, name) => {
-        const fromTab = activeTab;
-        const fromLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
-        pushBreadcrumb(fromLabel, () => { setSelectedEntity(null); setActiveTab(fromTab); });
-        setShowModal(false);
-        setSelectedEntity({
-          type, name,
-          events: data.events.filter(e => {
-            if (type === 'person') return (e.people||[]).includes(name);
-            if (type === 'org') return (e.organizations||[]).includes(name);
-            if (type === 'topic') return (e.topics||[]).includes(name);
-            return false;
-          })
+        const relEvents = data.events.filter(e => {
+          if (type === 'person') return (e.people||[]).includes(name);
+          if (type === 'org') return (e.organizations||[]).includes(name);
+          if (type === 'topic') return (e.topics||[]).includes(name);
+          return false;
         });
+        const coTopics = {}, coPeople = {}, coOrgs = {};
+        relEvents.forEach(e => {
+          (e.topics||[]).forEach(t => { coTopics[t] = (coTopics[t]||0)+1; });
+          (e.people||[]).forEach(p => { coPeople[p] = (coPeople[p]||0)+1; });
+          (e.organizations||[]).forEach(o => { coOrgs[o] = (coOrgs[o]||0)+1; });
+        });
+        if (type==='topic') delete coTopics[name];
+        if (type==='person') delete coPeople[name];
+        if (type==='org') delete coOrgs[name];
+        const sortByCount = obj => Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([n,c])=>({name:n,count:c}));
+        const cacheKey = `${type}:${name}`;
+        setEntityModalData({
+          type, name, relEvents,
+          connections: { topics: sortByCount(coTopics), people: sortByCount(coPeople), orgs: sortByCount(coOrgs) },
+          profile: entityProfiles[cacheKey] || null
+        });
+        setEntityModalEditing(false);
+        setEntityModalOpen(true);
+        setShowModal(false);
+        if (!entityProfiles[cacheKey] && supabaseClient) {
+          supabaseClient.from('entity_profiles').select('*')
+            .eq('entity_type', type).eq('entity_name', name).maybeSingle()
+            .then(({data: p}) => {
+              if (p) {
+                setEntityProfiles(prev => ({...prev, [cacheKey]: p}));
+                setEntityModalData(prev => prev && prev.type===type && prev.name===name ? {...prev, profile: p} : prev);
+              }
+            });
+        }
+      };
+
+      const saveEntityProfile = async () => {
+        if (!entityModalData) return;
+        const {type, name} = entityModalData;
+        const cacheKey = `${type}:${name}`;
+        const profileData = {
+          entity_type: type, entity_name: name,
+          description: entityModalDraft.description || '',
+          date_start: entityModalDraft.date_start || '',
+          date_end: entityModalDraft.date_end || '',
+          updated_by: currentUser.username,
+          updated_at: new Date().toISOString()
+        };
+        const {data: saved, error} = await supabaseClient.from('entity_profiles')
+          .upsert(profileData, {onConflict: 'entity_type,entity_name'}).select().single();
+        if (error) { setUploadMessage('❌ Save failed: ' + error.message); setTimeout(()=>setUploadMessage(''),4000); return; }
+        const prof = saved || profileData;
+        setEntityProfiles(prev => ({...prev, [cacheKey]: prof}));
+        setEntityModalData(prev => prev ? {...prev, profile: prof} : prev);
+        setEntityModalEditing(false);
       };
 
       const goBack = () => {
@@ -3758,6 +3808,137 @@
         </div>
       );
 
+      // ── Entity Profile Modal ──
+      const entityProfileModalJSX = !entityModalOpen || !entityModalData ? null : (() => {
+        const em = entityModalData;
+        const canEdit = currentUser && (currentUser.role === 'owner' || currentUser.role === 'admin');
+        const typeLabel = em.type === 'person' ? 'PERSON' : em.type === 'org' ? 'ORGANIZATION' : 'TOPIC';
+        const typeBadgeBg = em.type === 'person' ? 'rgba(96,165,250,0.15)' : em.type === 'org' ? 'rgba(16,185,129,0.15)' : 'rgba(167,139,250,0.15)';
+        const typeBadgeBorder = em.type === 'person' ? 'rgba(96,165,250,0.5)' : em.type === 'org' ? 'rgba(16,185,129,0.5)' : 'rgba(167,139,250,0.5)';
+        const typeBadgeText = em.type === 'person' ? '#60a5fa' : em.type === 'org' ? '#10b981' : '#a78bfa';
+        const dateStartLabel = em.type === 'person' ? 'Born' : em.type === 'org' ? 'Founded' : 'Active From';
+        const dateEndLabel = em.type === 'person' ? 'Died' : em.type === 'org' ? 'Dissolved' : 'Active Until';
+        const profile = em.profile || {};
+        return (
+          <div className="modal" onClick={() => setEntityModalOpen(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth:'860px'}}>
+              {/* Header */}
+              <div className="modal-header">
+                <div style={{flex:1}}>
+                  <span style={{display:'inline-block',marginBottom:'0.6rem',padding:'0.2rem 0.75rem',background:typeBadgeBg,border:`1px solid ${typeBadgeBorder}`,borderRadius:'20px',color:typeBadgeText,fontSize:'0.68rem',fontWeight:700,letterSpacing:'1.5px'}}>{typeLabel}</span>
+                  <h2 className="modal-title">{em.name}</h2>
+                  <p style={{color:'#8b92b0',fontSize:'0.85rem',marginTop:'0.25rem'}}>{em.relEvents.length} related event{em.relEvents.length!==1?'s':''}</p>
+                </div>
+                <div className="modal-actions">
+                  {canEdit && !entityModalEditing && (
+                    <button className="edit-btn" onClick={() => { setEntityModalDraft({description:profile.description||'', date_start:profile.date_start||'', date_end:profile.date_end||''}); setEntityModalEditing(true); }}>✏️ Edit</button>
+                  )}
+                  {entityModalEditing && <>
+                    <button className="btn btn-primary" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={saveEntityProfile}>💾 Save</button>
+                    <button className="btn btn-danger" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={() => setEntityModalEditing(false)}>Cancel</button>
+                  </>}
+                  <button className="close" onClick={() => setEntityModalOpen(false)}>×</button>
+                </div>
+              </div>
+
+              {/* Dates */}
+              {(entityModalEditing || profile.date_start || profile.date_end) && (
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1rem',marginBottom:'1.5rem',padding:'1rem 1.25rem',background:'rgba(26,31,58,0.5)',borderRadius:'10px',border:'1px solid rgba(61,69,99,0.3)'}}>
+                  <div>
+                    <div style={{fontSize:'0.7rem',color:'#8b92b0',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'0.5rem'}}>{dateStartLabel}</div>
+                    {entityModalEditing
+                      ? <input value={entityModalDraft.date_start} onChange={e=>setEntityModalDraft(prev=>({...prev,date_start:e.target.value}))} placeholder="e.g. January 1, 1950" style={{width:'100%'}} />
+                      : <div style={{color:'#e0e6ed',fontSize:'1rem',fontWeight:600,fontFamily:"'Space Mono',monospace"}}>{profile.date_start||'—'}</div>
+                    }
+                  </div>
+                  <div>
+                    <div style={{fontSize:'0.7rem',color:'#8b92b0',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'0.5rem'}}>{dateEndLabel}</div>
+                    {entityModalEditing
+                      ? <input value={entityModalDraft.date_end} onChange={e=>setEntityModalDraft(prev=>({...prev,date_end:e.target.value}))} placeholder="e.g. March 12, 2010 or Present" style={{width:'100%'}} />
+                      : <div style={{color:'#e0e6ed',fontSize:'1rem',fontWeight:600,fontFamily:"'Space Mono',monospace"}}>{profile.date_end||'—'}</div>
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Description / About */}
+              <div className="form-group">
+                <label className="form-label">About</label>
+                {entityModalEditing
+                  ? <textarea value={entityModalDraft.description} onChange={e=>setEntityModalDraft(prev=>({...prev,description:e.target.value}))} rows={5} placeholder="Write a description of this entity..." style={{width:'100%',background:'rgba(10,14,39,0.8)',border:'2px solid rgba(45,53,97,0.5)',borderRadius:'10px',color:'#e0e6ed',padding:'0.875rem',fontSize:'0.875rem',fontFamily:'Karla,sans-serif',resize:'vertical',boxSizing:'border-box'}} />
+                  : profile.description
+                    ? (profile.description.includes('\n') || profile.description.startsWith('- ')
+                        ? <ul style={{color:'#e0e6ed',lineHeight:1.8,paddingLeft:'1.25rem',margin:0}}>{profile.description.split('\n').filter(l=>l.trim()).map((line,i)=><li key={i} style={{marginBottom:'0.3rem'}}>{line.replace(/^[-•]\s*/,'')}</li>)}</ul>
+                        : <p style={{color:'#e0e6ed',lineHeight:1.7}}>{profile.description}</p>
+                      )
+                    : <p style={{color:'#4a5270',fontStyle:'italic',fontSize:'0.875rem'}}>{canEdit?'No description yet — click ✏️ Edit to add one.':'No description available.'}</p>
+                }
+              </div>
+
+              {/* Connections */}
+              {(em.connections.topics.length > 0 || em.connections.people.length > 0 || em.connections.orgs.length > 0) && (
+                <div className="form-group">
+                  <label className="form-label">Connected To</label>
+                  <div style={{display:'flex',flexDirection:'column',gap:'0.85rem'}}>
+                    {em.connections.topics.length > 0 && (
+                      <div>
+                        <div style={{fontSize:'0.68rem',color:'#a78bfa',fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',marginBottom:'0.4rem'}}>Topics</div>
+                        <div className="tags">
+                          {em.connections.topics.slice(0,20).map(({name:t,count:c})=>(
+                            <span key={t} className="tag" style={{background:'rgba(167,139,250,0.15)',borderColor:'rgba(167,139,250,0.3)',cursor:'pointer'}} onClick={()=>openEntityDetail('topic',t)}>{t}<span style={{opacity:0.55,fontSize:'0.68rem',marginLeft:'0.3rem'}}>×{c}</span></span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {em.connections.people.length > 0 && (
+                      <div>
+                        <div style={{fontSize:'0.68rem',color:'#60a5fa',fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',marginBottom:'0.4rem'}}>People</div>
+                        <div className="tags">
+                          {em.connections.people.slice(0,20).map(({name:p,count:c})=>(
+                            <span key={p} className="tag" style={{cursor:'pointer'}} onClick={()=>openEntityDetail('person',p)}>{p}<span style={{opacity:0.55,fontSize:'0.68rem',marginLeft:'0.3rem'}}>×{c}</span></span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {em.connections.orgs.length > 0 && (
+                      <div>
+                        <div style={{fontSize:'0.68rem',color:'#10b981',fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',marginBottom:'0.4rem'}}>Organizations</div>
+                        <div className="tags">
+                          {em.connections.orgs.slice(0,20).map(({name:o,count:c})=>(
+                            <span key={o} className="tag" style={{background:'rgba(16,185,129,0.1)',borderColor:'rgba(16,185,129,0.3)',cursor:'pointer'}} onClick={()=>openEntityDetail('org',o)}>{o}<span style={{opacity:0.55,fontSize:'0.68rem',marginLeft:'0.3rem'}}>×{c}</span></span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Related Events */}
+              <div className="form-group" style={{marginBottom:0}}>
+                <label className="form-label">Related Events ({em.relEvents.length})</label>
+                {em.relEvents.length === 0
+                  ? <p style={{color:'#4a5270',fontStyle:'italic',fontSize:'0.875rem'}}>No events found.</p>
+                  : <div style={{display:'flex',flexDirection:'column',gap:'0.6rem',maxHeight:'320px',overflowY:'auto',paddingRight:'0.25rem'}}>
+                      {em.relEvents.map(e=>(
+                        <div key={e.id} style={{background:'rgba(26,31,58,0.6)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'10px',padding:'0.9rem 1rem',cursor:'pointer',transition:'border-color 0.15s'}}
+                          onClick={()=>{ setEntityModalOpen(false); openEventModal(e,'entity'); }}
+                          onMouseEnter={ev=>ev.currentTarget.style.borderColor='rgba(96,165,250,0.5)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
+                          <div style={{color:'#60a5fa',fontSize:'0.78rem',marginBottom:'0.25rem',fontFamily:"'Space Mono',monospace"}}>{e.date||'Date Unknown'}</div>
+                          <div style={{fontWeight:700,marginBottom:'0.35rem',fontSize:'0.95rem'}}>{e.title}</div>
+                          {e.description && <div style={{color:'#8b92b0',fontSize:'0.82rem',lineHeight:1.4}}>{e.description.substring(0,160)}{e.description.length>160?'…':''}</div>}
+                          {(e.topics||[]).length>0 && <div className="tags" style={{marginTop:'0.4rem'}}>{(e.topics||[]).slice(0,4).map((t,i)=><span key={i} className="tag" style={{fontSize:'0.68rem',padding:'0.15rem 0.5rem'}}>{t}</span>)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                }
+              </div>
+            </div>
+          </div>
+        );
+      })();
+
       // ── Account Page ──
       // NOTE: accountTab, myFilters, myPageTab all live in App scope to prevent reset on re-render
       const AccountPage = () => {
@@ -4209,65 +4390,7 @@
               <AccountPage />
             </main>
             {showModal && modalData && modalViewJSX}
-          </div>
-        );
-      }
-
-      // ── Entity Detail page ──
-      if (selectedEntity) {
-        return (
-          <div className="app">
-            <header className="header">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'1rem'}}>
-                <h1 style={{cursor:'pointer'}} onClick={()=>{ setSelectedEntity(null); navigateToTab('timeline'); }}>Historical Events Database</h1>
-                <div className="user-chip">
-                  <div className="user-chip-btn" onClick={()=>{ setSelectedEntity(null); navigateToTab('account'); }}>
-                    <div className="user-chip-avatar">{currentUser.username.substring(0,2).toUpperCase()}</div>
-                    <span style={{color:'#e0e6ed',fontSize:'0.875rem',fontWeight:600}}>{currentUser.username}</span>
-                    <span className={`role-badge role-${currentUser.role}`}>{currentUser.role}</span>
-                  </div>
-                  <button className="logout-btn" onClick={logout}>Logout</button>
-                </div>
-              </div>
-              <div className="stats">
-                <div className="stat"><span className="stat-label">Total Events</span><span className="stat-value">{data.events.length}</span></div>
-                <div className="stat"><span className="stat-label">People</span><span className="stat-value">{data.people.length}</span></div>
-                <div className="stat"><span className="stat-label">Organizations</span><span className="stat-value">{data.organizations.length}</span></div>
-                <div className="stat"><span className="stat-label">Topics</span><span className="stat-value">{data.topics.length}</span></div>
-              </div>
-            </header>
-            <div className="breadcrumb-bar">
-              <span className="bc-item" onClick={()=>{ setSelectedEntity(null); setBreadcrumbs([]); setActiveTab('timeline'); }}>🏠 Home</span>
-              {breadcrumbs.map((b,i) => (
-                <React.Fragment key={i}>
-                  <span className="bc-sep">›</span>
-                  <span className="bc-item" onClick={()=>goToBreadcrumb(i)}>{b.label}</span>
-                </React.Fragment>
-              ))}
-              <span className="bc-sep">›</span>
-              <span className="bc-current">{selectedEntity.name}</span>
-            </div>
-            <main className="content">
-              <button className="back-btn" onClick={goBack}>← Back</button>
-              <div style={{marginBottom:'2rem'}}>
-                <h2 style={{fontSize:'2rem',color:'#60a5fa',marginBottom:'0.5rem',fontFamily:"'Space Mono',monospace"}}>{selectedEntity.name}</h2>
-                <p style={{color:'#8b92b0'}}>{selectedEntity.events.length} related event{selectedEntity.events.length!==1?'s':''}</p>
-              </div>
-              <div style={{display:'flex',flexDirection:'column',gap:'1.5rem'}}>
-                {selectedEntity.events.map(e=>(
-                  <div key={e.id} style={{background:'rgba(26,31,58,0.6)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'12px',padding:'1.5rem',cursor:'pointer',transition:'all 0.2s'}}
-                    onClick={()=>openEventModal(e,'entity')}
-                    onMouseEnter={ev=>ev.currentTarget.style.borderColor='#60a5fa'}
-                    onMouseLeave={ev=>ev.currentTarget.style.borderColor='rgba(61,69,99,0.5)'}>
-                    <div style={{color:'#60a5fa',fontSize:'0.85rem',marginBottom:'0.5rem'}}>{e.date||'Date Unknown'}</div>
-                    <div style={{fontSize:'1.2rem',fontWeight:700,marginBottom:'0.75rem'}}>{e.title}</div>
-                    <div style={{color:'#8b92b0',marginBottom:'1rem',lineHeight:1.5}}>{(e.description||'').substring(0,200)}{(e.description||'').length>200?'...':''}</div>
-                    <div className="tags">{(e.topics||[]).slice(0,5).map((t,i)=><span key={i} className="tag">{t}</span>)}</div>
-                  </div>
-                ))}
-              </div>
-            </main>
-            {showModal && modalData && modalViewJSX}
+            {entityProfileModalJSX}
           </div>
         );
       }
@@ -5196,6 +5319,7 @@
           </main>
 
           {showModal && modalData && modalViewJSX}
+          {entityProfileModalJSX}
 
           {/* FULLSCREEN PRESENTATION MODE */}
           {presentationMode && (() => {
