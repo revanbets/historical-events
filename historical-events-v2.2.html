@@ -446,6 +446,244 @@
       );
     };
 
+    // ── Research Companion Page ──────────────────────────────────────────
+    // Defined OUTSIDE App to prevent a conditional React.useState hook violation.
+    // (Calling useState inside a conditional IIFE corrupts hook order → white screen.)
+    const _COMPANION_URL    = 'https://historical-events-databse.netlify.app/research-companion.html';
+    const _EXT_ZIP_URL      = 'https://historical-events-databse.netlify.app/hdb-extension.zip';
+    const _COMPANION_BM_SRC = `javascript:(function(){var sel='';try{sel=window.getSelection().toString().trim();}catch(e){}var tc='';try{var v=document.querySelector('video');if(v&&!isNaN(v.currentTime)){var s=Math.floor(v.currentTime);tc=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}}catch(e){}var d={url:location.href,title:document.title,text:sel,timecode:tc,ts:Date.now()};var w=window.open('','hdb_companion');if(w&&w.location&&w.location.href.indexOf('research-companion')!==-1){w.postMessage({type:'HDB_CAPTURE',data:d},'*');w.focus();}else{var encoded=encodeURIComponent(JSON.stringify(d));window.open('${_COMPANION_URL}#bm='+encoded,'hdb_companion','width=450,height=680,resizable=yes,scrollbars=yes');}})();`;
+
+    const CompanionPage = () => {
+      const [companionTab, setCompanionTab] = React.useState('setup');
+
+      const Badge = ({children, color='#60a5fa', bg='rgba(96,165,250,0.1)', border='rgba(96,165,250,0.25)'}) => (
+        <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 9px',background:bg,border:`1px solid ${border}`,borderRadius:'20px',fontSize:'0.72rem',fontWeight:700,color,whiteSpace:'nowrap'}}>{children}</span>
+      );
+
+      const Step = ({n, title, children}) => (
+        <div style={{display:'flex',gap:'1rem',alignItems:'flex-start',padding:'0.9rem 0',borderBottom:'1px solid rgba(96,165,250,0.07)'}}>
+          <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'linear-gradient(135deg,rgba(96,165,250,0.25),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.8rem',fontWeight:700,color:'#60a5fa',flexShrink:0}}>{n}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:'0.9rem',fontWeight:700,color:'#e2e8f8',marginBottom:'0.25rem'}}>{title}</div>
+            <div style={{fontSize:'0.82rem',color:'#8b95b0',lineHeight:1.6}}>{children}</div>
+          </div>
+        </div>
+      );
+
+      const Section = ({icon, title, subtitle, children}) => (
+        <div style={{background:'rgba(15,19,40,0.7)',border:'1px solid rgba(96,165,250,0.14)',borderRadius:'14px',padding:'1.5rem'}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:'0.75rem',marginBottom:'1rem'}}>
+            <span style={{fontSize:'1.6rem',lineHeight:1}}>{icon}</span>
+            <div>
+              <div style={{fontSize:'1.05rem',fontWeight:700,color:'#e2e8f8'}}>{title}</div>
+              {subtitle && <div style={{fontSize:'0.8rem',color:'#8b95b0',marginTop:'2px'}}>{subtitle}</div>}
+            </div>
+          </div>
+          {children}
+        </div>
+      );
+
+      const UsageCard = ({icon, title, steps}) => (
+        <div style={{background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'10px',padding:'1.1rem 1.25rem',marginBottom:'0.75rem'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'0.85rem'}}>
+            <span style={{fontSize:'1.2rem'}}>{icon}</span>
+            <span style={{fontSize:'0.9rem',fontWeight:700,color:'#e2e8f8'}}>{title}</span>
+          </div>
+          {steps.map((s,i) => (
+            <div key={i} style={{display:'flex',gap:'0.75rem',alignItems:'flex-start',padding:'5px 0',borderTop: i>0 ? '1px solid rgba(96,165,250,0.06)' : 'none'}}>
+              <span style={{fontSize:'0.75rem',fontWeight:700,color:'#60a5fa',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'4px',padding:'1px 6px',flexShrink:0,marginTop:'1px',minWidth:'22px',textAlign:'center'}}>{i+1}</span>
+              <span style={{fontSize:'0.83rem',color:'#c0c7d8',lineHeight:1.5}}>{s}</span>
+            </div>
+          ))}
+        </div>
+      );
+
+      return (
+        <div style={{maxWidth:'980px',margin:'0 auto',padding:'2rem 1.5rem'}}>
+          <div style={{textAlign:'center',marginBottom:'2rem'}}>
+            <div style={{fontSize:'2.5rem',marginBottom:'0.5rem'}}>🔬</div>
+            <h2 style={{fontFamily:"'Space Mono',monospace",fontSize:'1.4rem',fontWeight:700,color:'#e2e8f8',marginBottom:'0.5rem',letterSpacing:'0.5px'}}>Research Companion</h2>
+            <p style={{fontSize:'0.88rem',color:'#8b95b0',lineHeight:1.6,maxWidth:'520px',margin:'0 auto'}}>
+              Two tools that let you capture URLs, highlighted text, and video timestamps while you browse — then save them directly to this database with AI analysis.
+            </p>
+          </div>
+          <div style={{display:'flex',borderBottom:'1px solid rgba(96,165,250,0.14)',marginBottom:'1.75rem'}}>
+            {[['setup','🛠 Setup & Install'],['howto','📖 How to Use']].map(([id,label])=>(
+              <button key={id} onClick={()=>setCompanionTab(id)} style={{
+                padding:'0.65rem 1.5rem',background:'transparent',border:'none',
+                borderBottom: companionTab===id ? '2px solid #60a5fa' : '2px solid transparent',
+                color: companionTab===id ? '#60a5fa' : '#8b95b0',
+                fontSize:'0.875rem',fontWeight:700,cursor:'pointer',
+                fontFamily:'Karla,inherit',transition:'color 0.15s',marginBottom:'-1px'
+              }}>{label}</button>
+            ))}
+          </div>
+
+          {companionTab === 'setup' && (
+            <div>
+              <div style={{background:'rgba(96,165,250,0.06)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'10px',padding:'1rem 1.25rem',marginBottom:'1.5rem',display:'flex',gap:'0.75rem',alignItems:'flex-start'}}>
+                <span style={{fontSize:'1.1rem',flexShrink:0}}>💡</span>
+                <p style={{fontSize:'0.82rem',color:'#8b95b0',lineHeight:1.6,margin:0}}>
+                  You only need to set up <strong style={{color:'#c0c7d8'}}>one of these tools</strong> — pick whichever fits your browser. Both connect to the same database and do the same job.
+                </p>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.25rem',alignItems:'start'}}>
+                <Section icon="🧩" title="Chrome Extension" subtitle="Best for Chrome, Edge, and Brave — adds a toolbar button and right-click menu">
+                  <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1.1rem'}}>
+                    <Badge>✓ Chrome</Badge><Badge>✓ Edge</Badge><Badge>✓ Brave</Badge>
+                    <Badge color='#f87171' bg='rgba(248,113,113,0.08)' border='rgba(248,113,113,0.2)'>✗ Firefox</Badge>
+                    <Badge color='#f87171' bg='rgba(248,113,113,0.08)' border='rgba(248,113,113,0.2)'>✗ Safari</Badge>
+                  </div>
+                  <Step n="1" title='Download the extension files'>
+                    Click below — downloads a small ZIP file (~20KB).
+                    <br/><br/>
+                    <a href={_EXT_ZIP_URL} download style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'0.65rem 1.4rem',background:'linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.5)',borderRadius:'9px',color:'#60a5fa',textDecoration:'none',fontSize:'0.875rem',fontWeight:700}}
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(96,165,250,0.3)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))'}>
+                      ⬇ Download Extension (.zip)
+                    </a>
+                  </Step>
+                  <Step n="2" title='Unzip the downloaded file'>
+                    <strong style={{color:'#c0c7d8'}}>Mac:</strong> Double-click the ZIP.<br/>
+                    <strong style={{color:'#c0c7d8'}}>Windows:</strong> Right-click → "Extract All".<br/>
+                    Result: a folder called <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>chrome-extension</code>.
+                  </Step>
+                  <Step n="3" title='Open Chrome Extensions page'>
+                    Go to: <code style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.25)',padding:'4px 10px',borderRadius:'6px',fontSize:'0.82rem',color:'#93c5fd'}}>chrome://extensions</code>
+                    <div style={{marginTop:'6px',fontSize:'0.78rem',color:'#8b95b0'}}><strong style={{color:'#c0c7d8'}}>Edge:</strong> use <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 5px',borderRadius:'4px',color:'#93c5fd'}}>edge://extensions</code></div>
+                  </Step>
+                  <Step n="4" title='Turn on Developer Mode'>
+                    Toggle <strong style={{color:'#c0c7d8'}}>"Developer mode"</strong> in the top-right corner.
+                    <div style={{marginTop:'6px',padding:'6px 10px',background:'rgba(251,191,36,0.07)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:'6px',fontSize:'0.78rem',color:'#fbbf24'}}>⚠ Only allows loading extensions not from the store — nothing else changes.</div>
+                  </Step>
+                  <Step n="5" title='Load the extension folder'>
+                    Click <strong style={{color:'#c0c7d8'}}>"Load unpacked"</strong> → navigate to Downloads → select the <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>chrome-extension</code> folder → click <strong style={{color:'#c0c7d8'}}>Select Folder</strong>.
+                  </Step>
+                  <Step n="6" title="You're done!">
+                    The <strong style={{color:'#c0c7d8'}}>HDB Research</strong> (◈) icon should appear in the toolbar.
+                    <div style={{display:'flex',gap:'6px',alignItems:'center',padding:'8px 12px',background:'rgba(74,222,128,0.07)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:'7px',fontSize:'0.8rem',color:'#4ade80',fontWeight:600,marginTop:'8px'}}>✓ Log in with your normal HDB username and password inside the extension.</div>
+                  </Step>
+                </Section>
+
+                <Section icon="🌐" title="Research Companion Web App" subtitle="Works in every browser — Firefox, Safari, Chrome, Edge, and mobile">
+                  <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1.1rem'}}>
+                    <Badge>✓ Chrome</Badge><Badge>✓ Firefox</Badge><Badge>✓ Safari</Badge><Badge>✓ Edge</Badge><Badge>✓ Brave</Badge><Badge>✓ Mobile</Badge>
+                  </div>
+                  <Step n="1" title="Open the companion app">
+                    Click below to open in a new window. Keep it open alongside your browser as you research.
+                    <br/><br/>
+                    <a href={_COMPANION_URL} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'0.65rem 1.4rem',background:'linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.5)',borderRadius:'9px',color:'#60a5fa',textDecoration:'none',fontSize:'0.875rem',fontWeight:700}}>
+                      ↗ Open Research Companion
+                    </a>
+                  </Step>
+                  <Step n="2" title="Log in with your HDB credentials">
+                    Use the same username and password as this database.
+                  </Step>
+                  <Step n="3" title="Add the bookmarklet to your browser">
+                    Show your bookmarks bar (<code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>Ctrl+Shift+B</code> / <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>Cmd+Shift+B</code>). Drag the <strong style={{color:'#c0c7d8'}}>📎 HDB Capture</strong> button from the companion app to your bookmarks bar.
+                    <br/><br/>
+                    Or drag this one right now:&nbsp;
+                    <a href={_COMPANION_BM_SRC} draggable="true"
+                      onClick={e=>{e.preventDefault();alert("Drag this button to your bookmarks bar — don't click it on this page.");}}
+                      style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'4px 12px',background:'rgba(96,165,250,0.15)',border:'2px dashed rgba(96,165,250,0.45)',borderRadius:'7px',color:'#93c5fd',textDecoration:'none',fontSize:'0.82rem',fontWeight:700,cursor:'grab'}}>
+                      📎 HDB Capture
+                    </a>
+                  </Step>
+                  <Step n="4" title="You're done!">
+                    <div style={{display:'flex',gap:'6px',alignItems:'center',padding:'8px 12px',background:'rgba(74,222,128,0.07)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:'7px',fontSize:'0.8rem',color:'#4ade80',fontWeight:600}}>✓ Click the 📎 HDB Capture bookmark anytime to save a page or highlighted text.</div>
+                  </Step>
+                </Section>
+              </div>
+            </div>
+          )}
+
+          {companionTab === 'howto' && (
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.25rem',alignItems:'start'}}>
+              <Section icon="🧩" title="Using the Chrome Extension" subtitle="Click the ◈ icon in your Chrome toolbar to open it">
+                <UsageCard icon="📎" title="Save highlighted text from any page" steps={[
+                  "Go to any web page you're researching.",
+                  'Highlight the text you want to save.',
+                  'A small "Save to DB" button pops up next to your selection — click it.',
+                  'Open the extension and click "Add to DB" to run AI analysis and save to the database.'
+                ]} />
+                <UsageCard icon="🔗" title="Save the current page URL" steps={[
+                  'Open the extension by clicking the ◈ toolbar icon.',
+                  'Click "Save Page" next to the current page card at the top.',
+                  'Click "Add to DB" to analyze and save it.'
+                ]} />
+                <UsageCard icon="🎬" title="Save a video with a timestamp" steps={[
+                  'Go to a YouTube video and pause at the moment you want to reference.',
+                  'Highlight any text on the page (even the title is fine).',
+                  'The capture bubble shows the current timestamp — click "Save to DB".'
+                ]} />
+                <UsageCard icon="🖱 " title="Right-click shortcut (fastest method)" steps={[
+                  'Highlight any text on a page.',
+                  'Right-click the highlighted text.',
+                  'Select "Save to Historical Events DB" from the menu.',
+                  "Done — instantly saved without even opening the extension."
+                ]} />
+                <UsageCard icon="🗺" title="Track your research trail with sessions" steps={[
+                  'Open the extension and click "Start Session".',
+                  'Browse normally — every page you visit is automatically logged.',
+                  'Click "End Session" — the session is saved to the database.',
+                  'View past sessions in Account → Research Sessions tab.'
+                ]} />
+              </Section>
+
+              <Section icon="🌐" title="Using the Research Companion App" subtitle="Keep the companion open alongside your browser while you research">
+                <UsageCard icon="📎" title="Save a page or highlighted text" steps={[
+                  'Highlight text on any page (or nothing if you just want the URL).',
+                  'Click the 📎 HDB Capture bookmark in your bookmarks bar.',
+                  'The companion opens with the URL and text already filled in.',
+                  'Click "Capture", then "Add to DB" to run AI analysis and save.'
+                ]} />
+                <UsageCard icon="🎬" title="Save a video timecode" steps={[
+                  'Pause a YouTube or Vimeo video at the moment you want.',
+                  'Click the 📎 HDB Capture bookmark.',
+                  'The companion auto-detects the timestamp — click Capture, then Add to DB.'
+                ]} />
+                <UsageCard icon="✏️" title="Manually add a URL or note" steps={[
+                  'Open the companion app.',
+                  'Paste a URL into the URL field and add optional notes.',
+                  'Click "Capture", then "Add to DB".'
+                ]} />
+                <UsageCard icon="🗺" title="Track your research sessions" steps={[
+                  'In the companion app, click "Start Session".',
+                  'Use the 📎 HDB Capture bookmark as you browse — each page is added to your trail.',
+                  'Click "End Session" when done — the full session is saved.',
+                  'Past sessions appear in Account → Research Sessions tab here too.'
+                ]} />
+              </Section>
+
+              <div style={{gridColumn:'1 / -1'}}>
+                <Section icon="📚" title="Viewing your Research Sessions" subtitle="See a full record of where you went and what you found">
+                  <p style={{fontSize:'0.85rem',color:'#8b95b0',lineHeight:1.7,marginBottom:'0.75rem'}}>
+                    After you end a session, a complete record is saved showing every page you visited (in order) and every item you captured. You can view these in two places:
+                  </p>
+                  <div style={{display:'flex',gap:'1rem'}}>
+                    <div style={{flex:1,display:'flex',gap:'0.75rem',alignItems:'flex-start',padding:'0.7rem 0.9rem',background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'8px'}}>
+                      <span style={{fontSize:'1rem',flexShrink:0}}>🌐</span>
+                      <div>
+                        <div style={{fontSize:'0.85rem',fontWeight:700,color:'#e2e8f8',marginBottom:'2px'}}>In the Companion App</div>
+                        <div style={{fontSize:'0.8rem',color:'#8b95b0'}}>Click the "Sessions" tab — expandable cards show the full trail and all captured items.</div>
+                      </div>
+                    </div>
+                    <div style={{flex:1,display:'flex',gap:'0.75rem',alignItems:'flex-start',padding:'0.7rem 0.9rem',background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'8px'}}>
+                      <span style={{fontSize:'1rem',flexShrink:0}}>👤</span>
+                      <div>
+                        <div style={{fontSize:'0.85rem',fontWeight:700,color:'#e2e8f8',marginBottom:'2px'}}>In this Database</div>
+                        <div style={{fontSize:'0.8rem',color:'#8b95b0'}}>Go to the <strong style={{color:'#c0c7d8'}}>Account page</strong> and click the <strong style={{color:'#c0c7d8'}}>Research Sessions</strong> tab. Click any session to expand it and see the full trail.</div>
+                      </div>
+                    </div>
+                  </div>
+                </Section>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     const FiltersComponent = ({ filters, setFilters, data, activeTab, onSearch, onClear, onExportCSV, onExportJSON }) => {
       return (
         <div className="filters">
@@ -4396,303 +4634,7 @@
             {/* MY UPLOADS moved to Account Page */}
 
             {/* RESEARCH COMPANION PAGE */}
-            {activeTab === 'companion' && (() => {
-              const COMPANION_URL = 'https://historical-events-databse.netlify.app/research-companion.html';
-              const EXT_ZIP_URL   = 'https://historical-events-databse.netlify.app/hdb-extension.zip';
-              const BM_SRC = `javascript:(function(){var sel='';try{sel=window.getSelection().toString().trim();}catch(e){}var tc='';try{var v=document.querySelector('video');if(v&&!isNaN(v.currentTime)){var s=Math.floor(v.currentTime);tc=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}}catch(e){}var d={url:location.href,title:document.title,text:sel,timecode:tc,ts:Date.now()};var w=window.open('','hdb_companion');if(w&&w.location&&w.location.href.indexOf('research-companion')!==-1){w.postMessage({type:'HDB_CAPTURE',data:d},'*');w.focus();}else{var encoded=encodeURIComponent(JSON.stringify(d));window.open('${COMPANION_URL}#bm='+encoded,'hdb_companion','width=450,height=680,resizable=yes,scrollbars=yes');}})();`;
-              const [companionTab, setCompanionTab] = React.useState('setup');
-
-              const Badge = ({children, color='#60a5fa', bg='rgba(96,165,250,0.1)', border='rgba(96,165,250,0.25)'}) => (
-                <span style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 9px',background:bg,border:`1px solid ${border}`,borderRadius:'20px',fontSize:'0.72rem',fontWeight:700,color,whiteSpace:'nowrap'}}>{children}</span>
-              );
-
-              const Step = ({n, title, children}) => (
-                <div style={{display:'flex',gap:'1rem',alignItems:'flex-start',padding:'0.9rem 0',borderBottom:'1px solid rgba(96,165,250,0.07)'}}>
-                  <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'linear-gradient(135deg,rgba(96,165,250,0.25),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.8rem',fontWeight:700,color:'#60a5fa',flexShrink:0}}>
-                    {n}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:'0.9rem',fontWeight:700,color:'#e2e8f8',marginBottom:'0.25rem'}}>{title}</div>
-                    <div style={{fontSize:'0.82rem',color:'#8b95b0',lineHeight:1.6}}>{children}</div>
-                  </div>
-                </div>
-              );
-
-              const Section = ({icon, title, subtitle, children}) => (
-                <div style={{background:'rgba(15,19,40,0.7)',border:'1px solid rgba(96,165,250,0.14)',borderRadius:'14px',padding:'1.5rem',marginBottom:'1.25rem'}}>
-                  <div style={{display:'flex',alignItems:'flex-start',gap:'0.75rem',marginBottom:'1rem'}}>
-                    <span style={{fontSize:'1.6rem',lineHeight:1}}>{icon}</span>
-                    <div>
-                      <div style={{fontSize:'1.05rem',fontWeight:700,color:'#e2e8f8'}}>{title}</div>
-                      {subtitle && <div style={{fontSize:'0.8rem',color:'#8b95b0',marginTop:'2px'}}>{subtitle}</div>}
-                    </div>
-                  </div>
-                  {children}
-                </div>
-              );
-
-              const UsageCard = ({icon, title, steps}) => (
-                <div style={{background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'10px',padding:'1.1rem 1.25rem',marginBottom:'0.75rem'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'0.85rem'}}>
-                    <span style={{fontSize:'1.2rem'}}>{icon}</span>
-                    <span style={{fontSize:'0.9rem',fontWeight:700,color:'#e2e8f8'}}>{title}</span>
-                  </div>
-                  {steps.map((s,i) => (
-                    <div key={i} style={{display:'flex',gap:'0.75rem',alignItems:'flex-start',padding:'5px 0',borderTop: i>0 ? '1px solid rgba(96,165,250,0.06)' : 'none'}}>
-                      <span style={{fontSize:'0.75rem',fontWeight:700,color:'#60a5fa',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'4px',padding:'1px 6px',flexShrink:0,marginTop:'1px',minWidth:'22px',textAlign:'center'}}>{i+1}</span>
-                      <span style={{fontSize:'0.83rem',color:'#c0c7d8',lineHeight:1.5}}>{s}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-
-              return (
-                <div style={{maxWidth:'780px',margin:'0 auto',padding:'2rem 1.5rem'}}>
-                  {/* Page header */}
-                  <div style={{textAlign:'center',marginBottom:'2rem'}}>
-                    <div style={{fontSize:'2.5rem',marginBottom:'0.5rem'}}>🔬</div>
-                    <h2 style={{fontFamily:"'Space Mono',monospace",fontSize:'1.4rem',fontWeight:700,color:'#e2e8f8',marginBottom:'0.5rem',letterSpacing:'0.5px'}}>Research Companion</h2>
-                    <p style={{fontSize:'0.88rem',color:'#8b95b0',lineHeight:1.6,maxWidth:'520px',margin:'0 auto'}}>
-                      Two tools that let you capture URLs, highlighted text, and video timestamps while you browse — then save them directly to this database with AI analysis.
-                    </p>
-                  </div>
-
-                  {/* Tab nav */}
-                  <div style={{display:'flex',borderBottom:'1px solid rgba(96,165,250,0.14)',marginBottom:'1.75rem'}}>
-                    {[['setup','🛠 Setup & Install'],['howto','📖 How to Use']].map(([id,label])=>(
-                      <button key={id} onClick={()=>setCompanionTab(id)} style={{
-                        padding:'0.65rem 1.5rem',background:'transparent',border:'none',
-                        borderBottom: companionTab===id ? '2px solid #60a5fa' : '2px solid transparent',
-                        color: companionTab===id ? '#60a5fa' : '#8b95b0',
-                        fontSize:'0.875rem',fontWeight:700,cursor:'pointer',
-                        fontFamily:'Karla,inherit',transition:'color 0.15s',marginBottom:'-1px'
-                      }}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* ── SETUP TAB ───────────────────────────────── */}
-                  {companionTab === 'setup' && (
-                    <div>
-                      {/* Intro note */}
-                      <div style={{background:'rgba(96,165,250,0.06)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:'10px',padding:'1rem 1.25rem',marginBottom:'1.5rem',display:'flex',gap:'0.75rem',alignItems:'flex-start'}}>
-                        <span style={{fontSize:'1.1rem',flexShrink:0}}>💡</span>
-                        <p style={{fontSize:'0.82rem',color:'#8b95b0',lineHeight:1.6}}>
-                          You only need to set up <strong style={{color:'#c0c7d8'}}>one of these tools</strong> — pick whichever fits your browser.
-                          Both connect to the same database and do the same job.
-                        </p>
-                      </div>
-
-                      {/* Tool 1: Chrome Extension */}
-                      <Section icon="🧩" title="Chrome Extension" subtitle="Best for Chrome, Edge, and Brave users — adds a toolbar button and right-click menu">
-                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1.1rem'}}>
-                          <Badge>✓ Chrome</Badge>
-                          <Badge>✓ Edge</Badge>
-                          <Badge>✓ Brave</Badge>
-                          <Badge color='#f87171' bg='rgba(248,113,113,0.08)' border='rgba(248,113,113,0.2)'>✗ Firefox</Badge>
-                          <Badge color='#f87171' bg='rgba(248,113,113,0.08)' border='rgba(248,113,113,0.2)'>✗ Safari</Badge>
-                        </div>
-
-                        <Step n="1" title='Download the extension files'>
-                          Click the button below — it downloads a small ZIP file (about 20KB).
-                          <br/><br/>
-                          <a href={EXT_ZIP_URL} download style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'0.65rem 1.4rem',background:'linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.5)',borderRadius:'9px',color:'#60a5fa',textDecoration:'none',fontSize:'0.875rem',fontWeight:700,transition:'background 0.15s'}}
-                            onMouseEnter={e=>e.currentTarget.style.background='rgba(96,165,250,0.3)'}
-                            onMouseLeave={e=>e.currentTarget.style.background='linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))'}>
-                            ⬇ Download Extension (.zip)
-                          </a>
-                        </Step>
-
-                        <Step n="2" title='Unzip the downloaded file'>
-                          Find the file in your Downloads folder.<br/>
-                          <strong style={{color:'#c0c7d8'}}>Mac:</strong> Double-click the ZIP file — it creates a folder automatically.<br/>
-                          <strong style={{color:'#c0c7d8'}}>Windows:</strong> Right-click the ZIP → "Extract All" → click Extract.<br/>
-                          You should see a folder called <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>chrome-extension</code>.
-                        </Step>
-
-                        <Step n="3" title='Open the Extensions page in Chrome'>
-                          In Chrome, click the address bar and go to:<br/>
-                          <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'6px',flexWrap:'wrap'}}>
-                            <code style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.25)',padding:'4px 10px',borderRadius:'6px',fontSize:'0.82rem',color:'#93c5fd',letterSpacing:'0.5px'}}>chrome://extensions</code>
-                            <span style={{fontSize:'0.78rem',color:'#4a5270'}}>(copy and paste this into your address bar)</span>
-                          </div>
-                          <div style={{marginTop:'6px',fontSize:'0.78rem',color:'#8b95b0'}}>
-                            <strong style={{color:'#c0c7d8'}}>Edge users:</strong> use <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 5px',borderRadius:'4px',color:'#93c5fd'}}>edge://extensions</code> instead.
-                          </div>
-                        </Step>
-
-                        <Step n="4" title='Turn on Developer Mode'>
-                          In the top-right corner of the Extensions page, you'll see a toggle labelled <strong style={{color:'#c0c7d8'}}>"Developer mode"</strong>. Click it to turn it ON — a blue slider means it's on.
-                          <div style={{marginTop:'6px',padding:'6px 10px',background:'rgba(251,191,36,0.07)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:'6px',fontSize:'0.78rem',color:'#fbbf24'}}>
-                            ⚠ Don't worry — this doesn't change anything about Chrome. It just lets you load extensions that aren't from the store.
-                          </div>
-                        </Step>
-
-                        <Step n="5" title='Load the extension folder'>
-                          Click the <strong style={{color:'#c0c7d8'}}>"Load unpacked"</strong> button (appears after turning on Developer Mode). A file picker opens — navigate to your Downloads folder, click the <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>chrome-extension</code> folder, and click <strong style={{color:'#c0c7d8'}}>Select Folder</strong>.
-                        </Step>
-
-                        <Step n="6" title="You're done!">
-                          The <strong style={{color:'#c0c7d8'}}>HDB Research</strong> icon (◈) should now appear in your Chrome toolbar. If you don't see it, click the puzzle piece icon (🧩) in the toolbar and pin it.
-                          <br/><br/>
-                          <div style={{display:'flex',gap:'6px',alignItems:'center',padding:'8px 12px',background:'rgba(74,222,128,0.07)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:'7px',fontSize:'0.8rem',color:'#4ade80',fontWeight:600}}>
-                            ✓ Log in with your normal HDB username and password inside the extension.
-                          </div>
-                        </Step>
-                      </Section>
-
-                      {/* Tool 2: Companion Web App */}
-                      <Section icon="🌐" title="Research Companion Web App" subtitle="Works in every browser — Firefox, Safari, Chrome, Edge, and mobile. No installation needed.">
-                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'1.1rem'}}>
-                          <Badge>✓ Chrome</Badge>
-                          <Badge>✓ Firefox</Badge>
-                          <Badge>✓ Safari</Badge>
-                          <Badge>✓ Edge</Badge>
-                          <Badge>✓ Brave</Badge>
-                          <Badge>✓ Mobile</Badge>
-                        </div>
-
-                        <Step n="1" title="Open the companion app">
-                          Click the button below to open the app in a new window. Keep it open alongside your browser as you research — snap it to the side of your screen for the best experience.
-                          <br/><br/>
-                          <a href={COMPANION_URL} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'0.65rem 1.4rem',background:'linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.5)',borderRadius:'9px',color:'#60a5fa',textDecoration:'none',fontSize:'0.875rem',fontWeight:700}}>
-                            ↗ Open Research Companion
-                          </a>
-                        </Step>
-
-                        <Step n="2" title="Log in with your HDB credentials">
-                          Use the same username and password as this database.
-                        </Step>
-
-                        <Step n="3" title="Add the bookmarklet to your browser">
-                          When you first log in, the companion shows a setup banner with a button labelled <strong style={{color:'#c0c7d8'}}>📎 HDB Capture</strong>.
-                          <br/><br/>
-                          <strong style={{color:'#c0c7d8'}}>To add it:</strong> Make sure your bookmarks bar is visible (press <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>Ctrl+Shift+B</code> on Windows or <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 6px',borderRadius:'4px',fontSize:'0.78rem',color:'#93c5fd'}}>Cmd+Shift+B</code> on Mac). Then drag the <strong style={{color:'#c0c7d8'}}>📎 HDB Capture</strong> button from the companion app up to your bookmarks bar.
-                          <br/><br/>
-                          Or drag this one right now:&nbsp;
-                          <a href={BM_SRC} draggable="true"
-                            onClick={e=>{e.preventDefault();alert("Drag this button to your bookmarks bar — don't click it on this page.");}}
-                            style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'4px 12px',background:'rgba(96,165,250,0.15)',border:'2px dashed rgba(96,165,250,0.45)',borderRadius:'7px',color:'#93c5fd',textDecoration:'none',fontSize:'0.82rem',fontWeight:700,cursor:'grab'}}>
-                            📎 HDB Capture
-                          </a>
-                        </Step>
-
-                        <Step n="4" title="You're done!">
-                          <div style={{display:'flex',gap:'6px',alignItems:'center',padding:'8px 12px',background:'rgba(74,222,128,0.07)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:'7px',fontSize:'0.8rem',color:'#4ade80',fontWeight:600}}>
-                            ✓ Whenever you want to save a page or highlighted text, click the <strong>📎 HDB Capture</strong> bookmark. Done.
-                          </div>
-                        </Step>
-                      </Section>
-                    </div>
-                  )}
-
-                  {/* ── HOW TO USE TAB ──────────────────────────── */}
-                  {companionTab === 'howto' && (
-                    <div>
-                      {/* Chrome Extension */}
-                      <Section icon="🧩" title="Using the Chrome Extension" subtitle="Click the ◈ icon in your Chrome toolbar to open it">
-
-                        <UsageCard icon="📎" title="Save highlighted text from any page" steps={[
-                          'Go to any web page you\'re researching.',
-                          'Highlight (click and drag) the text you want to save.',
-                          'A small "Save to DB" button pops up next to your selection — click it.',
-                          'The text is saved to your Captures list in the extension.',
-                          'Open the extension and click "Add to DB" to run AI analysis and save it to the database.'
-                        ]} />
-
-                        <UsageCard icon="🔗" title="Save the current page URL" steps={[
-                          'Open the extension by clicking the ◈ toolbar icon.',
-                          'Click "Save Page" next to the current page card at the top.',
-                          'The page URL is added to your Captures list.',
-                          'Click "Add to DB" to analyze and save it.'
-                        ]} />
-
-                        <UsageCard icon="🎬" title="Save a video with a timestamp" steps={[
-                          'Go to a YouTube (or other) video and play it.',
-                          'Pause at the moment you want to reference.',
-                          'Highlight any text on the page (even the title is fine).',
-                          'The capture bubble shows the current timestamp automatically — click "Save to DB".',
-                          'Your capture will include the exact timecode.'
-                        ]} />
-
-                        <UsageCard icon="🖱 " title="Right-click shortcut (fastest method)" steps={[
-                          'Highlight any text on a page.',
-                          'Right-click the highlighted text.',
-                          'Select "Save to Historical Events DB" from the menu.',
-                          'Done — it\'s instantly saved to your captures without even opening the extension.'
-                        ]} />
-
-                        <UsageCard icon="🗺" title="Track your research trail with sessions" steps={[
-                          'Open the extension and click "Start Session".',
-                          'Browse normally — every page you visit is automatically logged.',
-                          'You\'ll see the trail build up in the "Trail" tab.',
-                          'When you\'re done, click "End Session" — the session is saved to the database.',
-                          'View all past sessions in the Account page → Research Sessions tab.'
-                        ]} />
-                      </Section>
-
-                      {/* Companion App */}
-                      <Section icon="🌐" title="Using the Research Companion App" subtitle={'Keep the companion open at ' + COMPANION_URL + ' while you browse'}>
-
-                        <UsageCard icon="📎" title="Save a page or highlighted text with the bookmarklet" steps={[
-                          'On any page you want to save, highlight the text you want (or nothing if you just want the URL).',
-                          'Click the 📎 HDB Capture bookmark in your bookmarks bar.',
-                          'The companion app opens (or focuses if already open) with the URL and text already filled in.',
-                          'Review the details, then click "Capture" to add it to your list.',
-                          'Click "Add to DB" on the captured item to run AI analysis and save it to the database.'
-                        ]} />
-
-                        <UsageCard icon="🎬" title="Save a video timecode" steps={[
-                          'Go to a YouTube or Vimeo video and pause it at the moment you want.',
-                          'Click the 📎 HDB Capture bookmark.',
-                          'The companion auto-detects the video timestamp and fills it in.',
-                          'Click Capture, then Add to DB.'
-                        ]} />
-
-                        <UsageCard icon="✏️" title="Manually add a URL or note" steps={[
-                          'Open the companion app.',
-                          'Paste a URL into the URL field at the top.',
-                          'Optionally add notes in the text field below it.',
-                          'Click "Capture", then "Add to DB".'
-                        ]} />
-
-                        <UsageCard icon="🗺" title="Track your research sessions" steps={[
-                          'In the companion app, click "Start Session".',
-                          'Use the 📎 HDB Capture bookmark as you browse — each page gets added to your trail automatically.',
-                          'The "Trail" tab shows every page you visited in order.',
-                          'Click "End Session" when done — the full session is saved.',
-                          'Past sessions appear in the "Sessions" tab of the companion, and also in the Account → Research Sessions tab here.'
-                        ]} />
-                      </Section>
-
-                      {/* Research Sessions */}
-                      <Section icon="📚" title="Viewing your Research Sessions" subtitle="See a full record of where you went and what you found">
-                        <p style={{fontSize:'0.85rem',color:'#8b95b0',lineHeight:1.7,marginBottom:'0.75rem'}}>
-                          After you end a session, a complete record is saved showing every page you visited (in order) and every item you captured. You can view these in two places:
-                        </p>
-                        <div style={{display:'flex',flexDirection:'column',gap:'0.6rem'}}>
-                          <div style={{display:'flex',gap:'0.75rem',alignItems:'flex-start',padding:'0.7rem 0.9rem',background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'8px'}}>
-                            <span style={{fontSize:'1rem',flexShrink:0}}>🌐</span>
-                            <div>
-                              <div style={{fontSize:'0.85rem',fontWeight:700,color:'#e2e8f8',marginBottom:'2px'}}>In the Companion App</div>
-                              <div style={{fontSize:'0.8rem',color:'#8b95b0'}}>Click the "Sessions" tab — expandable cards show the full trail and all captured items.</div>
-                            </div>
-                          </div>
-                          <div style={{display:'flex',gap:'0.75rem',alignItems:'flex-start',padding:'0.7rem 0.9rem',background:'rgba(10,13,28,0.5)',border:'1px solid rgba(96,165,250,0.12)',borderRadius:'8px'}}>
-                            <span style={{fontSize:'1rem',flexShrink:0}}>👤</span>
-                            <div>
-                              <div style={{fontSize:'0.85rem',fontWeight:700,color:'#e2e8f8',marginBottom:'2px'}}>In this Database</div>
-                              <div style={{fontSize:'0.8rem',color:'#8b95b0'}}>Go to the <strong style={{color:'#c0c7d8'}}>Account page</strong> and click the <strong style={{color:'#c0c7d8'}}>Research Sessions</strong> tab. Click any session to expand it and see the full trail.</div>
-                            </div>
-                          </div>
-                        </div>
-                      </Section>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {activeTab === 'companion' && <CompanionPage />}
 
             {/* ADMIN PANEL (kept for backward compat but hidden from nav) */}
             {activeTab === 'admin panel' && (currentUser.role === 'admin' || currentUser.role === 'owner') && <AdminPanel />}
