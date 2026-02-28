@@ -52,11 +52,17 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     for d in [UPLOADS_DIR, PENDING_DIR, FRAMES_DIR, TRANSCRIPTS_DIR, ATTACHMENTS_DIR]:
-        os.makedirs(d, exist_ok=True)
-    init_db()
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception as e:
+            print(f"[startup] Could not create dir {d}: {e}")
+    try:
+        init_db()
+        print("[startup] Database ready")
+    except Exception as e:
+        print(f"[startup] WARNING: Database init failed — {e}")
+        print("[startup] File analysis features may be unavailable, but 2FA/email endpoints are unaffected")
     print(f"Server ready. Uploads dir: {UPLOADS_DIR}")
-    print(f"Downloads dir: {DOWNLOADS_DIR}")
-    print(f"Open http://localhost:8000 in your browser")
 
 
 # ─── 2FA / Email Verification ───────────────────────────────────────────────
