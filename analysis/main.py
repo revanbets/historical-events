@@ -101,29 +101,12 @@ def _send_email(to_email: str, code: str) -> None:
 
     msg = _build_email_msg(to_email, smtp_from, code)
     ctx = ssl.create_default_context()
-    last_err = None
 
-    # Try SMTP_SSL on port 465 first (more reliable on cloud hosts)
-    for attempt, (use_ssl, port) in enumerate([(True, 465), (False, 587)]):
-        try:
-            print(f"[2FA] Attempt {attempt+1}: {'SSL' if use_ssl else 'STARTTLS'} port {port} → {to_email}")
-            if use_ssl:
-                with smtplib.SMTP_SSL(smtp_host, port, context=ctx) as server:
-                    server.login(smtp_user, smtp_pass)
-                    server.sendmail(smtp_from, to_email, msg.as_string())
-            else:
-                with smtplib.SMTP(smtp_host, port) as server:
-                    server.ehlo()
-                    server.starttls(context=ctx)
-                    server.login(smtp_user, smtp_pass)
-                    server.sendmail(smtp_from, to_email, msg.as_string())
-            print(f"[2FA] Email sent successfully via {'SSL' if use_ssl else 'STARTTLS'}")
-            return  # success
-        except Exception as e:
-            last_err = e
-            print(f"[2FA] {'SSL' if use_ssl else 'STARTTLS'} failed: {e}")
-
-    raise RuntimeError(f"All SMTP attempts failed. Last error: {last_err}")
+    print(f"[2FA] Sending to {to_email} via {smtp_host}:465")
+    with smtplib.SMTP_SSL(smtp_host, 465, context=ctx) as server:
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, to_email, msg.as_string())
+    print(f"[2FA] Sent OK")
 
 
 class TwoFARequest(BaseModel):
