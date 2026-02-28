@@ -442,11 +442,34 @@
     const BACKEND_URL = 'https://historical-events-api-n45u.onrender.com';
     const isEmailFormat = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
+    // fetchWithWakeup: retries up to maxTries times if the server returns 503 (Render cold start)
+    // Shows a live status message via onStatus callback
+    const fetchWithWakeup = async (url, opts, onStatus, maxTries = 4) => {
+      for (let i = 0; i < maxTries; i++) {
+        if (i > 0) {
+          onStatus(`Server is waking up… please wait (${i}/${maxTries - 1})`);
+          await new Promise(r => setTimeout(r, 12000));
+        }
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 15000);
+          const res = await fetch(url, { ...opts, signal: controller.signal });
+          clearTimeout(timer);
+          if (res.status !== 503) return res; // success or real error
+          // 503 = Render still waking — loop again
+        } catch(e) {
+          if (i === maxTries - 1) throw e; // last attempt failed
+        }
+      }
+      throw new Error('Server did not wake up in time');
+    };
+
     const LoginScreen = ({ onLogin, onGoSignup }) => {
       const [username, setUsername] = useState('');
       const [password, setPassword] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
+      const [loadingMsg, setLoadingMsg] = useState('Signing in...');
       const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
       const [otp, setOtp] = useState('');
       const [otpLoading, setOtpLoading] = useState(false);
@@ -454,25 +477,27 @@
 
       const submit = async () => {
         if (!username.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
-        setLoading(true); setError('');
+        setLoading(true); setLoadingMsg('Signing in...'); setError('');
         const user = await findUser(username.trim(), password.trim());
-        setLoading(false);
-        if (!user) { setError('Invalid email or password.'); return; }
+        if (!user) { setLoading(false); setError('Invalid email or password.'); return; }
         if (isEmailFormat(username.trim())) {
-          // Email account → require 2FA
+          setLoadingMsg('Sending verification code…');
           try {
-            const res = await fetch(`${BACKEND_URL}/api/send-2fa`, {
-              method: 'POST', headers: {'Content-Type':'application/json'},
-              body: JSON.stringify({ email: username.trim().toLowerCase() })
-            });
-            if (!res.ok) throw new Error('send failed');
+            const res = await fetchWithWakeup(
+              `${BACKEND_URL}/api/send-2fa`,
+              { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase() }) },
+              (msg) => setLoadingMsg(msg)
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             setPendingUser(user);
+            setLoading(false);
             setStep('otp');
           } catch(e) {
-            setError('Could not send verification code. Check your connection and try again.');
+            setLoading(false);
+            setError('Could not reach the server. Make sure your internet is connected and try again.');
           }
         } else {
-          // Non-email username (owner/admin legacy accounts) — login directly
+          setLoading(false);
           onLogin(user);
         }
       };
@@ -481,10 +506,11 @@
         if (otp.trim().length !== 6) { setError('Enter the 6-digit code.'); return; }
         setOtpLoading(true); setError('');
         try {
-          const res = await fetch(`${BACKEND_URL}/api/verify-2fa`, {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ email: username.trim().toLowerCase(), code: otp.trim() })
-          });
+          const res = await fetchWithWakeup(
+            `${BACKEND_URL}/api/verify-2fa`,
+            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase(), code: otp.trim() }) },
+            ()=>{}
+          );
           const result = await res.json();
           if (result.valid) { onLogin(pendingUser); }
           else { setError(result.error || 'Invalid or expired code.'); }
@@ -495,11 +521,11 @@
       const resendCode = async () => {
         setError('');
         try {
-          await fetch(`${BACKEND_URL}/api/send-2fa`, {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ email: username.trim().toLowerCase() })
-          });
-          setError('');
+          await fetchWithWakeup(
+            `${BACKEND_URL}/api/send-2fa`,
+            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase() }) },
+            ()=>{}
+          );
         } catch(e) { setError('Could not resend code.'); }
       };
 
@@ -546,7 +572,7 @@
               <input className="auth-input" type="password" placeholder="Enter password" value={password}
                 onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} />
             </div>
-            <button className="auth-btn" onClick={submit} disabled={loading}>{loading ? 'Signing in...' : 'Sign In →'}</button>
+            <button className="auth-btn" onClick={submit} disabled={loading}>{loading ? loadingMsg : 'Sign In →'}</button>
             <div className="auth-switch">Don't have an account? <span onClick={onGoSignup}>Create one</span></div>
           </div>
         </div>
