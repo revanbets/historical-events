@@ -239,6 +239,122 @@
     .user-chip-btn { display: flex; align-items: center; gap: 0.6rem; background: rgba(45,53,97,0.5); border: 1px solid rgba(96,165,250,0.2); border-radius: 10px; padding: 0.4rem 0.85rem; cursor: pointer; transition: all 0.2s; }
     .user-chip-btn:hover { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.4); }
     .user-chip-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #60a5fa, #a78bfa); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: white; font-family: 'Space Mono', monospace; flex-shrink: 0; }
+
+    /* ── Hamburger button (hidden on desktop) ── */
+    .hamburger-btn { display: none; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 44px; height: 44px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+    .hamburger-btn:hover { background: rgba(96,165,250,0.22); }
+    .hamburger-btn span { display: block; width: 20px; height: 2px; background: #60a5fa; border-radius: 2px; }
+    .nav-label { display: flex; justify-content: space-between; align-items: center; }
+
+    /* ── Mobile — max 768px ── */
+    @media (max-width: 768px) {
+      body { font-size: 16px; }
+      .hamburger-btn { display: flex; }
+
+      /* Header */
+      .header { padding: 0.875rem 1rem; }
+      .header h1 { font-size: 1.3rem; letter-spacing: -0.5px; }
+      .stats { gap: 1rem; margin-top: 0.6rem; }
+      .stat-value { font-size: 1.2rem; }
+      .stat-label { font-size: 0.65rem; }
+
+      /* Breadcrumb & controls */
+      .breadcrumb-bar { padding: 0.5rem 1rem; }
+      .controls-bar { padding: 0.6rem 1rem; }
+      .save-btn { padding: 0.55rem 1rem; font-size: 0.75rem; letter-spacing: 0; }
+
+      /* Nav label & hamburger row */
+      .nav-label { padding-left: 1rem !important; padding-right: 1rem !important; padding-top: 0.65rem !important; }
+
+      /* Nav — collapsed by default on mobile */
+      .nav { display: none; flex-direction: column; gap: 0.3rem; padding: 0.75rem 1rem !important; overflow-x: visible; }
+      .nav.nav-open { display: flex; }
+      .nav-btn { width: 100%; min-height: 44px; text-align: left; padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.85rem; }
+
+      /* Content */
+      .content { padding: 1rem; }
+
+      /* Filters */
+      .filters { padding: 1rem; }
+      .filter-row { flex-direction: column; gap: 0.75rem; }
+      .filter-group { min-width: 100%; flex: unset; }
+      .checkbox-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+
+      /* Buttons — 44px touch target minimum */
+      .btn { min-height: 44px; padding: 0.75rem 1.25rem; font-size: 0.82rem; }
+      .search-btn { min-height: 44px; padding: 0.75rem 1.25rem; }
+      .back-btn { min-height: 44px; padding: 0.65rem 1rem; margin-bottom: 1rem; }
+
+      /* Modals — near fullscreen */
+      .modal-content { width: 96%; padding: 1.5rem 1.25rem; max-height: 92vh; border-radius: 14px; }
+      .modal-title { font-size: 1.2rem; }
+      .modal-actions { gap: 0.35rem; }
+      .close { padding: 0.4rem 0.75rem; font-size: 1.25rem; }
+      .edit-btn { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+
+      /* Network graph */
+      .network { height: 380px; }
+
+      /* Timeline */
+      .timeline-wrapper { padding: 1rem 0.5rem; }
+
+      /* Upload zone */
+      .upload { padding: 2rem 1rem; }
+      .upload-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+      .upload-tabs { flex-wrap: wrap; gap: 0.4rem; }
+      .upload-tab { padding: 0.6rem 1rem; font-size: 0.82rem; min-height: 44px; }
+      .url-input-section { padding: 1.25rem 1rem; }
+      .url-input-row { flex-direction: column; }
+
+      /* Spreadsheet table — hide non-essential columns, keep horizontal scroll */
+      .table th:nth-child(2), .table td:nth-child(2) { display: none; } /* ID */
+      .table th:nth-child(4), .table td:nth-child(4) { display: none; } /* AI Summary */
+      .table th:nth-child(8), .table td:nth-child(8) { display: none; } /* Source */
+      .table th, .table td { padding: 0.7rem 0.65rem; font-size: 0.82rem; }
+
+      /* Grid (Topics/People/Orgs) */
+      .grid { grid-template-columns: 1fr; gap: 1rem; }
+      .card { padding: 1.25rem; }
+
+      /* Tags */
+      .tag { padding: 0.4rem 0.75rem; font-size: 0.78rem; }
+
+      /* Auth */
+      .auth-card { padding: 2rem 1.25rem; margin: 1rem; max-width: 100%; }
+
+      /* Account */
+      .account-profile-card { padding: 1.25rem 1rem; gap: 1rem; }
+      .account-avatar { width: 60px; height: 60px; font-size: 1.25rem; }
+      .account-tabs { overflow-x: auto; flex-wrap: nowrap; }
+      .account-tab { padding: 0.7rem 1.1rem; font-size: 0.8rem; white-space: nowrap; }
+
+      /* Notifications */
+      .notif-item { padding: 0.75rem 0.875rem; }
+
+      /* Admin */
+      .admin-section { padding: 1rem; }
+      .admin-table { font-size: 0.8rem; }
+      .admin-table th, .admin-table td { padding: 0.55rem 0.65rem; }
+
+      /* Export buttons */
+      .export-btns { gap: 0.5rem; }
+      .export-btns .btn { padding: 0.6rem 0.875rem; font-size: 0.78rem; min-height: 44px; }
+
+      /* User chip */
+      .user-chip { margin-top: 0.4rem; gap: 0.4rem; }
+
+      /* Processing overlay */
+      .processing-card { max-width: 90%; padding: 1.75rem 1.25rem; }
+    }
+
+    /* ── Small phones — max 480px ── */
+    @media (max-width: 480px) {
+      .header h1 { font-size: 1.1rem; }
+      .stats { gap: 0.75rem; }
+      .stat-value { font-size: 1rem; }
+      .modal-content { width: 99%; padding: 1rem 0.875rem; max-height: 98vh; border-radius: 10px; }
+      .card { padding: 1rem; }
+    }
   </style>
 </head>
 <body>
@@ -1474,6 +1590,7 @@
 
       const TABS = ['timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications'];
 
+      const [mobileNavOpen, setMobileNavOpen] = useState(false);
       const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'timeline');
       const setActiveTab = (t) => { sessionStorage.setItem('hdb_activeTab', t); _setActiveTab(t); };
       const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
@@ -1756,6 +1873,7 @@
       const navigateToTab = (tab) => {
         setActiveTab(tab);
         setSelectedEntity(null);
+        setMobileNavOpen(false);
         setBreadcrumbs([{ label: tab.charAt(0).toUpperCase() + tab.slice(1), action: () => { setActiveTab(tab); setSelectedEntity(null); } }]);
       };
 
@@ -5062,8 +5180,13 @@
           </div>
 
           <div style={{marginBottom:'0'}}>
-            <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600,marginBottom:'0.5rem',paddingLeft:'3rem',paddingTop:'1rem',background:'rgba(21,25,50,0.4)'}}>Pages</div>
-            <nav className="nav" style={{paddingTop:'0.75rem'}}>
+            <div className="nav-label" style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',letterSpacing:'1px',fontWeight:600,marginBottom:'0.5rem',paddingLeft:'3rem',paddingTop:'1rem',background:'rgba(21,25,50,0.4)'}}>
+              Pages
+              <button className="hamburger-btn" onClick={()=>setMobileNavOpen(o=>!o)} aria-label="Toggle navigation">
+                <span></span><span></span><span></span>
+              </button>
+            </div>
+            <nav className={`nav${mobileNavOpen?' nav-open':''}`} style={{paddingTop:'0.75rem'}}>
               {TABS.map(tab=>(
                 <button key={tab} className={`nav-btn ${activeTab===tab?'active':''}`} onClick={()=>navigateToTab(tab)}
                   style={tab==='notifications'&&notifUnreadCount>0&&activeTab!==tab?{background:'rgba(96,165,250,0.08)',borderColor:'rgba(96,165,250,0.35)'}:{}}>
