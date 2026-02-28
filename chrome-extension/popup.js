@@ -61,6 +61,7 @@ let currentTab = 'captured';
 let sessionHistory = [];
 let expandedSessionId = null;
 let sessionsFilter = { search: '', date: 'all', captures: 'any', pages: 'any', sort: 'newest' };
+let confirmBackUpSessionId = null;
 
 // ─── Boot ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -494,6 +495,7 @@ async function handleSessionToggle() {
       console.error('End session failed:', e);
     } finally {
       btn.disabled = false;
+      if (currentTab === 'sessions') loadSessions();
     }
   } else {
     // Start session
@@ -507,6 +509,7 @@ async function handleSessionToggle() {
       renderSessionBar();
       renderCapturedItems();
       renderTrail();
+      if (currentTab === 'sessions') renderSessions();
     } catch (e) {
       console.error('Start session failed:', e);
     }
@@ -621,6 +624,7 @@ async function handlePauseResume() {
     state.sessionPaused = fresh.sessionPaused;
     renderSessionBar();
     renderTrail();
+    if (currentTab === 'sessions') renderSessions();
   } catch(e) {
     console.error('Pause/resume failed:', e);
   } finally {
@@ -751,6 +755,24 @@ async function handleVcCapture() {
   }
 }
 
+async function handleStartBackUp(sess) {
+  try {
+    const resp = await send({ type: 'START_BACK_UP', prevSession: sess });
+    state.sessionActive = true;
+    state.sessionPaused = false;
+    state.sessionName = resp.name;
+    state.trail = resp.trail || [];
+    state.capturedItems = resp.capturedItems || [];
+    renderSessionBar();
+    renderCapturedItems();
+    renderTrail();
+    renderSessions();
+    await loadCurrentPageInfo();
+  } catch (e) {
+    console.error('Start back up failed:', e);
+  }
+}
+
 // ─── Sessions ──────────────────────────────────────────────────
 async function loadSessions() {
   const hasData = sessionHistory.length > 0;
@@ -847,7 +869,9 @@ function renderSessions() {
   badge.textContent = total;
   badge.style.display = total > 0 ? '' : 'none';
 
-  if (filtered.length === 0) {
+  const activeHtml = renderActiveSessionCard();
+
+  if (!activeHtml && filtered.length === 0) {
     empty.style.display = '';
     list.style.display = 'none';
     return;
@@ -855,9 +879,9 @@ function renderSessions() {
 
   empty.style.display = 'none';
   list.style.display = '';
-  list.innerHTML = filtered.map(s => renderSessionCard(s)).join('');
+  list.innerHTML = activeHtml + filtered.map(s => renderSessionCard(s)).join('');
 
-  // Bind expand/collapse
+  // Bind expand/collapse for past session cards
   list.querySelectorAll('.session-card-header').forEach(header => {
     header.addEventListener('click', () => {
       const id = String(header.dataset.id);
@@ -865,11 +889,114 @@ function renderSessions() {
       renderSessions();
     });
   });
+
+  // Active session: End button
+  const endBtn = list.querySelector('#sessions-tab-end-btn');
+  if (endBtn) {
+    endBtn.addEventListener('click', async () => {
+      endBtn.disabled = true;
+      endBtn.textContent = '⏳ Ending…';
+      await handleSessionToggle();
+      loadSessions();
+    });
+  }
+
+  // Active session: Pause/Resume button
+  const pauseBtn = list.querySelector('#sessions-tab-pause-btn');
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', async () => {
+      pauseBtn.disabled = true;
+      await handlePauseResume();
+    });
+  }
+
+  // Past sessions: Continue button
+  list.querySelectorAll('.btn-continue-session').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const sess = sessionHistory.find(s => String(s.id) === id);
+      if (!sess) return;
+      if (state.sessionActive) {
+        confirmBackUpSessionId = (confirmBackUpSessionId === id) ? null : id;
+        renderSessions();
+      } else {
+        handleStartBackUp(sess);
+      }
+    });
+  });
+
+  // Confirm: Yes — end current session and start back up
+  list.querySelectorAll('.btn-confirm-continue').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const sess = sessionHistory.find(s => String(s.id) === id);
+      if (!sess) return;
+      btn.disabled = true;
+      btn.textContent = 'Working…';
+      try {
+        await send({ type: 'END_SESSION' });
+        state.sessionActive = false;
+        state.sessionName = '';
+        state.trail = [];
+        state.capturedItems = [];
+        renderSessionBar();
+        renderTrail();
+        renderCapturedItems();
+        confirmBackUpSessionId = null;
+        await handleStartBackUp(sess);
+        loadSessions();
+      } catch (err) {
+        console.error('Continue session failed:', err);
+        btn.disabled = false;
+        btn.textContent = 'Yes, continue';
+      }
+    });
+  });
+
+  // Confirm: Cancel
+  list.querySelectorAll('.btn-cancel-continue').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      confirmBackUpSessionId = null;
+      renderSessions();
+    });
+  });
+}
+
+function renderActiveSessionCard() {
+  if (!state.sessionActive) return '';
+
+  const realPages = (state.trail || []).filter(e => e.type !== 'pause' && e.type !== 'resume').length;
+  const captures = (state.capturedItems || []).length;
+
+  const statusLabel = state.sessionPaused ? '⏸ Paused' : '● Active';
+  const statusClass = state.sessionPaused ? 'paused' : 'active';
+  const pauseBtnLabel = state.sessionPaused ? '▶ Resume' : '⏸ Pause';
+  const pauseBtnClass = state.sessionPaused ? 'btn-session-resume' : 'btn-session-pause';
+
+  return `
+    <div class="active-session-card">
+      <div class="active-session-top">
+        <span class="active-session-status ${statusClass}">${statusLabel}</span>
+        <span class="active-session-name">${escHtml(state.sessionName || 'Active Session')}</span>
+      </div>
+      <div class="active-session-stats">
+        ${realPages} page${realPages !== 1 ? 's' : ''} visited · ${captures} item${captures !== 1 ? 's' : ''} captured
+      </div>
+      <div class="active-session-actions">
+        <button class="${pauseBtnClass} active-session-btn" id="sessions-tab-pause-btn">${pauseBtnLabel}</button>
+        <button class="btn-session-end active-session-btn" id="sessions-tab-end-btn">⏹ End Session</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderSessionCard(sess) {
   const id = String(sess.id);
   const isExpanded = expandedSessionId === id;
+  const isConfirming = confirmBackUpSessionId === id;
   const pages = sessionRealPages(sess);
   const captures = (sess.captured_items || []).length;
 
@@ -893,8 +1020,18 @@ function renderSessionCard(sess) {
   const expandIcon = isExpanded ? '▼' : '▶';
   const detailHtml = isExpanded ? renderSessionDetail(sess) : '';
 
+  const confirmHtml = isConfirming ? `
+    <div class="confirm-continue-bar">
+      <span class="confirm-text">⚠ End current session to continue this one?</span>
+      <div class="confirm-btns">
+        <button class="btn-cancel-continue btn-ghost btn-sm" data-id="${escHtml(id)}">Cancel</button>
+        <button class="btn-confirm-continue btn-primary btn-sm" data-id="${escHtml(id)}">Yes, continue</button>
+      </div>
+    </div>
+  ` : '';
+
   return `
-    <div class="session-card ${isExpanded ? 'expanded' : ''}">
+    <div class="session-card ${isExpanded ? 'expanded' : ''}${isConfirming ? ' confirming' : ''}">
       <div class="session-card-header" data-id="${escHtml(id)}">
         <span class="session-expand-icon">${expandIcon}</span>
         <div class="session-card-info">
@@ -904,13 +1041,17 @@ function renderSessionCard(sess) {
             ${timeStr ? `<span>${escHtml(timeStr)}</span>` : ''}
             ${durationStr ? `<span class="session-duration">${escHtml(durationStr)}</span>` : ''}
           </div>
-          <div class="session-card-stats">
-            <span class="session-stat">${pages} page${pages !== 1 ? 's' : ''}</span>
-            <span class="session-stat-dot">·</span>
-            <span class="session-stat">${captures} capture${captures !== 1 ? 's' : ''}</span>
+          <div class="session-card-bottom">
+            <div class="session-card-stats">
+              <span class="session-stat">${pages} page${pages !== 1 ? 's' : ''}</span>
+              <span class="session-stat-dot">·</span>
+              <span class="session-stat">${captures} capture${captures !== 1 ? 's' : ''}</span>
+            </div>
+            <button class="btn-continue-session" data-id="${escHtml(id)}" title="Pick up this session where you left off — old trail and captures are imported">↩ Continue</button>
           </div>
         </div>
       </div>
+      ${confirmHtml}
       ${detailHtml}
     </div>
   `;
@@ -982,12 +1123,16 @@ let refreshInterval = setInterval(async () => {
     const fresh = await send({ type: 'GET_STATE' });
     const trailChanged = JSON.stringify(fresh.trail) !== JSON.stringify(state.trail);
     const itemsChanged = JSON.stringify(fresh.capturedItems) !== JSON.stringify(state.capturedItems);
+    const sessionStatusChanged = fresh.sessionActive !== state.sessionActive || fresh.sessionPaused !== state.sessionPaused;
     state = fresh;
     if (trailChanged) {
       renderTrail();
       if (state.sessionActive) renderSessionBar();
     }
     if (itemsChanged) renderCapturedItems();
+    if (currentTab === 'sessions' && (trailChanged || itemsChanged || sessionStatusChanged)) {
+      renderSessions();
+    }
   } catch {}
 }, 3000);
 

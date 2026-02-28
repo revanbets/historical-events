@@ -399,6 +399,40 @@ async function handleMessage(msg, sender) {
       return { ok: true };
     }
 
+    case 'START_BACK_UP': {
+      const session = await getSession();
+      if (!session) throw new Error('Not logged in');
+
+      const prev = msg.prevSession;
+      if (!prev) throw new Error('No previous session data provided');
+
+      const name = (prev.session_name || 'Session') + ' — Continued';
+
+      // Import old trail entries, flagged as archived so AI analysis can skip them
+      const archivedTrail = (prev.trail || []).map(entry => ({
+        ...entry,
+        _archived: true
+      }));
+
+      // Import old captured items; preserve their saved state so they won't be re-saved
+      const archivedItems = (prev.captured_items || []).map(item => ({
+        ...item,
+        _archived: true,
+        _fromSessionId: String(prev.id)
+      }));
+
+      await setStorage({
+        hdb_session_active: true,
+        hdb_session_paused: false,
+        hdb_session_name: name,
+        hdb_current_trail: archivedTrail,
+        hdb_captured_items: archivedItems
+      });
+      lastUrlByTab = {};
+
+      return { ok: true, name, trail: archivedTrail, capturedItems: archivedItems };
+    }
+
     case 'GET_SESSIONS': {
       const session = await getSession();
       if (!session) throw new Error('Not logged in');

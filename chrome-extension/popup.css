@@ -1461,3 +1461,116 @@ body {
   color: var(--text-dim);
   text-align: center;
 }
+
+/* ─── ACTIVE SESSION CARD (Sessions Tab) ─────────────────── */
+.active-session-card {
+  background: linear-gradient(to right, rgba(74, 222, 128, 0.06), var(--bg-card));
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  border-radius: 9px;
+  padding: 10px 12px 10px;
+  margin-bottom: 2px;
+}
+
+.active-session-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  min-width: 0;
+}
+
+.active-session-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  flex-shrink: 0;
+}
+.active-session-status.active { color: var(--green); }
+.active-session-status.paused { color: var(--yellow); }
+
+.active-session-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.active-session-stats {
+  font-size: 11px;
+  color: var(--text-mid);
+  margin-bottom: 8px;
+}
+
+.active-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Sizing override for buttons inside the active-session card */
+.active-session-btn {
+  font-size: 11px !important;
+  padding: 4px 11px !important;
+}
+
+/* ─── CONTINUE SESSION BUTTON ────────────────────────────── */
+.session-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  gap: 6px;
+}
+
+.btn-continue-session {
+  padding: 3px 8px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid var(--border-mid);
+  border-radius: 5px;
+  color: var(--accent);
+  font-family: 'Karla', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+.btn-continue-session:hover {
+  background: var(--accent-dim);
+  border-color: var(--border-hi);
+}
+
+/* ─── CONFIRM CONTINUE BAR ───────────────────────────────── */
+.confirm-continue-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 12px;
+  background: rgba(251, 191, 36, 0.06);
+  border-top: 1px solid rgba(251, 191, 36, 0.22);
+}
+
+.confirm-text {
+  font-size: 11px;
+  color: var(--yellow);
+  flex: 1;
+  min-width: 0;
+}
+
+.confirm-btns {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.session-card.confirming {
+  border-color: rgba(251, 191, 36, 0.4);
+}
