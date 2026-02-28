@@ -1637,7 +1637,9 @@
       // ── Notifications ──
       const [notifications, setNotifications] = React.useState([]);
       const [notifsLoaded, setNotifsLoaded] = React.useState(false);
-      const [notifFilter, setNotifFilter] = React.useState('all');
+      const [notifTypeFilters, setNotifTypeFilters] = React.useState([]);
+      const [notifReadFilter, setNotifReadFilter] = React.useState('all'); // 'all' | 'unread' | 'read'
+      const [notifSort, setNotifSort] = React.useState('newest'); // 'newest' | 'oldest' | 'unread_first'
 
       const fileInputRef = useRef(null);
       // Canvas drag engine refs
@@ -6075,33 +6077,51 @@
 
             {/* NOTIFICATIONS PAGE */}
             {activeTab === 'notifications' && (() => {
-              const filterDefs = [
-                {id:'all', label:'All'},
-                {id:'unread', label:`Unread${notifUnreadCount>0?' ('+notifUnreadCount+')':''}`},
-                {id:'upload_success', label:'📤 Uploads'},
-                {id:'ai_analysis', label:'🤖 AI Analysis'},
-                {id:'event_saved', label:'💾 Events'},
-                {id:'system_health', label:'🛡️ System'},
-                {id:'new_user', label:'👤 Users'},
+              // Type filter definitions (multi-select)
+              const typeDefs = [
+                {id:'upload',  label:'📤 Uploads',     types:['upload_success','upload_error']},
+                {id:'ai',      label:'🤖 AI Analysis', types:['ai_analysis','ai_error']},
+                {id:'events',  label:'💾 Events',      types:['event_saved','event_deleted']},
+                {id:'system',  label:'🛡️ System',      types:['system_health']},
+                {id:'users',   label:'👤 Users',       types:['new_user','user_role_change']},
               ];
+              const toggleTypeFilter = (id) =>
+                setNotifTypeFilters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+              // Compute allowed types from selected filter IDs (null = no filter = all)
+              const allowedTypes = notifTypeFilters.length > 0
+                ? notifTypeFilters.flatMap(fid => typeDefs.find(t => t.id === fid)?.types || [])
+                : null;
+              // Apply type + read filters
               const filteredNotifs = notifications.filter(n => {
-                if (notifFilter === 'unread') return !(n.read_by||[]).includes(currentUser.username);
-                if (notifFilter === 'all') return true;
-                if (notifFilter === 'upload_success') return n.type === 'upload_success' || n.type === 'upload_error';
-                if (notifFilter === 'ai_analysis') return n.type === 'ai_analysis' || n.type === 'ai_error';
-                if (notifFilter === 'event_saved') return n.type === 'event_saved' || n.type === 'event_deleted';
-                return n.type === notifFilter;
+                if (allowedTypes !== null && !allowedTypes.includes(n.type)) return false;
+                const isUnread = !(n.read_by||[]).includes(currentUser.username);
+                if (notifReadFilter === 'unread' && !isUnread) return false;
+                if (notifReadFilter === 'read' && isUnread) return false;
+                return true;
               });
+              // Apply sort
+              const sortedNotifs = [...filteredNotifs].sort((a, b) => {
+                if (notifSort === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
+                if (notifSort === 'unread_first') {
+                  const aU = !(a.read_by||[]).includes(currentUser.username);
+                  const bU = !(b.read_by||[]).includes(currentUser.username);
+                  if (aU && !bU) return -1;
+                  if (!aU && bU) return 1;
+                  return new Date(b.created_at) - new Date(a.created_at);
+                }
+                return new Date(b.created_at) - new Date(a.created_at); // newest (default)
+              });
+              const activeFiltersCount = notifTypeFilters.length + (notifReadFilter !== 'all' ? 1 : 0);
               return (
                 <div style={{maxWidth:'820px',margin:'0 auto',padding:'0 0.5rem'}}>
                   {/* Header row */}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.25rem',flexWrap:'wrap',gap:'1rem'}}>
                     <div>
                       <h2 style={{color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,fontSize:'1.35rem',display:'flex',alignItems:'center',gap:'0.5rem'}}>
                         🔔 Notifications
                         {notifUnreadCount > 0 && <span style={{background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.75rem',fontWeight:700,padding:'0.15rem 0.6rem',borderRadius:'12px'}}>{notifUnreadCount} unread</span>}
                       </h2>
-                      <div style={{color:'#5a6080',fontSize:'0.8rem',marginTop:'0.35rem'}}>Notifications are visible based on your role</div>
+                      <div style={{color:'#5a6080',fontSize:'0.8rem',marginTop:'0.35rem'}}>Visible based on your role · {sortedNotifs.length} shown{activeFiltersCount>0?` (${activeFiltersCount} filter${activeFiltersCount>1?'s':''} active)`:''}</div>
                     </div>
                     <div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>
                       {notifUnreadCount > 0 && (
@@ -6114,19 +6134,65 @@
                     </div>
                   </div>
 
-                  {/* Filter chips */}
-                  <div style={{display:'flex',gap:'0.4rem',flexWrap:'wrap',marginBottom:'1.25rem'}}>
-                    {filterDefs.map(f => (
-                      <button key={f.id} className="notif-filter-btn" onClick={()=>setNotifFilter(f.id)}
-                        style={{
-                          border: notifFilter===f.id ? '2px solid #60a5fa' : '1px solid rgba(61,69,99,0.5)',
-                          background: notifFilter===f.id ? 'rgba(96,165,250,0.15)' : 'rgba(26,31,58,0.5)',
-                          color: notifFilter===f.id ? '#60a5fa' : '#8b92b0',
-                          fontWeight: notifFilter===f.id ? 700 : 500,
-                        }}>
-                        {f.label}
-                      </button>
-                    ))}
+                  {/* Filter + sort controls */}
+                  <div style={{background:'rgba(26,31,58,0.5)',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'12px',padding:'0.85rem 1rem',marginBottom:'1.25rem'}}>
+                    {/* Type filters row */}
+                    <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap',marginBottom:'0.65rem'}}>
+                      <span style={{fontSize:'0.72rem',color:'#5a6080',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.6px',whiteSpace:'nowrap',minWidth:'60px'}}>Type</span>
+                      <div style={{display:'flex',gap:'0.35rem',flexWrap:'wrap',flex:1}}>
+                        {typeDefs.map(f => {
+                          const active = notifTypeFilters.includes(f.id);
+                          return (
+                            <button key={f.id} className="notif-filter-btn" onClick={()=>toggleTypeFilter(f.id)}
+                              style={{
+                                border: active ? '2px solid #60a5fa' : '1px solid rgba(61,69,99,0.5)',
+                                background: active ? 'rgba(96,165,250,0.18)' : 'transparent',
+                                color: active ? '#60a5fa' : '#8b92b0',
+                                fontWeight: active ? 700 : 500,
+                              }}>
+                              {f.label}
+                            </button>
+                          );
+                        })}
+                        {notifTypeFilters.length > 0 && (
+                          <button className="notif-filter-btn" onClick={()=>setNotifTypeFilters([])}
+                            style={{border:'1px solid rgba(239,68,68,0.4)',background:'transparent',color:'#f87171',fontWeight:500}}>
+                            ✕ Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Read state + sort row */}
+                    <div style={{display:'flex',alignItems:'center',gap:'1rem',flexWrap:'wrap'}}>
+                      {/* Read filter */}
+                      <div style={{display:'flex',alignItems:'center',gap:'0.35rem'}}>
+                        <span style={{fontSize:'0.72rem',color:'#5a6080',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.6px',whiteSpace:'nowrap',minWidth:'60px'}}>Show</span>
+                        {[{id:'all',label:'All'},{id:'unread',label:`Unread${notifUnreadCount>0?' ('+notifUnreadCount+')':''}`},{id:'read',label:'Read'}].map(opt => {
+                          const active = notifReadFilter === opt.id;
+                          return (
+                            <button key={opt.id} className="notif-filter-btn" onClick={()=>setNotifReadFilter(opt.id)}
+                              style={{
+                                border: active ? '2px solid #60a5fa' : '1px solid rgba(61,69,99,0.5)',
+                                background: active ? 'rgba(96,165,250,0.18)' : 'transparent',
+                                color: active ? '#60a5fa' : '#8b92b0',
+                                fontWeight: active ? 700 : 500,
+                              }}>
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* Sort */}
+                      <div style={{display:'flex',alignItems:'center',gap:'0.5rem',marginLeft:'auto'}}>
+                        <span style={{fontSize:'0.72rem',color:'#5a6080',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.6px',whiteSpace:'nowrap'}}>Sort</span>
+                        <select value={notifSort} onChange={e=>setNotifSort(e.target.value)}
+                          style={{background:'rgba(10,14,39,0.8)',border:'1px solid rgba(61,69,99,0.6)',borderRadius:'8px',color:'#c0c7d8',fontSize:'0.8rem',padding:'0.3rem 0.6rem',fontFamily:'inherit',cursor:'pointer'}}>
+                          <option value="newest">Newest first</option>
+                          <option value="oldest">Oldest first</option>
+                          <option value="unread_first">Unread first</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Content */}
@@ -6135,14 +6201,24 @@
                       <div style={{fontSize:'2rem',marginBottom:'0.75rem'}}>⏳</div>
                       Loading notifications…
                     </div>
-                  ) : filteredNotifs.length === 0 ? (
+                  ) : sortedNotifs.length === 0 ? (
                     <div className="empty-state" style={{padding:'4rem 2rem'}}>
                       <div className="empty-state-icon">🔔</div>
-                      <p style={{color:'#5a6080'}}>{notifFilter==='unread' ? 'No unread notifications — you\'re all caught up!' : 'No notifications yet. Actions like uploads, AI analysis, and edits will appear here.'}</p>
+                      <p style={{color:'#5a6080'}}>
+                        {notifReadFilter==='unread' ? 'No unread notifications — you\'re all caught up!'
+                         : activeFiltersCount > 0 ? 'No notifications match your current filters.'
+                         : 'No notifications yet. Actions like uploads, AI analysis, and edits will appear here.'}
+                      </p>
+                      {activeFiltersCount > 0 && (
+                        <button className="btn btn-secondary" style={{fontSize:'0.8rem',marginTop:'0.75rem'}}
+                          onClick={()=>{setNotifTypeFilters([]);setNotifReadFilter('all');}}>
+                          Clear all filters
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div>
-                      {filteredNotifs.map(n => {
+                      {sortedNotifs.map(n => {
                         const isUnread = !(n.read_by||[]).includes(currentUser.username);
                         const meta = NOTIF_META[n.type] || {icon:'🔔',color:'#60a5fa'};
                         const hasEvent = !!n.event_id;
