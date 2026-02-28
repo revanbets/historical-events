@@ -488,13 +488,28 @@
               { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase() }) },
               (msg) => setLoadingMsg(msg)
             );
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (res.status === 404) {
+              setLoading(false);
+              setError('Email feature not deployed yet — go to Render dashboard → your service → Deploys tab → "Deploy latest commit".');
+              return;
+            }
+            if (res.status === 500) {
+              setLoading(false);
+              try { const b = await res.json(); setError('SMTP error: ' + (b.detail || 'Check SMTP env vars in Render.')); }
+              catch { setError('Server error sending email. Check SMTP env vars in Render.'); }
+              return;
+            }
+            if (!res.ok) {
+              setLoading(false);
+              setError(`Unexpected server error (HTTP ${res.status}). Check Render logs.`);
+              return;
+            }
             setPendingUser(user);
             setLoading(false);
             setStep('otp');
           } catch(e) {
             setLoading(false);
-            setError('Could not reach the server. Make sure your internet is connected and try again.');
+            setError('Could not reach the server after multiple retries. Check that your Render service is running.');
           }
         } else {
           setLoading(false);
