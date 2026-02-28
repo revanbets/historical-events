@@ -439,19 +439,95 @@
     });
 
     // ─── LOGIN SCREEN ───
+    const BACKEND_URL = 'https://historical-events-api-n45u.onrender.com';
+    const isEmailFormat = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
     const LoginScreen = ({ onLogin, onGoSignup }) => {
       const [username, setUsername] = useState('');
       const [password, setPassword] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
+      const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
+      const [otp, setOtp] = useState('');
+      const [otpLoading, setOtpLoading] = useState(false);
+      const [pendingUser, setPendingUser] = useState(null);
+
       const submit = async () => {
         if (!username.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
         setLoading(true); setError('');
         const user = await findUser(username.trim(), password.trim());
         setLoading(false);
-        if (!user) { setError('Invalid username or password.'); return; }
-        onLogin(user);
+        if (!user) { setError('Invalid email or password.'); return; }
+        if (isEmailFormat(username.trim())) {
+          // Email account → require 2FA
+          try {
+            const res = await fetch(`${BACKEND_URL}/api/send-2fa`, {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ email: username.trim().toLowerCase() })
+            });
+            if (!res.ok) throw new Error('send failed');
+            setPendingUser(user);
+            setStep('otp');
+          } catch(e) {
+            setError('Could not send verification code. Check your connection and try again.');
+          }
+        } else {
+          // Non-email username (owner/admin legacy accounts) — login directly
+          onLogin(user);
+        }
       };
+
+      const submitOtp = async () => {
+        if (otp.trim().length !== 6) { setError('Enter the 6-digit code.'); return; }
+        setOtpLoading(true); setError('');
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/verify-2fa`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ email: username.trim().toLowerCase(), code: otp.trim() })
+          });
+          const result = await res.json();
+          if (result.valid) { onLogin(pendingUser); }
+          else { setError(result.error || 'Invalid or expired code.'); }
+        } catch(e) { setError('Verification failed. Try again.'); }
+        setOtpLoading(false);
+      };
+
+      const resendCode = async () => {
+        setError('');
+        try {
+          await fetch(`${BACKEND_URL}/api/send-2fa`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ email: username.trim().toLowerCase() })
+          });
+          setError('');
+        } catch(e) { setError('Could not resend code.'); }
+      };
+
+      if (step === 'otp') {
+        return (
+          <div className="auth-screen">
+            <div className="auth-card">
+              <div style={{marginBottom:'2rem'}}>
+                <div className="auth-title">Verify Identity</div>
+                <div className="auth-subtitle">A 6-digit code was sent to<br/><strong style={{color:'#60a5fa'}}>{username.trim()}</strong></div>
+              </div>
+              {error && <div className="auth-error">{error}</div>}
+              <div className="auth-field">
+                <label className="auth-label">Verification Code</label>
+                <input className="auth-input" type="text" inputMode="numeric" placeholder="000000" maxLength={6}
+                  value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g,''))}
+                  onKeyDown={e=>{if(e.key==='Enter')submitOtp();}}
+                  style={{letterSpacing:'0.6rem',fontSize:'1.4rem',textAlign:'center'}} autoFocus />
+              </div>
+              <button className="auth-btn" onClick={submitOtp} disabled={otpLoading}>{otpLoading ? 'Verifying...' : 'Verify →'}</button>
+              <div className="auth-switch">
+                <span onClick={resendCode}>Resend code</span>&nbsp;·&nbsp;<span onClick={()=>{setStep('credentials');setOtp('');setError('');}}>← Back</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="auth-screen">
           <div className="auth-card">
@@ -461,8 +537,8 @@
             </div>
             {error && <div className="auth-error">{error}</div>}
             <div className="auth-field">
-              <label className="auth-label">Username</label>
-              <input className="auth-input" type="text" placeholder="Enter username" value={username}
+              <label className="auth-label">Email or Username</label>
+              <input className="auth-input" type="text" placeholder="Enter email or username" value={username}
                 onChange={e=>setUsername(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} autoFocus />
             </div>
             <div className="auth-field">
@@ -479,31 +555,32 @@
 
     // ─── SIGNUP SCREEN ───
     const SignupScreen = ({ onGoLogin }) => {
-      const [username, setUsername] = useState('');
+      const [email, setEmail] = useState('');
       const [password, setPassword] = useState('');
       const [confirm, setConfirm] = useState('');
       const [error, setError] = useState('');
       const [success, setSuccess] = useState('');
       const [loading, setLoading] = useState(false);
       const submit = async () => {
-        if (!username.trim() || !password.trim() || !confirm.trim()) { setError('Please fill in all fields.'); return; }
-        if (username.trim().length < 3) { setError('Username must be at least 3 characters.'); return; }
+        if (!email.trim() || !password.trim() || !confirm.trim()) { setError('Please fill in all fields.'); return; }
+        if (!isEmailFormat(email.trim())) { setError('Please enter a valid email address.'); return; }
         if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
         if (password !== confirm) { setError('Passwords do not match.'); return; }
         setLoading(true); setError('');
-        // Check if username already exists
-        const { data: existing } = await supabaseClient.from('users').select('username').eq('username', username.trim().toLowerCase()).single();
-        if (existing) { setLoading(false); setError('Username already taken.'); return; }
+        const normalized = email.trim().toLowerCase();
+        // Check if email already exists
+        const { data: existing } = await supabaseClient.from('users').select('username').eq('username', normalized).single();
+        if (existing) { setLoading(false); setError('An account with this email already exists.'); return; }
         // Insert new user
-        const { error: insertErr } = await supabaseClient.from('users').insert([{ username: username.trim().toLowerCase(), password, role: 'user' }]);
+        const { error: insertErr } = await supabaseClient.from('users').insert([{ username: normalized, password, role: 'user' }]);
         setLoading(false);
         if (insertErr) { setError('Registration failed: ' + insertErr.message); return; }
         setSuccess('Account created! Redirecting to sign in…'); setError('');
         // Notify admins/owner of new registration
         supabaseClient.from('notifications').insert([{
           type: 'new_user', title: 'New User Registered',
-          message: `${username.trim().toLowerCase()} just created a new account.`,
-          created_by: username.trim().toLowerCase(), created_by_role: 'user',
+          message: `${normalized} just created a new account.`,
+          created_by: normalized, created_by_role: 'user',
           event_id: null, metadata: {}, read_by: [], dismissed_by: [],
         }]).catch(()=>{});
         setTimeout(() => onGoLogin(), 1500);
@@ -518,9 +595,9 @@
             {error && <div className="auth-error">{error}</div>}
             {success && <div className="auth-success">{success}</div>}
             <div className="auth-field">
-              <label className="auth-label">Username</label>
-              <input className="auth-input" type="text" placeholder="Min. 3 characters" value={username}
-                onChange={e=>setUsername(e.target.value)} autoFocus />
+              <label className="auth-label">Email</label>
+              <input className="auth-input" type="email" placeholder="your@email.com" value={email}
+                onChange={e=>setEmail(e.target.value)} autoFocus />
             </div>
             <div className="auth-field">
               <label className="auth-label">Password</label>
@@ -4530,6 +4607,7 @@
             <div className="account-tabs">
               <button className={`account-tab ${accountTab==='uploads'?'active':''}`} onClick={()=>setAccountTab('uploads')}>📂 My Uploads</button>
               <button className={`account-tab ${accountTab==='sessions'?'active':''}`} onClick={()=>setAccountTab('sessions')}>🗺 Research Sessions</button>
+              <button className={`account-tab ${accountTab==='settings'?'active':''}`} onClick={()=>setAccountTab('settings')}>⚙️ Settings</button>
               {isAdminOrOwner && (
                 <button className={`account-tab ${accountTab==='admin'?'active-admin':''}`} onClick={()=>setAccountTab('admin')}>
                   🛡️ {currentUser.role==='owner'?'Owner Panel':'Admin Panel'}
@@ -4789,6 +4867,95 @@
                 </div>
               </div>
             )}
+            {/* Settings Tab */}
+            {accountTab === 'settings' && (() => {
+              const [emailVal, setEmailVal] = React.useState(currentUser.username);
+              const [emailMsg, setEmailMsg] = React.useState('');
+              const [emailLoading, setEmailLoading] = React.useState(false);
+              const [pwdCurrent, setPwdCurrent] = React.useState('');
+              const [pwdNew, setPwdNew] = React.useState('');
+              const [pwdConfirm, setPwdConfirm] = React.useState('');
+              const [pwdMsg, setPwdMsg] = React.useState('');
+              const [pwdLoading, setPwdLoading] = React.useState(false);
+
+              const renderMsg = (msg) => {
+                if (!msg) return null;
+                const isErr = msg.startsWith('error:');
+                const text = msg.replace(/^(error:|success:)/,'');
+                return <div style={{background:isErr?'rgba(239,68,68,0.15)':'rgba(16,185,129,0.15)',border:`1px solid ${isErr?'rgba(239,68,68,0.4)':'rgba(16,185,129,0.4)'}`,color:isErr?'#ef4444':'#10b981',padding:'0.6rem 0.85rem',borderRadius:'8px',fontSize:'0.85rem',marginTop:'0.75rem'}}>{text}</div>;
+              };
+
+              const handleEmailChange = async () => {
+                const newVal = emailVal.trim().toLowerCase();
+                if (!newVal || newVal.length < 3) { setEmailMsg('error:Must be at least 3 characters.'); return; }
+                if (newVal === currentUser.username) { setEmailMsg('error:That is already your current login.'); return; }
+                setEmailLoading(true); setEmailMsg('');
+                const { data: existing } = await supabaseClient.from('users').select('username').eq('username', newVal).single();
+                if (existing) { setEmailLoading(false); setEmailMsg('error:That email / username is already taken.'); return; }
+                const { error } = await supabaseClient.from('users').update({ username: newVal }).eq('username', currentUser.username);
+                setEmailLoading(false);
+                if (error) { setEmailMsg('error:Update failed: ' + error.message); return; }
+                const session = { ...currentUser, username: newVal };
+                localStorage.setItem('hdb_session', JSON.stringify(session));
+                setCurrentUser(session);
+                setEmailMsg('success:Login updated. You are now signed in as ' + newVal);
+              };
+
+              const handlePasswordChange = async () => {
+                if (!pwdCurrent || !pwdNew || !pwdConfirm) { setPwdMsg('error:Please fill in all fields.'); return; }
+                if (pwdNew.length < 6) { setPwdMsg('error:New password must be at least 6 characters.'); return; }
+                if (pwdNew !== pwdConfirm) { setPwdMsg('error:New passwords do not match.'); return; }
+                setPwdLoading(true); setPwdMsg('');
+                const user = await findUser(currentUser.username, pwdCurrent);
+                if (!user) { setPwdLoading(false); setPwdMsg('error:Current password is incorrect.'); return; }
+                const { error } = await supabaseClient.from('users').update({ password: pwdNew }).eq('username', currentUser.username);
+                setPwdLoading(false);
+                if (error) { setPwdMsg('error:Update failed: ' + error.message); return; }
+                setPwdMsg('success:Password updated successfully.');
+                setPwdCurrent(''); setPwdNew(''); setPwdConfirm('');
+              };
+
+              const fld = { background:'rgba(10,14,39,0.8)', border:'2px solid rgba(45,53,97,0.5)', borderRadius:'10px', color:'#e0e6ed', padding:'0.75rem 1rem', fontSize:'0.875rem', width:'100%', fontFamily:'inherit', marginBottom:'0.75rem' };
+              const lbl = { display:'block', fontSize:'0.75rem', color:'#8b92b0', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:700, marginBottom:'0.4rem' };
+              const sec = { background:'rgba(26,31,58,0.6)', border:'1px solid rgba(61,69,99,0.5)', borderRadius:'12px', padding:'1.5rem', marginBottom:'1.5rem' };
+              const secTitle = { fontSize:'0.8rem', color:'#60a5fa', textTransform:'uppercase', letterSpacing:'1px', fontWeight:700, marginBottom:'1rem' };
+
+              return (
+                <div style={{padding:'1.5rem 2rem', maxWidth:'520px'}}>
+                  <div style={{fontSize:'1.1rem',fontWeight:700,color:'#e0e6ed',marginBottom:'1.5rem'}}>Account Settings</div>
+
+                  {/* Change Email / Username */}
+                  <div style={sec}>
+                    <div style={secTitle}>Change Email / Username</div>
+                    <div style={{fontSize:'0.8rem',color:'#8b92b0',marginBottom:'1rem'}}>This is what you use to log in. Email accounts also require 2-factor verification.</div>
+                    <label style={lbl}>Email or Username</label>
+                    <input style={fld} type="text" value={emailVal} onChange={e=>setEmailVal(e.target.value)}
+                      onKeyDown={e=>{if(e.key==='Enter')handleEmailChange();}} />
+                    <button className="btn btn-primary" style={{padding:'0.6rem 1.5rem',fontSize:'0.85rem'}} onClick={handleEmailChange} disabled={emailLoading}>
+                      {emailLoading ? 'Saving...' : 'Update Login'}
+                    </button>
+                    {renderMsg(emailMsg)}
+                  </div>
+
+                  {/* Change Password */}
+                  <div style={sec}>
+                    <div style={secTitle}>Change Password</div>
+                    <label style={lbl}>Current Password</label>
+                    <input style={fld} type="password" value={pwdCurrent} onChange={e=>setPwdCurrent(e.target.value)} placeholder="Enter current password" />
+                    <label style={lbl}>New Password</label>
+                    <input style={fld} type="password" value={pwdNew} onChange={e=>setPwdNew(e.target.value)} placeholder="Min. 6 characters" />
+                    <label style={lbl}>Confirm New Password</label>
+                    <input style={fld} type="password" value={pwdConfirm} onChange={e=>setPwdConfirm(e.target.value)} placeholder="Re-enter new password"
+                      onKeyDown={e=>{if(e.key==='Enter')handlePasswordChange();}} />
+                    <button className="btn btn-primary" style={{padding:'0.6rem 1.5rem',fontSize:'0.85rem'}} onClick={handlePasswordChange} disabled={pwdLoading}>
+                      {pwdLoading ? 'Saving...' : 'Update Password'}
+                    </button>
+                    {renderMsg(pwdMsg)}
+                  </div>
+                </div>
+              );
+            })()}
+
                         {/* Admin / Owner Panel */}
             {accountTab === 'admin' && isAdminOrOwner && <AdminPanel />}
 

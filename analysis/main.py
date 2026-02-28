@@ -5,7 +5,14 @@ Handles file uploads, text extraction, AI analysis, and serves the frontend.
 
 import os
 import shutil
+import random
+import string
+import smtplib
+import time
 from datetime import datetime, timezone
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from pydantic import BaseModel
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +56,95 @@ def startup():
     print(f"Server ready. Uploads dir: {UPLOADS_DIR}")
     print(f"Downloads dir: {DOWNLOADS_DIR}")
     print(f"Open http://localhost:8000 in your browser")
+
+
+# ─── 2FA / Email Verification ───────────────────────────────────────────────
+
+# In-memory store: { email: { "code": "123456", "expires": float_timestamp } }
+_tfa_store: dict = {}
+
+
+def _generate_code() -> str:
+    return ''.join(random.choices(string.digits, k=6))
+
+
+def _send_email(to_email: str, code: str) -> None:
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
+
+    if not smtp_user or not smtp_pass:
+        # Dev mode — log the code so you can still test without email
+        print(f"[2FA] SMTP not configured. Code for {to_email}: {code}")
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Your verification code: {code}"
+    msg["From"] = smtp_from
+    msg["To"] = to_email
+
+    text_body = f"Your verification code is: {code}\n\nThis code expires in 10 minutes.\nIf you didn't request this, ignore this email."
+    html_body = f"""
+<html><body style="font-family:sans-serif;background:#0a0e27;padding:2rem;">
+  <div style="max-width:420px;margin:0 auto;background:rgba(26,31,58,0.98);border-radius:16px;padding:2rem;border:2px solid rgba(96,165,250,0.3);">
+    <h2 style="color:#60a5fa;font-family:monospace;margin-top:0">Historical Events DB</h2>
+    <p style="color:#c0c7d8;">Your sign-in verification code:</p>
+    <div style="font-size:2.5rem;font-weight:bold;letter-spacing:0.5rem;color:#60a5fa;font-family:monospace;
+                background:rgba(10,14,39,0.8);padding:1rem;border-radius:8px;text-align:center;margin:1rem 0;">{code}</div>
+    <p style="color:#8b92b0;font-size:0.875rem;">Expires in 10 minutes. If you didn't request this, ignore this email.</p>
+  </div>
+</body></html>"""
+
+    msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, to_email, msg.as_string())
+
+
+class TwoFARequest(BaseModel):
+    email: str
+
+
+class TwoFAVerify(BaseModel):
+    email: str
+    code: str
+
+
+@app.post("/api/send-2fa")
+def send_2fa(body: TwoFARequest):
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    code = _generate_code()
+    _tfa_store[email] = {"code": code, "expires": time.time() + 600}  # 10 min
+    try:
+        _send_email(email, code)
+    except Exception as e:
+        print(f"[2FA] Email send error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send verification email. Check SMTP settings.")
+    return {"ok": True}
+
+
+@app.post("/api/verify-2fa")
+def verify_2fa(body: TwoFAVerify):
+    email = body.email.strip().lower()
+    code = body.code.strip()
+    record = _tfa_store.get(email)
+    if not record:
+        return {"valid": False, "error": "No verification code found. Please request a new one."}
+    if time.time() > record["expires"]:
+        _tfa_store.pop(email, None)
+        return {"valid": False, "error": "Code expired. Please request a new one."}
+    if record["code"] != code:
+        return {"valid": False, "error": "Incorrect code. Please try again."}
+    _tfa_store.pop(email, None)  # Single-use
+    return {"valid": True}
 
 
 # --- Serve the frontend HTML ---
