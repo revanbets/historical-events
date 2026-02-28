@@ -1749,6 +1749,552 @@
       );
     };
 
+    // ─── FEEDBACK PAGE ───
+    const FeedbackPage = ({ currentUser }) => {
+      const isAdmin = currentUser.role === 'admin' || currentUser.role === 'owner';
+      const [fbView, setFbView] = React.useState('my');
+      const [myRequests, setMyRequests] = React.useState([]);
+      const [allRequests, setAllRequests] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
+      const [tableError, setTableError] = React.useState(false);
+      const [showForm, setShowForm] = React.useState(false);
+      const [formTitle, setFormTitle] = React.useState('');
+      const [formCategory, setFormCategory] = React.useState('feature');
+      const [formDescription, setFormDescription] = React.useState('');
+      const [formSubmitting, setFormSubmitting] = React.useState(false);
+      const [formError, setFormError] = React.useState('');
+      const [formSuccess, setFormSuccess] = React.useState('');
+      const [editingId, setEditingId] = React.useState(null);
+      const [editTitle, setEditTitle] = React.useState('');
+      const [editCategory, setEditCategory] = React.useState('');
+      const [editDescription, setEditDescription] = React.useState('');
+      const [editSaving, setEditSaving] = React.useState(false);
+      const [expandedHistory, setExpandedHistory] = React.useState(new Set());
+      const [adminSort, setAdminSort] = React.useState('newest');
+      const [adminStatusFilter, setAdminStatusFilter] = React.useState('all');
+      const [adminCategoryFilter, setAdminCategoryFilter] = React.useState('all');
+      const [adminNotesDraft, setAdminNotesDraft] = React.useState({});
+      const [adminUpdating, setAdminUpdating] = React.useState({});
+
+      const CATEGORIES = [
+        { value: 'feature',  label: '💡 Feature Request',   color: '#60a5fa' },
+        { value: 'bug',      label: '🐛 Bug Report',         color: '#ef4444' },
+        { value: 'content',  label: '📚 Content Request',    color: '#10b981' },
+        { value: 'ui',       label: '🎨 UI/UX Improvement',  color: '#a78bfa' },
+        { value: 'data',     label: '🔍 Data Quality',       color: '#f59e0b' },
+        { value: 'other',    label: '💬 Other',              color: '#8b92b0' },
+      ];
+      const STATUSES = [
+        { value: 'pending',     label: 'Pending',     color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+        { value: 'reviewing',   label: 'Reviewing',   color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+        { value: 'accepted',    label: 'Accepted',    color: '#10b981', bg: 'rgba(16,185,129,0.15)' },
+        { value: 'in-progress', label: 'In Progress', color: '#a78bfa', bg: 'rgba(167,139,250,0.15)' },
+        { value: 'completed',   label: 'Completed',   color: '#34d399', bg: 'rgba(52,211,153,0.15)' },
+        { value: 'declined',    label: 'Declined',    color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+      ];
+      const PRIORITIES = [
+        { value: 'low',    label: '⬇ Low',    color: '#64748b' },
+        { value: 'normal', label: '➡ Normal', color: '#8b92b0' },
+        { value: 'high',   label: '⬆ High',   color: '#f59e0b' },
+        { value: 'urgent', label: '🔺 Urgent', color: '#ef4444' },
+      ];
+      const getCat      = (v) => CATEGORIES.find(c => c.value === v) || CATEGORIES[5];
+      const getStatus   = (v) => STATUSES.find(s => s.value === v)   || STATUSES[0];
+      const getPriority = (v) => PRIORITIES.find(p => p.value === v) || PRIORITIES[1];
+
+      const fmtDate = (iso) => {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      };
+      const fmtDateTime = (iso) => {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      };
+
+      async function loadMyRequests() {
+        setLoading(true);
+        try {
+          const { data: rows, error } = await supabaseClient
+            .from('feedback_requests').select('*')
+            .eq('submitted_by', currentUser.username)
+            .order('created_at', { ascending: false });
+          if (error) {
+            if (error.code === '42P01' || (error.message || '').includes('does not exist')) setTableError(true);
+            setMyRequests([]);
+          } else { setMyRequests(rows || []); setTableError(false); }
+        } catch(e) { setMyRequests([]); }
+        setLoading(false);
+      }
+      async function loadAllRequests() {
+        try {
+          const { data: rows, error } = await supabaseClient
+            .from('feedback_requests').select('*').order('created_at', { ascending: false });
+          if (!error && rows) setAllRequests(rows);
+        } catch(e) {}
+      }
+      React.useEffect(() => { loadMyRequests(); if (isAdmin) loadAllRequests(); }, []);
+
+      async function submitRequest() {
+        if (!formTitle.trim()) { setFormError('Please enter a title.'); return; }
+        if (!formDescription.trim()) { setFormError('Please describe your request.'); return; }
+        setFormSubmitting(true); setFormError('');
+        try {
+          const { data: inserted, error } = await supabaseClient
+            .from('feedback_requests')
+            .insert([{ title: formTitle.trim(), category: formCategory, description: formDescription.trim(),
+              submitted_by: currentUser.username, submitted_by_role: currentUser.role,
+              status: 'pending', admin_notes: '', priority: 'normal', is_edited: false, edit_history: [] }])
+            .select().single();
+          if (error) throw error;
+          setMyRequests(prev => [inserted, ...prev]);
+          if (isAdmin) setAllRequests(prev => [inserted, ...prev]);
+          setFormTitle(''); setFormCategory('feature'); setFormDescription('');
+          setShowForm(false); setFormSuccess('Request submitted!');
+          setTimeout(() => setFormSuccess(''), 4000);
+        } catch(e) { setFormError('Failed to submit: ' + (e.message || 'Unknown error')); }
+        setFormSubmitting(false);
+      }
+
+      function startEdit(req) {
+        setEditingId(req.id); setEditTitle(req.title);
+        setEditCategory(req.category); setEditDescription(req.description);
+      }
+      async function saveEdit(req) {
+        if (!editTitle.trim() || !editDescription.trim()) return;
+        setEditSaving(true);
+        const newHistory = [...(req.edit_history || []), {
+          edited_at: new Date().toISOString(), edited_by: currentUser.username,
+          previous_title: req.title, previous_description: req.description, previous_category: req.category,
+        }];
+        try {
+          const { data: updated, error } = await supabaseClient
+            .from('feedback_requests')
+            .update({ title: editTitle.trim(), category: editCategory, description: editDescription.trim(),
+              is_edited: true, edit_history: newHistory, updated_at: new Date().toISOString() })
+            .eq('id', req.id).select().single();
+          if (error) throw error;
+          setMyRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+          if (isAdmin) setAllRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+          setEditingId(null);
+        } catch(e) {}
+        setEditSaving(false);
+      }
+      async function adminUpdateStatus(req, newStatus) {
+        setAdminUpdating(prev => ({...prev, [req.id]: true}));
+        try {
+          const { data: updated, error } = await supabaseClient
+            .from('feedback_requests')
+            .update({ status: newStatus, updated_at: new Date().toISOString() })
+            .eq('id', req.id).select().single();
+          if (!error && updated) {
+            setAllRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+            setMyRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+          }
+        } catch(e) {}
+        setAdminUpdating(prev => ({...prev, [req.id]: false}));
+      }
+      async function adminUpdatePriority(req, newPriority) {
+        try {
+          const { data: updated, error } = await supabaseClient
+            .from('feedback_requests')
+            .update({ priority: newPriority, updated_at: new Date().toISOString() })
+            .eq('id', req.id).select().single();
+          if (!error && updated) setAllRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+        } catch(e) {}
+      }
+      async function adminSaveNotes(req) {
+        const notes = adminNotesDraft[req.id] !== undefined ? adminNotesDraft[req.id] : (req.admin_notes || '');
+        setAdminUpdating(prev => ({...prev, [req.id + '_notes']: true}));
+        try {
+          const { data: updated, error } = await supabaseClient
+            .from('feedback_requests')
+            .update({ admin_notes: notes, admin_response_by: currentUser.username,
+              admin_response_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', req.id).select().single();
+          if (!error && updated) {
+            setAllRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+            setMyRequests(prev => prev.map(r => r.id === req.id ? updated : r));
+            setAdminNotesDraft(prev => { const n = {...prev}; delete n[req.id]; return n; });
+          }
+        } catch(e) {}
+        setAdminUpdating(prev => ({...prev, [req.id + '_notes']: false}));
+      }
+      function toggleHistory(key) {
+        setExpandedHistory(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+      }
+
+      const adminFiltered = (() => {
+        let list = [...allRequests];
+        if (adminStatusFilter !== 'all') list = list.filter(r => r.status === adminStatusFilter);
+        if (adminCategoryFilter !== 'all') list = list.filter(r => r.category === adminCategoryFilter);
+        if (adminSort === 'newest') list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        else if (adminSort === 'oldest') list.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+        else if (adminSort === 'priority') {
+          const ord = { urgent:0, high:1, normal:2, low:3 };
+          list.sort((a,b) => (ord[a.priority]||2) - (ord[b.priority]||2));
+        }
+        return list;
+      })();
+
+      const SETUP_SQL = `CREATE TABLE feedback_requests (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  title text NOT NULL,
+  category text NOT NULL DEFAULT 'feature',
+  description text NOT NULL,
+  submitted_by text NOT NULL,
+  submitted_by_role text NOT NULL DEFAULT 'user',
+  status text NOT NULL DEFAULT 'pending',
+  admin_notes text DEFAULT '',
+  admin_response_by text DEFAULT '',
+  admin_response_at timestamptz,
+  priority text DEFAULT 'normal',
+  is_edited boolean DEFAULT false,
+  edit_history jsonb DEFAULT '[]',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);`;
+
+      if (tableError) return (
+        <div style={{maxWidth:'700px',margin:'0 auto'}}>
+          <div style={{background:'rgba(245,158,11,0.08)',border:'1px solid rgba(245,158,11,0.4)',borderRadius:'16px',padding:'2rem'}}>
+            <h3 style={{color:'#f59e0b',marginBottom:'1rem',fontFamily:"'Space Mono',monospace"}}>⚙️ One-Time Setup Required</h3>
+            <p style={{color:'#c0c7d8',marginBottom:'1.25rem',lineHeight:1.6}}>The feedback system needs a new table in your Supabase database. Run the SQL below in Supabase dashboard → SQL Editor, then click Retry.</p>
+            <pre style={{background:'rgba(10,14,39,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'10px',padding:'1.25rem',fontFamily:'monospace',fontSize:'0.78rem',color:'#10b981',lineHeight:1.8,marginBottom:'1.25rem',overflowX:'auto',whiteSpace:'pre'}}>{SETUP_SQL}</pre>
+            <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap'}}>
+              <a href="https://supabase.com/dashboard" target="_blank" rel="noopener" style={{padding:'0.6rem 1.25rem',background:'linear-gradient(135deg,#10b981,#059669)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,textDecoration:'none',fontSize:'0.85rem'}}>Open Supabase →</a>
+              <button onClick={() => { setTableError(false); loadMyRequests(); if(isAdmin) loadAllRequests(); }} style={{padding:'0.6rem 1.25rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.4)',borderRadius:'8px',color:'#60a5fa',fontWeight:700,cursor:'pointer',fontSize:'0.85rem',fontFamily:'inherit'}}>↺ Retry</button>
+            </div>
+          </div>
+        </div>
+      );
+
+      const inputStyle = {width:'100%',padding:'0.7rem',background:'rgba(10,14,39,0.8)',border:'2px solid rgba(45,53,97,0.5)',borderRadius:'8px',color:'#e0e6ed',fontSize:'0.875rem',fontFamily:'inherit'};
+      const inputActiveStyle = {...inputStyle, border:'2px solid rgba(96,165,250,0.4)'};
+      const labelStyle = {display:'block',fontSize:'0.78rem',color:'#8b92b0',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'0.4rem'};
+      const smallBtnStyle = {padding:'0.3rem 0.7rem',background:'none',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'6px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.78rem'};
+
+      const RequestCard = ({ req, isMyView }) => {
+        const cat = getCat(req.category);
+        const status = getStatus(req.status);
+        const isEditing = editingId === req.id;
+        const histLen = (req.edit_history || []).length;
+        const histKey = (isMyView ? '' : 'admin_') + req.id;
+        const histExpanded = expandedHistory.has(histKey);
+        const canEdit = isMyView && req.status === 'pending' && !isEditing;
+        return (
+          <div style={{background:'rgba(26,31,58,0.6)',border:`1px solid ${isEditing?'rgba(96,165,250,0.5)':'rgba(61,69,99,0.5)'}`,borderRadius:'12px',padding:'1.25rem',transition:'border-color 0.2s'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.6rem',flexWrap:'wrap',gap:'0.5rem'}}>
+              <div style={{display:'flex',gap:'0.4rem',flexWrap:'wrap',alignItems:'center'}}>
+                <span style={{padding:'0.18rem 0.55rem',background:`${cat.color}22`,border:`1px solid ${cat.color}55`,borderRadius:'20px',color:cat.color,fontSize:'0.7rem',fontWeight:700}}>{cat.label}</span>
+                <span style={{padding:'0.18rem 0.55rem',background:status.bg,border:`1px solid ${status.color}55`,borderRadius:'20px',color:status.color,fontSize:'0.7rem',fontWeight:700}}>{status.label}</span>
+                {req.is_edited && <span style={{padding:'0.15rem 0.45rem',background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:'20px',color:'#a78bfa',fontSize:'0.68rem',fontWeight:600}}>✏️ Edited</span>}
+              </div>
+              <div style={{display:'flex',gap:'0.4rem',alignItems:'center'}}>
+                <span style={{color:'#5a6080',fontSize:'0.73rem'}}>{fmtDate(req.created_at)}</span>
+                {canEdit && <button onClick={() => startEdit(req)} style={{padding:'0.28rem 0.6rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',color:'#60a5fa',cursor:'pointer',fontSize:'0.72rem',fontWeight:600,fontFamily:'inherit'}}>✏️ Edit</button>}
+              </div>
+            </div>
+            {!isEditing ? (
+              <>
+                <div style={{fontWeight:700,color:'#e0e6ed',marginBottom:'0.4rem',fontSize:'0.93rem'}}>{req.title}</div>
+                <div style={{color:'#8b92b0',fontSize:'0.82rem',lineHeight:1.6}}>{req.description}</div>
+                {req.admin_notes && (
+                  <div style={{marginTop:'0.75rem',padding:'0.65rem 0.85rem',background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:'8px'}}>
+                    <div style={{fontSize:'0.68rem',color:'#10b981',fontWeight:700,marginBottom:'0.25rem',textTransform:'uppercase',letterSpacing:'0.5px'}}>
+                      Team Response{req.admin_response_by ? ` · ${req.admin_response_by}` : ''}{req.admin_response_at ? ` · ${fmtDate(req.admin_response_at)}` : ''}
+                    </div>
+                    <div style={{color:'#c0c7d8',fontSize:'0.82rem',lineHeight:1.6}}>{req.admin_notes}</div>
+                  </div>
+                )}
+                {histLen > 0 && (
+                  <button onClick={() => toggleHistory(histKey)} style={{marginTop:'0.55rem',background:'none',border:'none',color:'#5a6080',cursor:'pointer',fontSize:'0.72rem',padding:0,fontFamily:'inherit'}}>
+                    {histExpanded ? '▾ Hide' : '▸ Show'} edit history ({histLen} revision{histLen!==1?'s':''})
+                  </button>
+                )}
+                {histExpanded && (req.edit_history||[]).map((h,i) => (
+                  <div key={i} style={{marginTop:'0.35rem',padding:'0.5rem 0.75rem',background:'rgba(10,14,39,0.4)',border:'1px solid rgba(61,69,99,0.3)',borderRadius:'6px',fontSize:'0.74rem'}}>
+                    <div style={{color:'#a78bfa',fontWeight:600,marginBottom:'0.2rem'}}>Revision {i+1} — {fmtDateTime(h.edited_at)}{h.edited_by ? ` by ${h.edited_by}` : ''}</div>
+                    <div style={{color:'#5a6080'}}>Previous title: <span style={{color:'#8b92b0',fontStyle:'italic'}}>{h.previous_title}</span></div>
+                    {h.previous_description && <div style={{color:'#5a6080',marginTop:'0.1rem'}}>Previous description: <span style={{color:'#8b92b0',fontStyle:'italic'}}>{h.previous_description.substring(0,120)}{h.previous_description.length>120?'…':''}</span></div>}
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.6rem',marginBottom:'0.6rem'}}>
+                  <div><label style={labelStyle}>Title</label><input value={editTitle} onChange={e=>setEditTitle(e.target.value)} style={inputActiveStyle} /></div>
+                  <div><label style={labelStyle}>Category</label>
+                    <select value={editCategory} onChange={e=>setEditCategory(e.target.value)} style={inputActiveStyle}>
+                      {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{marginBottom:'0.6rem'}}>
+                  <label style={labelStyle}>Description</label>
+                  <textarea value={editDescription} onChange={e=>setEditDescription(e.target.value)} rows={4} style={{...inputActiveStyle,resize:'vertical',lineHeight:1.6}} />
+                </div>
+                <div style={{display:'flex',gap:'0.4rem',justifyContent:'flex-end'}}>
+                  <button onClick={() => setEditingId(null)} style={smallBtnStyle}>Cancel</button>
+                  <button onClick={() => saveEdit(req)} disabled={editSaving} style={{padding:'0.35rem 0.9rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'6px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.8rem'}}>
+                    {editSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div style={{maxWidth:'900px',margin:'0 auto'}}>
+          {/* Header */}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
+            <div>
+              <h2 style={{color:'#e0e6ed',fontFamily:"'Space Mono',monospace",margin:0,fontSize:'1.4rem'}}>💬 Feedback & Requests</h2>
+              <div style={{color:'#5a6080',fontSize:'0.8rem',marginTop:'0.35rem'}}>Submit feature requests, bug reports, or suggestions</div>
+            </div>
+            <div style={{display:'flex',gap:'0.5rem',alignItems:'center'}}>
+              <div className="tooltip-wrapper">
+                <span style={{width:18,height:18,borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'default'}}>i</span>
+                <span className="tooltip-content" style={{width:'260px',right:0,bottom:'100%'}}>Use the Category dropdown to tag your request type so it gets routed correctly. You can edit a request as long as its status is still Pending.</span>
+              </div>
+              <button onClick={() => { setShowForm(f => !f); setFormError(''); }}
+                style={{padding:'0.6rem 1.2rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'10px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.88rem'}}>
+                {showForm ? '✕ Cancel' : '+ New Request'}
+              </button>
+            </div>
+          </div>
+
+          {formSuccess && <div style={{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.35)',borderRadius:'10px',padding:'0.65rem 1.1rem',marginBottom:'1rem',color:'#34d399',fontSize:'0.87rem',fontWeight:600}}>✓ {formSuccess}</div>}
+
+          {/* Submit Form */}
+          {showForm && (
+            <div style={{background:'rgba(26,31,58,0.7)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'14px',padding:'1.5rem',marginBottom:'1.5rem'}}>
+              <h3 style={{color:'#60a5fa',margin:'0 0 1.1rem 0',fontSize:'1rem',fontFamily:"'Space Mono',monospace"}}>New Request</h3>
+              {formError && <div style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.35)',borderRadius:'8px',padding:'0.55rem 0.9rem',marginBottom:'0.75rem',color:'#f87171',fontSize:'0.82rem'}}>{formError}</div>}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem',marginBottom:'0.75rem'}}>
+                <div>
+                  <label style={labelStyle}>Title *</label>
+                  <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} placeholder="Brief summary of your request" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{...labelStyle,display:'flex',alignItems:'center',gap:'0.4rem'}}>
+                    Category
+                    <span className="tooltip-wrapper" style={{display:'inline-flex'}}>
+                      <span style={{width:15,height:15,borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.63rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',cursor:'default'}}>i</span>
+                      <span className="tooltip-content" style={{width:'220px',bottom:'100%',left:0,right:'auto'}}>Pick the type that best describes your request so the team can prioritize it.</span>
+                    </span>
+                  </label>
+                  <select value={formCategory} onChange={e=>setFormCategory(e.target.value)} style={inputStyle}>
+                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{marginBottom:'1rem'}}>
+                <label style={labelStyle}>Description *</label>
+                <textarea value={formDescription} onChange={e=>setFormDescription(e.target.value)}
+                  placeholder="Describe the feature, bug, or improvement in detail. Include examples or context that would be helpful."
+                  rows={5} style={{...inputStyle,resize:'vertical',lineHeight:1.6}} />
+              </div>
+              <div style={{display:'flex',gap:'0.5rem',justifyContent:'flex-end'}}>
+                <button onClick={() => { setShowForm(false); setFormError(''); }} style={smallBtnStyle}>Cancel</button>
+                <button onClick={submitRequest} disabled={formSubmitting}
+                  style={{padding:'0.55rem 1.25rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>
+                  {formSubmitting ? 'Submitting…' : 'Submit Request'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Admin/My view tabs */}
+          {isAdmin && (
+            <div style={{display:'flex',gap:'0.5rem',marginBottom:'1.25rem',borderBottom:'1px solid rgba(61,69,99,0.4)',paddingBottom:'0.75rem',alignItems:'center'}}>
+              {[{id:'my',label:'📋 My Requests'},{id:'admin',label:'🛡️ All Requests (Admin)'}].map(v => (
+                <button key={v.id} onClick={() => setFbView(v.id)}
+                  style={{padding:'0.45rem 1rem',border:'none',borderRadius:'8px',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem',fontWeight:600,
+                    background: fbView===v.id ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.4)',
+                    color: fbView===v.id ? '#0a0e27' : '#8b92b0'}}>
+                  {v.label}
+                  {v.id==='admin' && allRequests.length > 0 && <span style={{marginLeft:'0.4rem',background:'rgba(255,255,255,0.2)',borderRadius:'10px',padding:'0.1rem 0.45rem',fontSize:'0.72rem'}}>{allRequests.length}</span>}
+                </button>
+              ))}
+              <button onClick={() => { loadMyRequests(); if(isAdmin) loadAllRequests(); }}
+                style={{marginLeft:'auto',padding:'0.4rem 0.85rem',background:'none',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.8rem'}}>
+                🔄 Refresh
+              </button>
+            </div>
+          )}
+
+          {/* MY REQUESTS VIEW */}
+          {fbView === 'my' && (
+            <div>
+              {!isAdmin && (
+                <div style={{display:'flex',justifyContent:'flex-end',marginBottom:'0.75rem'}}>
+                  <button onClick={loadMyRequests} style={{padding:'0.38rem 0.85rem',background:'none',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.8rem'}}>🔄 Refresh</button>
+                </div>
+              )}
+              {loading ? (
+                <div style={{textAlign:'center',padding:'3rem',color:'#8b92b0'}}>Loading your requests…</div>
+              ) : myRequests.length === 0 ? (
+                <div style={{textAlign:'center',padding:'3rem',background:'rgba(26,31,58,0.4)',borderRadius:'14px',border:'1px solid rgba(61,69,99,0.4)'}}>
+                  <div style={{fontSize:'2.5rem',marginBottom:'0.75rem'}}>💬</div>
+                  <div style={{color:'#8b92b0',marginBottom:'0.4rem'}}>No requests yet</div>
+                  <div style={{color:'#5a6080',fontSize:'0.82rem'}}>Click "New Request" above to submit feedback or a feature request.</div>
+                </div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'0.75rem'}}>
+                  {myRequests.map(req => <RequestCard key={req.id} req={req} isMyView={true} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ADMIN VIEW */}
+          {fbView === 'admin' && isAdmin && (
+            <div>
+              {/* Filter/sort bar */}
+              <div style={{background:'rgba(26,31,58,0.5)',border:'1px solid rgba(61,69,99,0.4)',borderRadius:'12px',padding:'0.85rem 1rem',marginBottom:'1rem',display:'flex',flexWrap:'wrap',gap:'0.75rem',alignItems:'center'}}>
+                {[
+                  {label:'Status', value: adminStatusFilter, setter: setAdminStatusFilter, opts: [{value:'all',label:'All Statuses'}, ...STATUSES.map(s=>({value:s.value,label:s.label}))]},
+                  {label:'Category', value: adminCategoryFilter, setter: setAdminCategoryFilter, opts: [{value:'all',label:'All Categories'}, ...CATEGORIES.map(c=>({value:c.value,label:c.label}))]},
+                  {label:'Sort', value: adminSort, setter: setAdminSort, opts: [{value:'newest',label:'Newest First'},{value:'oldest',label:'Oldest First'},{value:'priority',label:'By Priority'}]},
+                ].map(f => (
+                  <div key={f.label} style={{display:'flex',alignItems:'center',gap:'0.4rem'}}>
+                    <span style={{fontSize:'0.7rem',color:'#5a6080',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.6px',whiteSpace:'nowrap'}}>{f.label}</span>
+                    <select value={f.value} onChange={e=>f.setter(e.target.value)}
+                      style={{padding:'0.3rem 0.55rem',background:'rgba(10,14,39,0.8)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'7px',color:'#e0e6ed',fontSize:'0.8rem',fontFamily:'inherit',cursor:'pointer'}}>
+                      {f.opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                ))}
+                <span style={{marginLeft:'auto',color:'#5a6080',fontSize:'0.8rem'}}>{adminFiltered.length} request{adminFiltered.length!==1?'s':''}</span>
+              </div>
+              {/* Status summary chips */}
+              <div style={{display:'flex',gap:'0.5rem',marginBottom:'1rem',flexWrap:'wrap'}}>
+                {STATUSES.map(s => {
+                  const cnt = allRequests.filter(r => r.status === s.value).length;
+                  if (!cnt) return null;
+                  return (
+                    <button key={s.value} onClick={() => setAdminStatusFilter(s.value === adminStatusFilter ? 'all' : s.value)}
+                      style={{padding:'0.3rem 0.75rem',background:s.bg,border:`1px solid ${s.color}55`,borderRadius:'8px',cursor:'pointer',display:'flex',alignItems:'center',gap:'0.35rem',fontFamily:'inherit',outline: adminStatusFilter===s.value ? `2px solid ${s.color}` : 'none'}}>
+                      <span style={{color:s.color,fontWeight:700,fontSize:'0.85rem'}}>{cnt}</span>
+                      <span style={{color:s.color,fontSize:'0.74rem'}}>{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* All requests */}
+              {adminFiltered.length === 0 ? (
+                <div style={{textAlign:'center',padding:'3rem',background:'rgba(26,31,58,0.4)',borderRadius:'14px',border:'1px solid rgba(61,69,99,0.4)'}}>
+                  <div style={{color:'#8b92b0'}}>No requests match the current filters.</div>
+                </div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'0.85rem'}}>
+                  {adminFiltered.map(req => {
+                    const cat = getCat(req.category);
+                    const status = getStatus(req.status);
+                    const priority = getPriority(req.priority || 'normal');
+                    const histLen = (req.edit_history || []).length;
+                    const histKey = 'admin_' + req.id;
+                    const histExpanded = expandedHistory.has(histKey);
+                    const notesDraft = adminNotesDraft[req.id];
+                    const notesValue = notesDraft !== undefined ? notesDraft : (req.admin_notes || '');
+                    const notesDirty = notesDraft !== undefined && notesDraft !== (req.admin_notes || '');
+                    const isUpdating = adminUpdating[req.id];
+                    const isSavingNotes = adminUpdating[req.id + '_notes'];
+                    const lastEdit = histLen > 0 ? req.edit_history[histLen - 1] : null;
+                    return (
+                      <div key={req.id} style={{background:'rgba(26,31,58,0.6)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'12px',padding:'1.25rem',borderLeft:`3px solid ${status.color}`}}>
+                        {/* Header */}
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.75rem',flexWrap:'wrap',gap:'0.5rem'}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap',marginBottom:'0.3rem'}}>
+                              <span style={{fontWeight:700,color:'#e0e6ed',fontSize:'0.93rem'}}>{req.title}</span>
+                              {req.is_edited && <span style={{padding:'0.13rem 0.4rem',background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:'12px',color:'#a78bfa',fontSize:'0.67rem',fontWeight:600,flexShrink:0}}>✏️ Edited</span>}
+                            </div>
+                            <div style={{display:'flex',gap:'0.35rem',flexWrap:'wrap',alignItems:'center'}}>
+                              <span style={{padding:'0.15rem 0.5rem',background:`${cat.color}22`,border:`1px solid ${cat.color}44`,borderRadius:'12px',color:cat.color,fontSize:'0.68rem',fontWeight:700}}>{cat.label}</span>
+                              <span style={{color:'#5a6080',fontSize:'0.72rem'}}>by <strong style={{color:'#8b92b0'}}>{req.submitted_by}</strong></span>
+                              <span style={{color:'#3d4563',fontSize:'0.7rem'}}>·</span>
+                              <span style={{color:'#5a6080',fontSize:'0.7rem'}}>{fmtDateTime(req.created_at)}</span>
+                              {lastEdit && (
+                                <>
+                                  <span style={{color:'#3d4563',fontSize:'0.7rem'}}>·</span>
+                                  <span style={{color:'#a78bfa',fontSize:'0.7rem'}}>edited {fmtDateTime(lastEdit.edited_at)} by {lastEdit.edited_by || req.submitted_by}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {/* Priority + Status selectors */}
+                          <div style={{display:'flex',gap:'0.5rem',alignItems:'center',flexShrink:0,flexWrap:'wrap'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'0.3rem'}}>
+                              <span style={{fontSize:'0.68rem',color:'#5a6080',fontWeight:600}}>Priority:</span>
+                              <select value={req.priority || 'normal'} onChange={e => adminUpdatePriority(req, e.target.value)}
+                                style={{padding:'0.22rem 0.5rem',background:'rgba(10,14,39,0.8)',border:`1px solid ${priority.color}55`,borderRadius:'6px',color:priority.color,fontSize:'0.76rem',fontFamily:'inherit',cursor:'pointer',fontWeight:600}}>
+                                {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                              </select>
+                            </div>
+                            <div style={{display:'flex',alignItems:'center',gap:'0.3rem'}}>
+                              <span style={{fontSize:'0.68rem',color:'#5a6080',fontWeight:600}}>Status:</span>
+                              <select value={req.status} onChange={e => adminUpdateStatus(req, e.target.value)} disabled={isUpdating}
+                                style={{padding:'0.22rem 0.5rem',background:status.bg,border:`1px solid ${status.color}55`,borderRadius:'6px',color:status.color,fontSize:'0.76rem',fontFamily:'inherit',cursor:'pointer',fontWeight:700}}>
+                                {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Description */}
+                        <div style={{color:'#8b92b0',fontSize:'0.82rem',lineHeight:1.6,marginBottom:'0.85rem'}}>{req.description}</div>
+                        {/* Edit history */}
+                        {histLen > 0 && (
+                          <div style={{marginBottom:'0.85rem'}}>
+                            <button onClick={() => toggleHistory(histKey)} style={{background:'none',border:'none',color:'#5a6080',cursor:'pointer',fontSize:'0.72rem',padding:0,fontFamily:'inherit'}}>
+                              {histExpanded ? '▾ Hide' : '▸ Show'} edit history ({histLen} revision{histLen!==1?'s':''})
+                            </button>
+                            {histExpanded && (
+                              <div style={{marginTop:'0.45rem',display:'flex',flexDirection:'column',gap:'0.3rem'}}>
+                                {(req.edit_history || []).map((h,i) => (
+                                  <div key={i} style={{padding:'0.5rem 0.75rem',background:'rgba(10,14,39,0.4)',border:'1px solid rgba(61,69,99,0.3)',borderRadius:'6px',fontSize:'0.74rem'}}>
+                                    <div style={{color:'#a78bfa',fontWeight:600,marginBottom:'0.2rem'}}>Revision {i+1} — {fmtDateTime(h.edited_at)} by {h.edited_by || req.submitted_by}</div>
+                                    <div style={{color:'#5a6080'}}>Previous title: <span style={{color:'#8b92b0',fontStyle:'italic'}}>{h.previous_title}</span></div>
+                                    {h.previous_description && <div style={{color:'#5a6080',marginTop:'0.1rem'}}>Previous description: <span style={{color:'#8b92b0',fontStyle:'italic'}}>{h.previous_description.substring(0,150)}{h.previous_description.length>150?'…':''}</span></div>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {/* Admin notes */}
+                        <div style={{borderTop:'1px solid rgba(61,69,99,0.3)',paddingTop:'0.85rem'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.4rem',flexWrap:'wrap'}}>
+                            <label style={{fontSize:'0.7rem',color:'#10b981',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px'}}>Team Notes / Response</label>
+                            {req.admin_response_by && <span style={{fontSize:'0.7rem',color:'#5a6080'}}>Last updated by {req.admin_response_by} · {fmtDate(req.admin_response_at)}</span>}
+                          </div>
+                          <textarea value={notesValue} onChange={e => setAdminNotesDraft(prev => ({...prev, [req.id]: e.target.value}))}
+                            placeholder="Add a response or internal notes visible to the submitter…" rows={3}
+                            style={{width:'100%',padding:'0.6rem 0.75rem',background:'rgba(10,14,39,0.6)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:'7px',color:'#e0e6ed',fontSize:'0.82rem',fontFamily:'inherit',resize:'vertical',lineHeight:1.6}} />
+                          {notesDirty && (
+                            <div style={{display:'flex',gap:'0.4rem',justifyContent:'flex-end',marginTop:'0.4rem'}}>
+                              <button onClick={() => setAdminNotesDraft(prev => { const n={...prev}; delete n[req.id]; return n; })} style={smallBtnStyle}>Discard</button>
+                              <button onClick={() => adminSaveNotes(req)} disabled={isSavingNotes}
+                                style={{padding:'0.3rem 0.8rem',background:'linear-gradient(135deg,#10b981,#059669)',border:'none',borderRadius:'6px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.78rem'}}>
+                                {isSavingNotes ? 'Saving…' : 'Save Notes'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     // ─── MAIN APP ───
     function App() {
       const [data, setData] = useState(() => normalizeData(EMBEDDED_DATA));
@@ -1764,7 +2310,7 @@
       const [myPageTab, _setMyPageTab] = useState(() => sessionStorage.getItem('hdb_myPageTab') || 'timeline');
       const setMyPageTab = (t) => { sessionStorage.setItem('hdb_myPageTab', t); _setMyPageTab(t); };
 
-      const TABS = ['timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications'];
+      const TABS = ['timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications','feedback'];
 
       const [mobileNavOpen, setMobileNavOpen] = useState(false);
       const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'timeline');
@@ -5478,6 +6024,7 @@
                   {tab==='companion' ? '🔬 Research Companion'
                    : tab==='sessions' ? '🗺 Research Sessions'
                    : tab==='notifications' ? `🔔 Notifications${notifUnreadCount>0?' ('+notifUnreadCount+')':''}`
+                   : tab==='feedback' ? '💬 Feedback'
                    : tab.charAt(0).toUpperCase()+tab.slice(1)}
                 </button>
               ))}
@@ -5530,7 +6077,7 @@
             )}
 
             {/* Show filters on all tabs except upload, account, presentations, companion, and notifications */}
-            {activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && <FiltersComponent {...filterProps} />}
+            {activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && <FiltersComponent {...filterProps} />}
 
             {/* TIMELINE */}
             {activeTab === 'timeline' && (
@@ -6599,6 +7146,9 @@
                 </div>
               );
             })()}
+
+            {/* FEEDBACK PAGE */}
+            {activeTab === 'feedback' && <FeedbackPage currentUser={currentUser} />}
 
           </main>
 
