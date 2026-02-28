@@ -1616,13 +1616,13 @@
             const antCheck = j.checks?.anthropic;
             if (antCheck?.status === 'error') {
               health.anthropic = 'error';
-              alerts.push({ id: 'anthropic_key', sev: 'error', title: 'Anthropic API Key Problem', message: antCheck.message, action: 'Open Anthropic Console', url: 'https://console.anthropic.com/api-keys' });
+              alerts.push({ id: 'anthropic_key', sev: 'error', title: 'Anthropic API Key Problem', message: antCheck.message, action: 'Open Anthropic Console', url: 'https://console.anthropic.com/api-keys', steps: ['Go to console.anthropic.com and sign in (email/password — no GitHub login)', 'Click "API Keys" in the left sidebar', 'If your key is missing or expired, click "+ Create Key" to generate a new one', 'Copy the full key (starts with sk-ant-...)', 'Go to dashboard.render.com → your service → "Environment" tab', 'Find ANTHROPIC_API_KEY, paste in the new key, and click Save', 'Render will automatically redeploy the server with the new key'] });
             } else {
               health.anthropic = 'ok';
             }
           } else {
             health.backend = 'error'; health.anthropic = 'unknown';
-            alerts.push({ id: 'backend_error', sev: 'warning', title: 'Backend Server Error', message: 'The analysis server (Render) responded with an error. Video/file AI analysis may not work.', action: 'View Render Logs', url: 'https://dashboard.render.com' });
+            alerts.push({ id: 'backend_error', sev: 'warning', title: 'Backend Server Error', message: 'The analysis server (Render) responded with an unexpected error. Video uploads, file analysis, and AI features may not work.', action: 'View Render Logs', url: 'https://dashboard.render.com', steps: ['Go to dashboard.render.com and sign in', 'Click your service (historical-events-api-...)', 'Click the "Logs" tab', 'Look for red error lines — the message will say what failed', 'If the service is crashed, click "Manual Deploy" → "Deploy latest commit" to restart it'] });
           }
         } catch (e) {
           health.backend = 'offline'; health.anthropic = 'unknown';
@@ -1637,7 +1637,7 @@
           health.supabase = 'ok';
         } catch (e) {
           health.supabase = 'error';
-          alerts.push({ id: 'supabase_down', sev: 'error', title: 'Database Not Responding', message: 'Supabase may be paused. Free projects pause after 7 days of inactivity. Your data is safe — it just needs to be manually restored from the Supabase dashboard.', action: 'Restore on Supabase', url: 'https://supabase.com/dashboard' });
+          alerts.push({ id: 'supabase_down', sev: 'error', title: 'Database Not Responding — Action Required', message: 'Supabase may be paused. Free projects automatically pause after 7 days with no activity. Your data is completely safe and will reappear once restored — this takes about 2 minutes.', action: 'Restore on Supabase', url: 'https://supabase.com/dashboard', steps: ['Go to supabase.com/dashboard and sign in', 'Click on your project (historical-events-...)', 'You will see a banner saying "Project is paused"', 'Click the green "Restore project" button', 'Wait 1–2 minutes while it restarts', 'Reload the database site — events will reappear automatically'] });
         }
 
         health.checkedAt = new Date().toISOString();
@@ -1651,8 +1651,10 @@
               supabaseClient.from('notifications').insert([{
                 type: 'system_health', title: alert.title, message: alert.message,
                 created_by: currentUser.username, created_by_role: 'owner',
-                event_id: null, metadata: { severity: alert.sev }, read_by: [], dismissed_by: [],
-              }]).then(({ data: ins }) => { if (ins?.[0]) setNotifications(p => [ins[0], ...p]); }).catch(()=>{});
+                event_id: null,
+                metadata: { severity: alert.sev, action: alert.action, url: alert.url, steps: alert.steps || [] },
+                read_by: [], dismissed_by: [],
+              }]).select().single().then(({ data: ins }) => { if (ins) setNotifications(p => [ins, ...p]); }).catch(()=>{});
             });
             return alerts;
           });
@@ -6022,6 +6024,63 @@
                         const meta = NOTIF_META[n.type] || {icon:'🔔',color:'#60a5fa'};
                         const hasEvent = !!n.event_id;
                         const showCreator = (currentUser.role==='owner'||currentUser.role==='admin') && n.created_by !== currentUser.username;
+                        const isSystemAlert = n.type === 'system_health';
+                        const steps = n.metadata?.steps || [];
+                        const actionUrl = n.metadata?.url;
+                        const actionLabel = n.metadata?.action;
+
+                        if (isSystemAlert) {
+                          // ── System health alert — expanded card with steps ──
+                          return (
+                            <div key={n.id}
+                              style={{marginBottom:'0.75rem',borderRadius:'12px',border:`1px solid ${isUnread?'rgba(239,68,68,0.4)':'rgba(239,68,68,0.2)'}`,borderLeft:`3px solid #ef4444`,background:isUnread?'rgba(239,68,68,0.07)':'rgba(26,31,58,0.5)',overflow:'hidden'}}
+                              onClick={async()=>{ await markNotificationRead(n.id); }}>
+                              {/* Header row */}
+                              <div style={{display:'flex',alignItems:'flex-start',gap:'0.85rem',padding:'1rem 1.25rem',cursor:'pointer'}}>
+                                <div style={{fontSize:'1.35rem',flexShrink:0,marginTop:'0.1rem'}}>⚠️</div>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.2rem',flexWrap:'wrap'}}>
+                                    <span style={{fontWeight:700,fontSize:'0.9rem',color:isUnread?'#ffffff':'#c0c7d8'}}>{n.title}</span>
+                                    <span style={{fontSize:'0.65rem',fontWeight:700,color:'#ef4444',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',padding:'1px 6px',textTransform:'uppercase',letterSpacing:'0.5px'}}>Action Required</span>
+                                    {isUnread && <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#60a5fa',flexShrink:0}}></div>}
+                                  </div>
+                                  <div style={{fontSize:'0.82rem',color:'#c0c7d8',lineHeight:1.55,marginBottom:'0.3rem'}}>{n.message}</div>
+                                  <div style={{fontSize:'0.72rem',color:'#5a6080'}}>{getRelativeTime(n.created_at)} · System Monitor</div>
+                                </div>
+                                <button className="notif-dismiss" title="Dismiss"
+                                  onClick={ev=>{ev.stopPropagation();dismissNotification(n.id);}}>×</button>
+                              </div>
+
+                              {/* Steps + action button */}
+                              {(steps.length > 0 || actionUrl) && (
+                                <div style={{borderTop:'1px solid rgba(239,68,68,0.15)',background:'rgba(10,14,39,0.4)',padding:'0.85rem 1.25rem 1rem'}}>
+                                  {steps.length > 0 && (
+                                    <div style={{marginBottom:'0.75rem'}}>
+                                      <div style={{fontSize:'0.7rem',color:'#f87171',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'0.5rem'}}>How to fix it — step by step:</div>
+                                      {steps.map((step, i) => (
+                                        <div key={i} style={{display:'flex',gap:'0.6rem',alignItems:'flex-start',marginBottom:'0.35rem'}}>
+                                          <span style={{minWidth:'20px',height:'20px',borderRadius:'50%',background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',fontSize:'0.65rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'1px'}}>{i+1}</span>
+                                          <span style={{fontSize:'0.8rem',color:'#c0c7d8',lineHeight:1.5}}>{step}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {actionUrl && (
+                                    <a href={actionUrl} target="_blank" rel="noopener noreferrer"
+                                      onClick={e=>e.stopPropagation()}
+                                      style={{display:'inline-flex',alignItems:'center',gap:'0.4rem',fontSize:'0.8rem',fontWeight:700,color:'#fca5a5',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.35)',borderRadius:'7px',padding:'0.4rem 1rem',textDecoration:'none',transition:'all 0.15s'}}
+                                      onMouseOver={e=>{e.currentTarget.style.background='rgba(239,68,68,0.2)';}}
+                                      onMouseOut={e=>{e.currentTarget.style.background='rgba(239,68,68,0.12)';}}>
+                                      {actionLabel || 'Open Dashboard'} ↗
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // ── Standard notification ──
                         return (
                           <div key={n.id}
                             className={`notif-item${isUnread?' unread':''}`}
