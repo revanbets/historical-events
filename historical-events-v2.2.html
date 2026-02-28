@@ -762,6 +762,364 @@
     const _COMPANION_BM_SRC = `javascript:(function(){var sel='';try{sel=window.getSelection().toString().trim();}catch(e){}var tc='';try{var v=document.querySelector('video');if(v&&!isNaN(v.currentTime)){var s=Math.floor(v.currentTime);tc=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}}catch(e){}var d={url:location.href,title:document.title,text:sel,timecode:tc,ts:Date.now()};var w=window.open('','hdb_companion');if(w&&w.location&&w.location.href.indexOf('research-companion')!==-1){w.postMessage({type:'HDB_CAPTURE',data:d},'*');w.focus();}else{var encoded=encodeURIComponent(JSON.stringify(d));window.open('${_COMPANION_URL}#bm='+encoded,'hdb_companion','width=450,height=680,resizable=yes,scrollbars=yes');}})();`;
 
 
+    // ── Dashboard Page ─────────────────────────────────────────────────────────
+    const DashboardPage = ({ currentUser, data, notifications, presentations, setActiveTab, openEventModal, setActivePresentationId }) => {
+      const [sessions, setSessions]               = React.useState([]);
+      const [sessionsLoading, setSessionsLoading] = React.useState(true);
+      const [feedback, setFeedback]               = React.useState([]);
+      const [feedbackLoading, setFeedbackLoading] = React.useState(true);
+      const [lastRefresh, setLastRefresh]         = React.useState(null);
+
+      const relTime = (ts) => {
+        if (!ts) return '—';
+        const diff  = Date.now() - new Date(ts).getTime();
+        const mins  = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days  = Math.floor(diff / 86400000);
+        if (mins < 1)   return 'just now';
+        if (mins < 60)  return `${mins}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days === 1) return 'yesterday';
+        if (days < 7)   return `${days}d ago`;
+        return new Date(ts).toLocaleDateString();
+      };
+
+      const loadData = async () => {
+        setSessionsLoading(true);
+        setFeedbackLoading(true);
+        if (supabaseClient) {
+          try {
+            const { data: rows } = await supabaseClient
+              .from('research_sessions')
+              .select('id,session_name,started_at,ended_at,trail,captured_items,status')
+              .eq('uploaded_by', currentUser.username)
+              .order('started_at', { ascending: false })
+              .limit(10);
+            if (rows) setSessions(rows);
+          } catch(e) {}
+          try {
+            const { data: rows } = await supabaseClient
+              .from('feedback_requests')
+              .select('id,title,status,created_at,updated_at,category')
+              .eq('submitted_by', currentUser.username)
+              .order('updated_at', { ascending: false })
+              .limit(8);
+            if (rows) setFeedback(rows);
+          } catch(e) {}
+        }
+        setSessionsLoading(false);
+        setFeedbackLoading(false);
+        setLastRefresh(new Date());
+      };
+
+      React.useEffect(() => { loadData(); }, []);
+
+      const recentUploads = React.useMemo(() => {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        return (data.events || [])
+          .filter(e => e.date_uploaded && new Date(e.date_uploaded) > cutoff)
+          .sort((a, b) => new Date(b.date_uploaded) - new Date(a.date_uploaded))
+          .slice(0, 5);
+      }, [data.events]);
+
+      const unreadNotifs = React.useMemo(() => {
+        return (notifications || [])
+          .filter(n => !n.read_by || !n.read_by.includes(currentUser.username))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .slice(0, 5);
+      }, [notifications, currentUser.username]);
+
+      const recentPresentations = React.useMemo(() => {
+        return [...(presentations || [])]
+          .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
+          .slice(0, 5);
+      }, [presentations]);
+
+      const totalUnread    = (notifications || []).filter(n => !n.read_by || !n.read_by.includes(currentUser.username)).length;
+      const totalMyUploads = (data.events || []).filter(e => e.uploaded_by === currentUser.username).length;
+
+      const STATUS_MAP = {
+        'pending':     { label:'Pending',     color:'#f59e0b', bg:'rgba(245,158,11,0.15)'  },
+        'reviewing':   { label:'Reviewing',   color:'#60a5fa', bg:'rgba(96,165,250,0.15)'  },
+        'accepted':    { label:'Accepted',    color:'#10b981', bg:'rgba(16,185,129,0.15)'  },
+        'in-progress': { label:'In Progress', color:'#a78bfa', bg:'rgba(167,139,250,0.15)' },
+        'completed':   { label:'Completed',   color:'#34d399', bg:'rgba(52,211,153,0.15)'  },
+        'declined':    { label:'Declined',    color:'#ef4444', bg:'rgba(239,68,68,0.15)'   },
+      };
+      const getStatus = (v) => STATUS_MAP[v] || STATUS_MAP['pending'];
+
+      const NOTIF_ICONS = {
+        upload_success:'📤', upload_error:'❌', ai_analysis:'🤖',
+        ai_error:'⚠️', event_saved:'💾', event_deleted:'🗑️',
+        system_health:'💻', new_user:'👤', user_role_change:'🛡️',
+      };
+
+      // ── Shared style objects ──
+      const card       = { background:'rgba(15,19,40,0.7)', border:'1px solid rgba(96,165,250,0.12)', borderRadius:'12px', overflow:'hidden', display:'flex', flexDirection:'column' };
+      const cardHead   = { padding:'0.8rem 1rem', borderBottom:'1px solid rgba(61,69,99,0.35)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.5rem' };
+      const cardFoot   = { padding:'0.5rem 1rem', borderTop:'1px solid rgba(61,69,99,0.25)', textAlign:'right' };
+      const itemRow    = { padding:'0.6rem 1rem', borderBottom:'1px solid rgba(61,69,99,0.18)', cursor:'pointer', display:'flex', alignItems:'center', gap:'0.6rem', transition:'background 0.12s' };
+      const emptyMsg   = { padding:'1.75rem 1rem', textAlign:'center', color:'#4a5270', fontSize:'0.82rem', lineHeight:1.6 };
+      const viewAllBtn = { background:'none', border:'none', color:'#60a5fa', fontSize:'0.77rem', fontWeight:600, cursor:'pointer', fontFamily:'inherit', padding:'0.2rem 0' };
+      const secLabel   = { padding:'0.3rem 1rem', fontSize:'0.62rem', color:'#5a6080', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.6px', borderBottom:'1px solid rgba(61,69,99,0.2)' };
+      const mkBadge    = (color, bg) => ({ background:bg, border:`1px solid ${color}55`, color, fontSize:'0.65rem', fontWeight:700, padding:'2px 7px', borderRadius:'5px', flexShrink:0, whiteSpace:'nowrap' });
+
+      return (
+        <div style={{ maxWidth:'1080px', margin:'0 auto', padding:'0 0.25rem' }}>
+
+          {/* ── Welcome bar ── */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1.25rem', flexWrap:'wrap', gap:'0.75rem' }}>
+            <div>
+              <h2 style={{ margin:0, fontSize:'1.25rem', fontFamily:"'Space Mono',monospace", color:'#e0e6ed', fontWeight:700 }}>
+                👋 Welcome back, {currentUser.username}
+              </h2>
+              <div style={{ color:'#5a6080', fontSize:'0.78rem', marginTop:'0.2rem' }}>
+                {new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}
+                {lastRefresh && <span> · Updated {relTime(lastRefresh)}</span>}
+              </div>
+            </div>
+            <button className="btn btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }} onClick={loadData}>
+              🔄 Refresh
+            </button>
+          </div>
+
+          {/* ── Stats row ── */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:'0.65rem', marginBottom:'1.25rem' }}>
+            {[
+              { icon:'📋', label:'Total Events',  value:(data.events||[]).length,   color:'#60a5fa', tab:'spreadsheet'   },
+              { icon:'📤', label:'My Uploads',     value:totalMyUploads,             color:'#10b981', tab:'upload'        },
+              { icon:'🔔', label:'Unread',         value:totalUnread,                color:totalUnread>0?'#f59e0b':'#5a6080', tab:'notifications' },
+              { icon:'🗺', label:'Sessions',       value:sessions.length,            color:'#a78bfa', tab:'sessions'      },
+              { icon:'🎞️',label:'Presentations',  value:presentations.length,       color:'#60a5fa', tab:'presentations' },
+              { icon:'💬', label:'Feedback',       value:feedback.length,            color:'#8b92b0', tab:'feedback'      },
+            ].map(s => (
+              <div key={s.label}
+                onClick={() => setActiveTab(s.tab)}
+                onMouseOver={e => e.currentTarget.style.borderColor='rgba(96,165,250,0.35)'}
+                onMouseOut={e  => e.currentTarget.style.borderColor='rgba(61,69,99,0.35)'}
+                style={{ background:'rgba(15,19,40,0.65)', border:'1px solid rgba(61,69,99,0.35)', borderRadius:'10px', padding:'0.75rem 0.85rem', cursor:'pointer', transition:'border-color 0.15s' }}>
+                <div style={{ fontSize:'1rem', marginBottom:'0.25rem' }}>{s.icon}</div>
+                <div style={{ fontSize:'1.35rem', fontWeight:700, color:s.color, fontFamily:"'Space Mono',monospace", lineHeight:1 }}>{s.value}</div>
+                <div style={{ fontSize:'0.62rem', color:'#8b92b0', textTransform:'uppercase', letterSpacing:'0.5px', marginTop:'0.15rem' }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Widget grid: 2 columns, auto-wraps on small screens ── */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:'0.85rem', marginBottom:'0.85rem' }}>
+
+            {/* RESEARCH SESSIONS */}
+            <div style={card}>
+              <div style={cardHead}>
+                <span style={{ color:'#e0e6ed', fontWeight:700, fontSize:'0.88rem' }}>🗺 Research Sessions</span>
+                <div style={{ display:'flex', gap:'0.35rem' }}>
+                  {sessions.filter(s=>!s.ended_at&&s.status!=='paused').length > 0 &&
+                    <span style={mkBadge('#10b981','rgba(16,185,129,0.12)')}>{sessions.filter(s=>!s.ended_at&&s.status!=='paused').length} active</span>}
+                  {sessions.filter(s=>s.status==='paused').length > 0 &&
+                    <span style={mkBadge('#f59e0b','rgba(245,158,11,0.12)')}>{sessions.filter(s=>s.status==='paused').length} paused</span>}
+                </div>
+              </div>
+              <div style={{ flex:1 }}>
+                {sessionsLoading && <div style={emptyMsg}>Loading…</div>}
+                {!sessionsLoading && sessions.length===0 && (
+                  <div style={emptyMsg}>No sessions yet.<br /><span style={{ fontSize:'0.75rem', color:'#3a4060' }}>Start one via the Chrome Extension or Research Companion.</span></div>
+                )}
+                {!sessionsLoading && sessions.length>0 && (() => {
+                  const active   = sessions.filter(s => !s.ended_at && s.status !== 'paused');
+                  const paused   = sessions.filter(s => s.status === 'paused');
+                  const done     = sessions.filter(s => s.ended_at);
+                  const usedRows = Math.min(active.length, 3) + Math.min(paused.length, 2);
+                  const doneRows = Math.max(0, 5 - usedRows);
+                  return (
+                    <div>
+                      {active.length > 0 && <div style={{ ...secLabel, background:'rgba(16,185,129,0.04)' }}>● Active</div>}
+                      {active.slice(0,3).map(s => (
+                        <div key={s.id} style={itemRow}
+                          onClick={() => setActiveTab('sessions')}
+                          onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                          onMouseOut={e  => e.currentTarget.style.background='transparent'}>
+                          <span style={{ width:7, height:7, borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#c0c7d8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.session_name||'Unnamed Session'}</div>
+                            <div style={{ fontSize:'0.68rem', color:'#5a6080' }}>{relTime(s.started_at)} · {Array.isArray(s.trail)?s.trail.length:0} pages · {Array.isArray(s.captured_items)?s.captured_items.length:0} captured</div>
+                          </div>
+                          <span style={mkBadge('#10b981','rgba(16,185,129,0.12)')}>ACTIVE</span>
+                        </div>
+                      ))}
+                      {paused.length > 0 && <div style={{ ...secLabel, background:'rgba(245,158,11,0.04)' }}>⏸ Paused</div>}
+                      {paused.slice(0,2).map(s => (
+                        <div key={s.id} style={itemRow}
+                          onClick={() => setActiveTab('sessions')}
+                          onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                          onMouseOut={e  => e.currentTarget.style.background='transparent'}>
+                          <span style={{ width:7, height:7, borderRadius:'50%', background:'#f59e0b', flexShrink:0, display:'inline-block' }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#c0c7d8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.session_name||'Unnamed Session'}</div>
+                            <div style={{ fontSize:'0.68rem', color:'#5a6080' }}>{relTime(s.started_at)} · {Array.isArray(s.trail)?s.trail.length:0} pages</div>
+                          </div>
+                          <span style={mkBadge('#f59e0b','rgba(245,158,11,0.12)')}>PAUSED</span>
+                        </div>
+                      ))}
+                      {doneRows > 0 && done.length > 0 && (
+                        <>
+                          <div style={secLabel}>Completed</div>
+                          {done.slice(0, doneRows).map(s => (
+                            <div key={s.id} style={itemRow}
+                              onClick={() => setActiveTab('sessions')}
+                              onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                              onMouseOut={e  => e.currentTarget.style.background='transparent'}>
+                              <span style={{ width:7, height:7, borderRadius:'50%', background:'#3a4060', flexShrink:0, display:'inline-block' }} />
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#8b92b0', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.session_name||'Unnamed Session'}</div>
+                                <div style={{ fontSize:'0.68rem', color:'#5a6080' }}>{relTime(s.ended_at)} · {Array.isArray(s.trail)?s.trail.length:0} pages</div>
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              <div style={cardFoot}>
+                <button style={viewAllBtn} onClick={() => setActiveTab('sessions')}>View all sessions →</button>
+              </div>
+            </div>
+
+            {/* RECENT UPLOADS */}
+            <div style={card}>
+              <div style={cardHead}>
+                <span style={{ color:'#e0e6ed', fontWeight:700, fontSize:'0.88rem' }}>📤 Recent Uploads</span>
+                {recentUploads.length > 0
+                  ? <span style={mkBadge('#10b981','rgba(16,185,129,0.12)')}>{recentUploads.length} today</span>
+                  : <span style={{ fontSize:'0.68rem', color:'#4a5270' }}>last 24 hrs</span>}
+              </div>
+              <div style={{ flex:1 }}>
+                {recentUploads.length === 0
+                  ? <div style={emptyMsg}>No uploads in the last 24 hours.</div>
+                  : recentUploads.map(ev => (
+                    <div key={ev.id} style={itemRow}
+                      onClick={() => openEventModal(ev, 'dashboard')}
+                      onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                      onMouseOut={e  => e.currentTarget.style.background='transparent'}>
+                      <span style={{ fontSize:'1rem', flexShrink:0 }}>{ev.is_video?'🎬':ev.backend_id?'📄':'📋'}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#c0c7d8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title||'Untitled Event'}</div>
+                        <div style={{ fontSize:'0.68rem', color:'#5a6080' }}>{relTime(ev.date_uploaded)}{ev.uploaded_by?' · '+ev.uploaded_by:''}</div>
+                      </div>
+                      {ev.ai_analyzed && <span style={mkBadge('#60a5fa','rgba(96,165,250,0.1)')}>AI</span>}
+                    </div>
+                  ))
+                }
+              </div>
+              <div style={cardFoot}>
+                <button style={viewAllBtn} onClick={() => setActiveTab('upload')}>View all uploads →</button>
+              </div>
+            </div>
+
+            {/* UNREAD NOTIFICATIONS */}
+            <div style={card}>
+              <div style={cardHead}>
+                <span style={{ color:'#e0e6ed', fontWeight:700, fontSize:'0.88rem' }}>🔔 Unread Notifications</span>
+                {totalUnread > 0
+                  ? <span style={mkBadge('#f59e0b','rgba(245,158,11,0.12)')}>{totalUnread} unread</span>
+                  : <span style={{ fontSize:'0.68rem', color:'#4a5270' }}>all read ✓</span>}
+              </div>
+              <div style={{ flex:1 }}>
+                {unreadNotifs.length === 0
+                  ? <div style={emptyMsg}>All caught up — no unread notifications. ✓</div>
+                  : unreadNotifs.map(n => (
+                    <div key={n.id} style={itemRow}
+                      onClick={() => setActiveTab('notifications')}
+                      onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                      onMouseOut={e  => e.currentTarget.style.background='transparent'}>
+                      <span style={{ fontSize:'0.95rem', flexShrink:0 }}>{NOTIF_ICONS[n.type]||'🔔'}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#c0c7d8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{n.title||n.message||'Notification'}</div>
+                        <div style={{ fontSize:'0.68rem', color:'#5a6080' }}>{relTime(n.created_at)}</div>
+                      </div>
+                      <div style={{ width:7, height:7, borderRadius:'50%', background:'#60a5fa', flexShrink:0 }} />
+                    </div>
+                  ))
+                }
+              </div>
+              <div style={cardFoot}>
+                <button style={viewAllBtn} onClick={() => setActiveTab('notifications')}>View all notifications →</button>
+              </div>
+            </div>
+
+            {/* FEEDBACK & REQUESTS */}
+            <div style={card}>
+              <div style={cardHead}>
+                <span style={{ color:'#e0e6ed', fontWeight:700, fontSize:'0.88rem' }}>💬 My Feedback & Requests</span>
+                {feedback.length > 0 && <span style={mkBadge('#a78bfa','rgba(167,139,250,0.12)')}>{feedback.length} request{feedback.length!==1?'s':''}</span>}
+              </div>
+              <div style={{ flex:1 }}>
+                {feedbackLoading && <div style={emptyMsg}>Loading…</div>}
+                {!feedbackLoading && feedback.length === 0 && (
+                  <div style={emptyMsg}>No feedback requests yet.<br /><span style={{ fontSize:'0.75rem', color:'#3a4060' }}>Share ideas or report issues on the Feedback tab.</span></div>
+                )}
+                {!feedbackLoading && feedback.slice(0,5).map(req => {
+                  const st = getStatus(req.status);
+                  return (
+                    <div key={req.id} style={itemRow}
+                      onClick={() => setActiveTab('feedback')}
+                      onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                      onMouseOut={e  => e.currentTarget.style.background='transparent'}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#c0c7d8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{req.title||'Untitled'}</div>
+                        <div style={{ fontSize:'0.68rem', color:'#5a6080' }}>{relTime(req.updated_at||req.created_at)}</div>
+                      </div>
+                      <span style={mkBadge(st.color, st.bg)}>{st.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={cardFoot}>
+                <button style={viewAllBtn} onClick={() => setActiveTab('feedback')}>View all feedback →</button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── Recent Presentations — full width ── */}
+          <div style={{ ...card, marginBottom:'0.5rem' }}>
+            <div style={cardHead}>
+              <span style={{ color:'#e0e6ed', fontWeight:700, fontSize:'0.88rem' }}>🎞️ Recent Presentations</span>
+              {presentations.length > 0 && <span style={mkBadge('#a78bfa','rgba(167,139,250,0.12)')}>{presentations.length} total</span>}
+            </div>
+            {recentPresentations.length === 0
+              ? <div style={emptyMsg}>No presentations yet.<br /><span style={{ fontSize:'0.75rem', color:'#3a4060' }}>Build one from the Presentations tab.</span></div>
+              : (
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(185px, 1fr))', borderBottom:'1px solid rgba(61,69,99,0.25)' }}>
+                  {recentPresentations.map((pres, i) => {
+                    const slideCount = (pres.slides||[]).length;
+                    const firstSlide = pres.slides && pres.slides[0];
+                    const thumbBg    = firstSlide?.bg || '#0a0d1e';
+                    return (
+                      <div key={pres.id}
+                        onClick={() => { setActivePresentationId(pres.id); setActiveTab('presentations'); }}
+                        onMouseOver={e => e.currentTarget.style.background='rgba(96,165,250,0.06)'}
+                        onMouseOut={e  => e.currentTarget.style.background='transparent'}
+                        style={{ padding:'0.8rem 1rem', cursor:'pointer', transition:'background 0.12s', borderRight:i<recentPresentations.length-1?'1px solid rgba(61,69,99,0.2)':'none' }}>
+                        <div style={{ width:'100%', height:'52px', borderRadius:'5px', background:thumbBg, border:'1px solid rgba(96,165,250,0.15)', marginBottom:'0.5rem', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.3rem', opacity:0.8 }}>🎞️</div>
+                        <div style={{ fontSize:'0.8rem', fontWeight:700, color:'#c0c7d8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pres.name||'Untitled'}</div>
+                        <div style={{ fontSize:'0.67rem', color:'#5a6080', marginTop:'0.12rem' }}>{slideCount} slide{slideCount!==1?'s':''}{pres.updated_at?' · '+relTime(pres.updated_at):''}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            }
+            <div style={cardFoot}>
+              <button style={viewAllBtn} onClick={() => setActiveTab('presentations')}>View all presentations →</button>
+            </div>
+          </div>
+
+        </div>
+      );
+    };
+
     // ── Research Sessions Page ────────────────────────────────────────────────
     // Full-featured top-level page: view all sessions + AI pipeline to save them.
     // Defined outside App (same pattern as CompanionPage) to avoid hook violations.
@@ -2327,10 +2685,10 @@
       const [myPageTab, _setMyPageTab] = useState(() => sessionStorage.getItem('hdb_myPageTab') || 'timeline');
       const setMyPageTab = (t) => { sessionStorage.setItem('hdb_myPageTab', t); _setMyPageTab(t); };
 
-      const TABS = ['timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications','feedback'];
+      const TABS = ['dashboard','timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications','feedback'];
 
       const [mobileNavOpen, setMobileNavOpen] = useState(false);
-      const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'timeline');
+      const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'dashboard');
       const setActiveTab = (t) => { sessionStorage.setItem('hdb_activeTab', t); _setActiveTab(t); };
       const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
       const [showModal, setShowModal] = useState(false);
@@ -6038,7 +6396,8 @@
               {TABS.map(tab=>(
                 <button key={tab} className={`nav-btn ${activeTab===tab?'active':''}`} onClick={()=>navigateToTab(tab)}
                   style={tab==='notifications'&&notifUnreadCount>0&&activeTab!==tab?{background:'rgba(96,165,250,0.08)',borderColor:'rgba(96,165,250,0.35)'}:{}}>
-                  {tab==='companion' ? '🔬 Research Companion'
+                  {tab==='dashboard' ? '🏠 Dashboard'
+                   : tab==='companion' ? '🔬 Research Companion'
                    : tab==='sessions' ? '🗺 Research Sessions'
                    : tab==='notifications' ? `🔔 Notifications${notifUnreadCount>0?' ('+notifUnreadCount+')':''}`
                    : tab==='feedback' ? '💬 Feedback'
@@ -6094,7 +6453,18 @@
             )}
 
             {/* Show filters on all tabs except upload, account, presentations, companion, and notifications */}
-            {activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && <FiltersComponent {...filterProps} />}
+            {activeTab !== 'dashboard' && activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && <FiltersComponent {...filterProps} />}
+
+            {/* DASHBOARD */}
+            {activeTab === 'dashboard' && <DashboardPage
+              currentUser={currentUser}
+              data={data}
+              notifications={notifications}
+              presentations={presentations}
+              setActiveTab={setActiveTab}
+              openEventModal={openEventModal}
+              setActivePresentationId={setActivePresentationId}
+            />}
 
             {/* TIMELINE */}
             {activeTab === 'timeline' && (
