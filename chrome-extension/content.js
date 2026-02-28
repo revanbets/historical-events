@@ -6,6 +6,11 @@
 (function () {
   'use strict';
 
+  // Stamp our version on the page so the web app can detect which extension version is installed
+  try {
+    document.documentElement.setAttribute('data-hdb-ext-version', chrome.runtime.getManifest().version);
+  } catch(e) {}
+
   let bubble = null;
   let currentSelection = null;
   let currentEndTimecode = null;

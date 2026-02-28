@@ -212,6 +212,8 @@
     .bell-shake { animation: bellShake 3s ease-in-out infinite; }
     .notif-badge { position: absolute; top: -6px; right: -8px; background: #ef4444; color: white; font-size: 0.6rem; font-weight: 800; min-width: 18px; height: 18px; border-radius: 9px; padding: 0 4px; display: flex; align-items: center; justify-content: center; border: 2px solid #0a0e27; pointer-events: none; animation: badgePop 0.3s ease-out; font-family: 'Space Mono', monospace; }
     @keyframes badgePop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+    @keyframes pulseRed { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,0.35)} 50%{opacity:0.8;box-shadow:0 0 0 5px rgba(239,68,68,0)} }
+    .ext-outdated-badge { animation: pulseRed 1.8s ease-in-out infinite; }
     .bell-btn { position: relative; background: none; border: none; cursor: pointer; padding: 0.3rem; border-radius: 8px; transition: background 0.2s; display: flex; align-items: center; }
     .bell-btn:hover { background: rgba(96,165,250,0.1); }
     .notif-item { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid rgba(61,69,99,0.5); background: rgba(26,31,58,0.5); transition: all 0.2s; cursor: pointer; margin-bottom: 0.5rem; position: relative; }
@@ -604,7 +606,24 @@
     // Defined OUTSIDE App to prevent a conditional React.useState hook violation.
     // (Calling useState inside a conditional IIFE corrupts hook order → white screen.)
     const _COMPANION_URL    = 'https://historical-events-databse.netlify.app/research-companion.html';
-    const _EXT_ZIP_URL      = 'https://historical-events-databse.netlify.app/hdb-extension.zip';
+
+    // ── Extension version tracking ───────────────────────────────────────
+    // Update LATEST_EXT_VERSION whenever a new extension zip is published.
+    // content.js stamps data-hdb-ext-version on every page so the web app
+    // can detect if the user's installed version is outdated.
+    const LATEST_EXT_VERSION = '1.1.0';
+    const EXT_RELEASE_NOTES = {
+      '1.1.0': {
+        title: 'Sessions Tab & Continuation Controls',
+        notes: [
+          'New Sessions tab — view your last 10 research sessions with full filters (date, captures, page count, sort)',
+          'All source links and trail entries are now clickable — opens the original page',
+          'Continue past sessions — old trail and captures imported without re-analysis by AI',
+          'Active session controls (Pause, Resume, End) available directly inside the Sessions tab',
+        ]
+      }
+    };
+    const _EXT_ZIP_URL      = `https://historical-events-databse.netlify.app/hdb-extension-v${LATEST_EXT_VERSION}.zip`;
     const _COMPANION_BM_SRC = `javascript:(function(){var sel='';try{sel=window.getSelection().toString().trim();}catch(e){}var tc='';try{var v=document.querySelector('video');if(v&&!isNaN(v.currentTime)){var s=Math.floor(v.currentTime);tc=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);}}catch(e){}var d={url:location.href,title:document.title,text:sel,timecode:tc,ts:Date.now()};var w=window.open('','hdb_companion');if(w&&w.location&&w.location.href.indexOf('research-companion')!==-1){w.postMessage({type:'HDB_CAPTURE',data:d},'*');w.focus();}else{var encoded=encodeURIComponent(JSON.stringify(d));window.open('${_COMPANION_URL}#bm='+encoded,'hdb_companion','width=450,height=680,resizable=yes,scrollbars=yes');}})();`;
 
 
@@ -807,6 +826,20 @@
           <div style={{display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'1rem', flexWrap:'wrap'}}>
             <span style={{fontSize:'1.1rem', fontWeight:700, color:'#e2e8f8'}}>&#128506; Research Sessions</span>
             <span style={{fontSize:'0.72rem', color:'#8b92b0', background:'rgba(96,165,250,0.08)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:'6px', padding:'2px 8px'}}>Chrome Extension &amp; Companion App</span>
+            {/* Extension version status badge */}
+            {(() => {
+              const installed = document.documentElement.getAttribute('data-hdb-ext-version');
+              if (!installed) return null;
+              if (installed === LATEST_EXT_VERSION) {
+                return <span style={{fontSize:'0.72rem', color:'#4ade80', background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.25)', borderRadius:'6px', padding:'2px 8px', fontWeight:600}}>✓ Extension v{installed} — up to date</span>;
+              }
+              return (
+                <span className="ext-outdated-badge" style={{fontSize:'0.72rem', color:'#ef4444', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.35)', borderRadius:'6px', padding:'2px 10px', fontWeight:700, cursor:'default'}}
+                  title={`Update your extension to v${LATEST_EXT_VERSION} — go to Research Companion → Setup → Download Extension`}>
+                  ⚠ Extension v{installed} outdated — update to v{LATEST_EXT_VERSION} available
+                </span>
+              );
+            })()}
           {rsSelectMode && rsSelected.size >= 2 && (
             <button onClick={rsCombineSelected} disabled={rsCombining}
               style={{background:'linear-gradient(135deg,#3b82f6,#6366f1)', border:'none', borderRadius:'6px', color:'white', fontSize:'0.75rem', fontWeight:700, padding:'4px 12px', cursor:'pointer', opacity:rsCombining?0.6:1}}>
@@ -1312,8 +1345,33 @@
                     <a href={_EXT_ZIP_URL} download style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'0.65rem 1.4rem',background:'linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))',border:'1px solid rgba(96,165,250,0.5)',borderRadius:'9px',color:'#60a5fa',textDecoration:'none',fontSize:'0.875rem',fontWeight:700}}
                       onMouseEnter={e=>e.currentTarget.style.background='rgba(96,165,250,0.3)'}
                       onMouseLeave={e=>e.currentTarget.style.background='linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.1))'}>
-                      ⬇ Download Extension (.zip)
+                      ⬇ Download Extension v{LATEST_EXT_VERSION} (.zip)
                     </a>
+                    {/* Extension version status — shown if user has the extension installed */}
+                    {(() => {
+                      const installed = document.documentElement.getAttribute('data-hdb-ext-version');
+                      if (!installed) return null;
+                      if (installed === LATEST_EXT_VERSION) {
+                        return <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 12px',background:'rgba(74,222,128,0.07)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:'7px',fontSize:'0.8rem',color:'#4ade80',fontWeight:600,marginTop:'10px'}}>✓ Your extension is up to date (v{installed})</div>;
+                      }
+                      const notes = EXT_RELEASE_NOTES[LATEST_EXT_VERSION];
+                      return (
+                        <div style={{marginTop:'10px'}}>
+                          <div className="ext-outdated-badge" style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 12px',background:'rgba(239,68,68,0.07)',border:'1px solid rgba(239,68,68,0.35)',borderRadius:'7px',fontSize:'0.8rem',color:'#ef4444',fontWeight:700,marginBottom:'8px'}}>
+                            ⚠ Your extension (v{installed}) is outdated — v{LATEST_EXT_VERSION} is available
+                          </div>
+                          {notes && (
+                            <div style={{background:'rgba(96,165,250,0.05)',border:'1px solid rgba(96,165,250,0.15)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.78rem',color:'#8b95b0',lineHeight:1.7}}>
+                              <div style={{fontWeight:700,color:'#c0c7d8',marginBottom:'4px'}}>What's new in v{LATEST_EXT_VERSION}: {notes.title}</div>
+                              {notes.notes.map((n,i) => <div key={i}>• {n}</div>)}
+                            </div>
+                          )}
+                          <div style={{fontSize:'0.78rem',color:'#8b95b0',marginTop:'8px',lineHeight:1.6}}>
+                            To update: download the new ZIP above, then go to <code style={{background:'rgba(96,165,250,0.1)',padding:'1px 5px',borderRadius:'4px',color:'#93c5fd'}}>chrome://extensions</code>, remove the old extension, and load the new folder.
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </Step>
                   <Step n="2" title='Unzip the downloaded file'>
                     <strong style={{color:'#c0c7d8'}}>Mac:</strong> Double-click the ZIP.<br/>
@@ -1807,6 +1865,22 @@
       useEffect(() => {
         if (!currentUser) return;
         loadNotifications();
+
+        // Check if extension is outdated and notify the user once per version
+        const extVer = document.documentElement.getAttribute('data-hdb-ext-version');
+        if (extVer && extVer !== LATEST_EXT_VERSION) {
+          const storageKey = `hdb_ext_upd_${currentUser.username}_${LATEST_EXT_VERSION}`;
+          if (!localStorage.getItem(storageKey)) {
+            localStorage.setItem(storageKey, '1');
+            const notes = EXT_RELEASE_NOTES[LATEST_EXT_VERSION];
+            const notesList = (notes?.notes || []).map(n => `• ${n}`).join('\n');
+            createNotification(
+              'extension_update',
+              `Extension Update Available — v${LATEST_EXT_VERSION}`,
+              `Your installed extension (v${extVer}) is out of date. Update to v${LATEST_EXT_VERSION} to get:\n\n${notesList}\n\nGo to the Research Companion tab → Setup → Download Extension to get the latest version.`
+            );
+          }
+        }
       }, [currentUser?.username]);
 
       // ── Sync liveBlocks when editing slide changes ──
@@ -2919,6 +2993,7 @@
         system_health:   { icon: '🛡️', color: '#f59e0b' },
         new_user:        { icon: '👤', color: '#10b981' },
         user_role_change:{ icon: '🔑', color: '#a78bfa' },
+        extension_update:{ icon: '🧩', color: '#60a5fa' },
       };
 
       const createNotification = async (type, title, message, eventId = null, metadata = {}) => {

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Historical Events Research Assistant",
   "short_name": "HDB Research",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Capture URLs, highlighted text, and video timecodes — save to the Historical Events Database with AI analysis.",
   "permissions": [
     "storage",

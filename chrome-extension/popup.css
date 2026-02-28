@@ -1574,3 +1574,33 @@ body {
 .session-card.confirming {
   border-color: rgba(251, 191, 36, 0.4);
 }
+
+/* ─── VERSION FOOTER ─────────────────────────────────────── */
+.ext-version-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  background: var(--bg-deep);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: 'Space Mono', monospace;
+  flex-shrink: 0;
+}
+
+.ext-update-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  padding: 1px 7px;
+  animation: pulse-red-badge 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}

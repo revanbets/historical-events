@@ -65,6 +65,12 @@ let confirmBackUpSessionId = null;
 
 // ─── Boot ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  // Show extension version in footer
+  try {
+    const { version } = chrome.runtime.getManifest();
+    $('ext-version-display').textContent = `HDB Research Extension  v${version}`;
+  } catch(e) {}
+
   await loadState();
   bindEvents();
   await loadCurrentPageInfo();
