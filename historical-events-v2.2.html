@@ -600,8 +600,16 @@
       const [password, setPassword] = useState('');
       const [confirm, setConfirm] = useState('');
       const [error, setError] = useState('');
-      const [success, setSuccess] = useState('');
+      const [success, setSuccess] = useState(false);
       const [loading, setLoading] = useState(false);
+
+      // useEffect redirect — more reliable than setTimeout after async work
+      React.useEffect(() => {
+        if (!success) return;
+        const t = setTimeout(onGoLogin, 2000);
+        return () => clearTimeout(t);
+      }, [success]);
+
       const submit = async () => {
         if (!email.trim() || !password.trim() || !confirm.trim()) { setError('Please fill in all fields.'); return; }
         if (!isEmailFormat(email.trim())) { setError('Please enter a valid email address.'); return; }
@@ -609,23 +617,33 @@
         if (password !== confirm) { setError('Passwords do not match.'); return; }
         setLoading(true); setError('');
         const normalized = email.trim().toLowerCase();
-        // Check if email already exists
         const { data: existing } = await supabaseClient.from('users').select('username').eq('username', normalized).single();
         if (existing) { setLoading(false); setError('An account with this email already exists.'); return; }
-        // Insert new user
         const { error: insertErr } = await supabaseClient.from('users').insert([{ username: normalized, password, role: 'user' }]);
         setLoading(false);
         if (insertErr) { setError('Registration failed: ' + insertErr.message); return; }
-        setSuccess('Account created! Redirecting to sign in…'); setError('');
-        // Notify admins/owner of new registration
         supabaseClient.from('notifications').insert([{
           type: 'new_user', title: 'New User Registered',
           message: `${normalized} just created a new account.`,
           created_by: normalized, created_by_role: 'user',
           event_id: null, metadata: {}, read_by: [], dismissed_by: [],
         }]).catch(()=>{});
-        setTimeout(() => onGoLogin(), 1500);
+        setSuccess(true);
       };
+
+      if (success) {
+        return (
+          <div className="auth-screen">
+            <div className="auth-card" style={{textAlign:'center'}}>
+              <div style={{fontSize:'2.5rem',marginBottom:'1rem'}}>✓</div>
+              <div className="auth-title" style={{color:'#10b981'}}>Account Created!</div>
+              <div className="auth-subtitle" style={{marginBottom:'2rem'}}>Taking you to sign in…</div>
+              <button className="auth-btn" onClick={onGoLogin}>Go to Sign In →</button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="auth-screen">
           <div className="auth-card">
@@ -634,7 +652,6 @@
               <div className="auth-subtitle">Join the Historical Events Database</div>
             </div>
             {error && <div className="auth-error">{error}</div>}
-            {success && <div className="auth-success">{success}</div>}
             <div className="auth-field">
               <label className="auth-label">Email</label>
               <input className="auth-input" type="email" placeholder="your@email.com" value={email}

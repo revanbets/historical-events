@@ -8,6 +8,7 @@ import shutil
 import random
 import string
 import smtplib
+import ssl
 import time
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
@@ -68,24 +69,12 @@ def _generate_code() -> str:
     return ''.join(random.choices(string.digits, k=6))
 
 
-def _send_email(to_email: str, code: str) -> None:
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASS", "")
-    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
-
-    if not smtp_user or not smtp_pass:
-        # Dev mode — log the code so you can still test without email
-        print(f"[2FA] SMTP not configured. Code for {to_email}: {code}")
-        return
-
+def _build_email_msg(to_email: str, smtp_from: str, code: str) -> MIMEMultipart:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"Your verification code: {code}"
     msg["From"] = smtp_from
     msg["To"] = to_email
-
-    text_body = f"Your verification code is: {code}\n\nThis code expires in 10 minutes.\nIf you didn't request this, ignore this email."
+    text_body = f"Your verification code is: {code}\n\nExpires in 10 minutes. If you didn't request this, ignore this email."
     html_body = f"""
 <html><body style="font-family:sans-serif;background:#0a0e27;padding:2rem;">
   <div style="max-width:420px;margin:0 auto;background:rgba(26,31,58,0.98);border-radius:16px;padding:2rem;border:2px solid rgba(96,165,250,0.3);">
@@ -96,15 +85,45 @@ def _send_email(to_email: str, code: str) -> None:
     <p style="color:#8b92b0;font-size:0.875rem;">Expires in 10 minutes. If you didn't request this, ignore this email.</p>
   </div>
 </body></html>"""
-
     msg.attach(MIMEText(text_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
+    return msg
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_from, to_email, msg.as_string())
+
+def _send_email(to_email: str, code: str) -> None:
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASS", "").strip()
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user).strip() or smtp_user
+
+    if not smtp_user or not smtp_pass:
+        raise RuntimeError("SMTP_USER and SMTP_PASS environment variables are not set")
+
+    msg = _build_email_msg(to_email, smtp_from, code)
+    ctx = ssl.create_default_context()
+    last_err = None
+
+    # Try SMTP_SSL on port 465 first (more reliable on cloud hosts)
+    for attempt, (use_ssl, port) in enumerate([(True, 465), (False, 587)]):
+        try:
+            print(f"[2FA] Attempt {attempt+1}: {'SSL' if use_ssl else 'STARTTLS'} port {port} → {to_email}")
+            if use_ssl:
+                with smtplib.SMTP_SSL(smtp_host, port, context=ctx) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_from, to_email, msg.as_string())
+            else:
+                with smtplib.SMTP(smtp_host, port) as server:
+                    server.ehlo()
+                    server.starttls(context=ctx)
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_from, to_email, msg.as_string())
+            print(f"[2FA] Email sent successfully via {'SSL' if use_ssl else 'STARTTLS'}")
+            return  # success
+        except Exception as e:
+            last_err = e
+            print(f"[2FA] {'SSL' if use_ssl else 'STARTTLS'} failed: {e}")
+
+    raise RuntimeError(f"All SMTP attempts failed. Last error: {last_err}")
 
 
 class TwoFARequest(BaseModel):
@@ -114,6 +133,19 @@ class TwoFARequest(BaseModel):
 class TwoFAVerify(BaseModel):
     email: str
     code: str
+
+
+@app.post("/api/test-email")
+def test_email(body: TwoFARequest):
+    """Send a test email to verify SMTP is configured correctly."""
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email")
+    try:
+        _send_email(email, "TEST-123")
+        return {"ok": True, "message": f"Test email sent to {email}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/send-2fa")
