@@ -1064,3 +1064,400 @@ body {
 
 /* ─── UTILITY ────────────────────────────────────────────── */
 .hidden { display: none !important; }
+
+/* ─── CLICKABLE SOURCES ──────────────────────────────────── */
+.card-source-link {
+  text-decoration: none;
+  color: var(--text-dim);
+  transition: color 0.1s;
+}
+.card-source-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.trail-title-link {
+  text-decoration: none;
+  color: var(--text-hi);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trail-title-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* ─── SESSIONS TAB ───────────────────────────────────────── */
+
+/* Filter Bar (sticky inside scroll container) */
+.sessions-filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sessions-filter-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+}
+
+.sessions-search-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-mid);
+  border-radius: 7px;
+  color: var(--text-hi);
+  font-family: 'Karla', sans-serif;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.sessions-search-input:focus {
+  border-color: var(--accent);
+  background: rgba(96, 165, 250, 0.04);
+}
+.sessions-search-input::placeholder { color: var(--text-dim); }
+
+.btn-filter-toggle {
+  padding: 5px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 7px;
+  color: var(--text-mid);
+  font-family: 'Karla', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.btn-filter-toggle:hover,
+.btn-filter-toggle.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--border-hi);
+}
+
+/* Filter panel */
+.sessions-filter-panel {
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-section-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-pill {
+  padding: 3px 9px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-mid);
+  font-family: 'Karla', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.filter-pill:hover {
+  background: var(--bg-hover);
+  color: var(--text-hi);
+}
+.filter-pill.active {
+  background: var(--accent-dim);
+  border-color: var(--border-hi);
+  color: var(--accent);
+}
+
+.filter-select {
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  color: var(--text-hi);
+  font-family: 'Karla', sans-serif;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.filter-select option {
+  background: var(--bg-card);
+}
+.filter-select:focus { border-color: var(--accent); }
+
+/* Loading state */
+.sessions-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px;
+  color: var(--text-mid);
+  font-size: 12px;
+}
+
+/* Sessions list */
+.sessions-list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Session card */
+.session-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
+.session-card:hover { border-color: var(--border-mid); }
+.session-card.expanded { border-color: var(--border-hi); }
+
+.session-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.session-card-header:hover { background: var(--bg-hover); }
+
+.session-expand-icon {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.session-card-info { flex: 1; min-width: 0; }
+
+.session-card-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+}
+
+.session-duration {
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.session-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.session-stat { font-size: 11px; color: var(--text-mid); }
+.session-stat-dot { font-size: 11px; color: var(--text-dim); }
+
+/* Session detail (expanded) */
+.session-detail {
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.session-detail-section {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.session-detail-section:last-child { border-bottom: none; }
+
+.session-detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.session-detail-count {
+  background: var(--accent-dim);
+  border: 1px solid var(--border-mid);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Session trail entries */
+.session-trail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-mid) transparent;
+}
+.session-trail-list::-webkit-scrollbar { width: 3px; }
+.session-trail-list::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 2px; }
+
+.session-trail-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px;
+  border-radius: 5px;
+  text-decoration: none;
+  transition: background 0.1s;
+}
+.session-trail-entry:hover { background: var(--bg-hover); }
+
+.session-trail-favicon {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.session-trail-favicon-empty {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.session-trail-info { flex: 1; min-width: 0; }
+
+.session-trail-title {
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-trail-domain {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: 'Space Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-trail-time {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+/* Session captured items */
+.session-captured-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-captured-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  background: var(--bg-base);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.session-captured-icon { font-size: 12px; flex-shrink: 0; }
+
+.session-captured-body { flex: 1; min-width: 0; }
+
+.session-captured-text {
+  font-size: 11px;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-captured-source {
+  font-size: 10px;
+  color: var(--accent);
+  text-decoration: none;
+  font-family: 'Space Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  transition: opacity 0.1s;
+  opacity: 0.75;
+}
+.session-captured-source:hover { opacity: 1; text-decoration: underline; }
+
+.session-saved-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.session-detail-empty {
+  padding: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+}

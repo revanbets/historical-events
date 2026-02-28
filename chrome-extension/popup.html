@@ -126,6 +126,10 @@
         Trail
         <span id="trail-count-badge" class="tab-badge" style="display:none;">0</span>
       </button>
+      <button class="tab-btn" data-tab="sessions">
+        Sessions
+        <span id="sessions-count-badge" class="tab-badge" style="display:none;">0</span>
+      </button>
     </div>
 
     <!-- Tab: Captured Items -->
@@ -150,6 +154,67 @@
         <div class="empty-desc">Start a session and browse — every page you visit gets tracked here.</div>
       </div>
       <div id="trail-list" class="trail-list"></div>
+    </div>
+
+    <!-- Tab: Sessions History -->
+    <div id="tab-sessions" class="tab-content" style="display:none;">
+
+      <!-- Filter Bar (sticky) -->
+      <div class="sessions-filter-bar">
+        <div class="sessions-filter-top">
+          <input type="text" id="sessions-search" class="sessions-search-input" placeholder="Search sessions…" />
+          <button id="sessions-filter-toggle" class="btn-filter-toggle">⚙ Filters</button>
+        </div>
+        <div id="sessions-filter-panel" class="sessions-filter-panel" style="display:none;">
+          <div class="filter-section">
+            <div class="filter-section-label">Date</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="date" data-value="all">All Time</button>
+              <button class="filter-pill" data-filter="date" data-value="today">Today</button>
+              <button class="filter-pill" data-filter="date" data-value="week">This Week</button>
+              <button class="filter-pill" data-filter="date" data-value="month">This Month</button>
+            </div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label">Captures</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="captures" data-value="any">Any</button>
+              <button class="filter-pill" data-filter="captures" data-value="has">Has Captures</button>
+              <button class="filter-pill" data-filter="captures" data-value="none">None</button>
+            </div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label">Page Count</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="pages" data-value="any">Any</button>
+              <button class="filter-pill" data-filter="pages" data-value="1-5">1–5</button>
+              <button class="filter-pill" data-filter="pages" data-value="6-20">6–20</button>
+              <button class="filter-pill" data-filter="pages" data-value="20+">20+</button>
+            </div>
+          </div>
+          <div class="filter-section filter-section-row">
+            <div class="filter-section-label">Sort by</div>
+            <select id="sessions-sort" class="filter-select">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="most-pages">Most Pages</option>
+              <option value="most-captures">Most Captures</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading / Empty / List -->
+      <div id="sessions-loading" class="sessions-loading-state" style="display:none;">
+        <span class="spinner"></span> Loading sessions…
+      </div>
+      <div id="sessions-empty" class="empty-state" style="display:none;">
+        <div class="empty-icon">📚</div>
+        <div class="empty-title">No sessions found</div>
+        <div class="empty-desc">End a research session and it will appear here. Try adjusting your filters.</div>
+      </div>
+      <div id="sessions-list" class="sessions-list"></div>
+
     </div>
 
   </div>

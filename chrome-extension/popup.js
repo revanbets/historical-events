@@ -57,6 +57,11 @@ let vcEnd = null;    // seconds (optional)
 
 let currentTab = 'captured';
 
+// ─── Sessions history state ─────────────────────────────────────
+let sessionHistory = [];
+let expandedSessionId = null;
+let sessionsFilter = { search: '', date: 'all', captures: 'any', pages: 'any', sort: 'newest' };
+
 // ─── Boot ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await loadState();
@@ -247,7 +252,7 @@ function renderCaptureCard(item) {
       </div>
       <div class="card-meta">
         ${faviconHtml}
-        <span class="card-source" title="${escHtml(item.url)}">${escHtml(truncate(item.pageTitle || getDomain(item.url), 36))}</span>
+        <a class="card-source card-source-link" href="${escHtml(item.url)}" target="_blank" title="${escHtml(item.url)}">${escHtml(truncate(item.pageTitle || getDomain(item.url), 36))}</a>
         ${timecodeHtml}
       </div>
       ${framesHtml}
@@ -328,7 +333,7 @@ function renderTrail() {
         </div>
         ${faviconHtml}
         <div class="trail-info">
-          <div class="trail-title" title="${escHtml(entry.url)}">${escHtml(truncate(entry.title || entry.url, 42))}</div>
+          <a class="trail-title trail-title-link" href="${escHtml(entry.url)}" target="_blank" title="${escHtml(entry.url)}">${escHtml(truncate(entry.title || entry.url, 42))}</a>
           <div class="trail-url">${escHtml(getDomain(entry.url))}</div>
         </div>
         <div class="trail-time">${timeAgo(entry.timestamp)}</div>
@@ -380,7 +385,41 @@ function bindEvents() {
       btn.classList.add('active');
       document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
       $('tab-' + currentTab).style.display = '';
+      if (currentTab === 'sessions') loadSessions();
     });
+  });
+
+  // Sessions filter toggle
+  $('sessions-filter-toggle').addEventListener('click', () => {
+    const panel = $('sessions-filter-panel');
+    const open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : '';
+    $('sessions-filter-toggle').classList.toggle('active', !open);
+    $('sessions-filter-toggle').textContent = open ? '⚙ Filters' : '✕ Filters';
+  });
+
+  // Sessions keyword search
+  $('sessions-search').addEventListener('input', () => {
+    sessionsFilter.search = $('sessions-search').value;
+    renderSessions();
+  });
+
+  // Filter pills (date / captures / pages)
+  document.querySelectorAll('.filter-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filterKey = btn.dataset.filter;
+      const value = btn.dataset.value;
+      sessionsFilter[filterKey] = value;
+      document.querySelectorAll(`.filter-pill[data-filter="${filterKey}"]`).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderSessions();
+    });
+  });
+
+  // Sessions sort
+  $('sessions-sort').addEventListener('change', () => {
+    sessionsFilter.sort = $('sessions-sort').value;
+    renderSessions();
   });
 
   // Pause / Resume session
@@ -710,6 +749,229 @@ async function handleVcCapture() {
     btn.textContent = '📷 Capture Frames';
     btn.disabled = vcStart === null;
   }
+}
+
+// ─── Sessions ──────────────────────────────────────────────────
+async function loadSessions() {
+  const hasData = sessionHistory.length > 0;
+  if (!hasData) {
+    $('sessions-loading').style.display = '';
+    $('sessions-list').style.display = 'none';
+    $('sessions-empty').style.display = 'none';
+  }
+  try {
+    const resp = await send({ type: 'GET_SESSIONS' });
+    sessionHistory = resp.sessions || [];
+    renderSessions();
+  } catch (e) {
+    console.error('Failed to load sessions:', e);
+    if (!hasData) {
+      $('sessions-loading').style.display = 'none';
+      $('sessions-empty').style.display = '';
+    }
+  }
+}
+
+function sessionRealPages(sess) {
+  return (sess.trail || []).filter(e => e.type !== 'pause' && e.type !== 'resume').length;
+}
+
+function applySessionFilters(sessions) {
+  let r = [...sessions];
+
+  // Keyword search
+  if (sessionsFilter.search) {
+    const q = sessionsFilter.search.toLowerCase();
+    r = r.filter(s =>
+      (s.session_name || '').toLowerCase().includes(q) ||
+      (s.trail || []).some(t =>
+        (t.title || '').toLowerCase().includes(q) ||
+        (t.url || '').toLowerCase().includes(q)
+      )
+    );
+  }
+
+  // Date range
+  const now = Date.now();
+  if (sessionsFilter.date === 'today') {
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+    r = r.filter(s => new Date(s.ended_at) >= startOfDay);
+  } else if (sessionsFilter.date === 'week') {
+    r = r.filter(s => new Date(s.ended_at) >= new Date(now - 7 * 24 * 60 * 60 * 1000));
+  } else if (sessionsFilter.date === 'month') {
+    r = r.filter(s => new Date(s.ended_at) >= new Date(now - 30 * 24 * 60 * 60 * 1000));
+  }
+
+  // Captures filter
+  if (sessionsFilter.captures === 'has') {
+    r = r.filter(s => (s.captured_items || []).length > 0);
+  } else if (sessionsFilter.captures === 'none') {
+    r = r.filter(s => (s.captured_items || []).length === 0);
+  }
+
+  // Page count filter
+  if (sessionsFilter.pages === '1-5') {
+    r = r.filter(s => { const n = sessionRealPages(s); return n >= 1 && n <= 5; });
+  } else if (sessionsFilter.pages === '6-20') {
+    r = r.filter(s => { const n = sessionRealPages(s); return n >= 6 && n <= 20; });
+  } else if (sessionsFilter.pages === '20+') {
+    r = r.filter(s => sessionRealPages(s) > 20);
+  }
+
+  // Sort
+  if (sessionsFilter.sort === 'oldest') {
+    r.sort((a, b) => new Date(a.ended_at) - new Date(b.ended_at));
+  } else if (sessionsFilter.sort === 'most-pages') {
+    r.sort((a, b) => sessionRealPages(b) - sessionRealPages(a));
+  } else if (sessionsFilter.sort === 'most-captures') {
+    r.sort((a, b) => (b.captured_items || []).length - (a.captured_items || []).length);
+  } else {
+    r.sort((a, b) => new Date(b.ended_at) - new Date(a.ended_at));
+  }
+
+  return r;
+}
+
+function renderSessions() {
+  const list = $('sessions-list');
+  const empty = $('sessions-empty');
+  const loading = $('sessions-loading');
+  const badge = $('sessions-count-badge');
+
+  loading.style.display = 'none';
+
+  const filtered = applySessionFilters(sessionHistory);
+
+  // Badge shows total unfiltered count
+  const total = sessionHistory.length;
+  badge.textContent = total;
+  badge.style.display = total > 0 ? '' : 'none';
+
+  if (filtered.length === 0) {
+    empty.style.display = '';
+    list.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.style.display = '';
+  list.innerHTML = filtered.map(s => renderSessionCard(s)).join('');
+
+  // Bind expand/collapse
+  list.querySelectorAll('.session-card-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const id = String(header.dataset.id);
+      expandedSessionId = (expandedSessionId === id) ? null : id;
+      renderSessions();
+    });
+  });
+}
+
+function renderSessionCard(sess) {
+  const id = String(sess.id);
+  const isExpanded = expandedSessionId === id;
+  const pages = sessionRealPages(sess);
+  const captures = (sess.captured_items || []).length;
+
+  const endDate = sess.ended_at ? new Date(sess.ended_at) : null;
+  const startDate = sess.started_at ? new Date(sess.started_at) : null;
+
+  const dateStr = endDate
+    ? endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+
+  const timeStr = endDate
+    ? endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : '';
+
+  let durationStr = '';
+  if (startDate && endDate) {
+    const mins = Math.round((endDate - startDate) / 60000);
+    durationStr = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  }
+
+  const expandIcon = isExpanded ? '▼' : '▶';
+  const detailHtml = isExpanded ? renderSessionDetail(sess) : '';
+
+  return `
+    <div class="session-card ${isExpanded ? 'expanded' : ''}">
+      <div class="session-card-header" data-id="${escHtml(id)}">
+        <span class="session-expand-icon">${expandIcon}</span>
+        <div class="session-card-info">
+          <div class="session-card-name">${escHtml(sess.session_name || 'Unnamed Session')}</div>
+          <div class="session-card-meta">
+            ${dateStr ? `<span>${escHtml(dateStr)}</span>` : ''}
+            ${timeStr ? `<span>${escHtml(timeStr)}</span>` : ''}
+            ${durationStr ? `<span class="session-duration">${escHtml(durationStr)}</span>` : ''}
+          </div>
+          <div class="session-card-stats">
+            <span class="session-stat">${pages} page${pages !== 1 ? 's' : ''}</span>
+            <span class="session-stat-dot">·</span>
+            <span class="session-stat">${captures} capture${captures !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      </div>
+      ${detailHtml}
+    </div>
+  `;
+}
+
+function renderSessionDetail(sess) {
+  const trail = (sess.trail || []).filter(e => e.type !== 'pause' && e.type !== 'resume');
+  const captured = sess.captured_items || [];
+
+  let trailHtml = '';
+  if (trail.length > 0) {
+    trailHtml = `
+      <div class="session-detail-section">
+        <div class="session-detail-label">Trail <span class="session-detail-count">${trail.length}</span></div>
+        <div class="session-trail-list">
+          ${trail.map(entry => `
+            <a class="session-trail-entry" href="${escHtml(entry.url)}" target="_blank" title="${escHtml(entry.url)}">
+              ${entry.favIconUrl
+                ? `<img class="session-trail-favicon" src="${escHtml(entry.favIconUrl)}" alt="" onerror="this.style.display='none'" />`
+                : `<div class="session-trail-favicon-empty"></div>`}
+              <div class="session-trail-info">
+                <div class="session-trail-title">${escHtml(truncate(entry.title || entry.url, 40))}</div>
+                <div class="session-trail-domain">${escHtml(getDomain(entry.url))}</div>
+              </div>
+              <div class="session-trail-time">${formatTime(entry.timestamp)}</div>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  let capturedHtml = '';
+  if (captured.length > 0) {
+    capturedHtml = `
+      <div class="session-detail-section">
+        <div class="session-detail-label">Captured <span class="session-detail-count">${captured.length}</span></div>
+        <div class="session-captured-list">
+          ${captured.map(item => {
+            const typeIcon = item.type === 'video' ? '🎬' : item.type === 'url' ? '🔗' : '📝';
+            return `
+              <div class="session-captured-item">
+                <span class="session-captured-icon">${typeIcon}</span>
+                <div class="session-captured-body">
+                  <div class="session-captured-text">${escHtml(truncate(item.text || item.pageTitle || item.url, 52))}</div>
+                  <a class="session-captured-source" href="${escHtml(item.url)}" target="_blank">${escHtml(getDomain(item.url))}</a>
+                </div>
+                ${item.saved ? `<span class="session-saved-tag">✓</span>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (!trailHtml && !capturedHtml) {
+    return '<div class="session-detail-empty">No data recorded for this session.</div>';
+  }
+
+  return `<div class="session-detail">${trailHtml}${capturedHtml}</div>`;
 }
 
 // ─── Auto-refresh state when popup is open ─────────────────────

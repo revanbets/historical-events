@@ -399,6 +399,16 @@ async function handleMessage(msg, sender) {
       return { ok: true };
     }
 
+    case 'GET_SESSIONS': {
+      const session = await getSession();
+      if (!session) throw new Error('Not logged in');
+      const rows = await sbFetch(
+        `/research_sessions?uploaded_by=eq.${encodeURIComponent(session.username)}&order=ended_at.desc&limit=10`,
+        { method: 'GET' }
+      );
+      return { ok: true, sessions: rows || [] };
+    }
+
     default:
       throw new Error(`Unknown message type: ${msg.type}`);
   }
