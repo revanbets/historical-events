@@ -14,6 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/dist/dist/vis-network.min.css" rel="stylesheet">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;600;700&display=swap');
@@ -442,74 +443,51 @@
     const BACKEND_URL = 'https://historical-events-api-n45u.onrender.com';
     const isEmailFormat = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
-    // fetchWithWakeup: retries up to maxTries times if the server returns 503 (Render cold start)
-    // Shows a live status message via onStatus callback
-    const fetchWithWakeup = async (url, opts, onStatus, maxTries = 4) => {
-      for (let i = 0; i < maxTries; i++) {
-        if (i > 0) {
-          onStatus(`Server is waking up… please wait (${i}/${maxTries - 1})`);
-          await new Promise(r => setTimeout(r, 12000));
-        }
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 15000);
-          const res = await fetch(url, { ...opts, signal: controller.signal });
-          clearTimeout(timer);
-          if (res.status !== 503) return res; // success or real error
-          // 503 = Render still waking — loop again
-        } catch(e) {
-          if (i === maxTries - 1) throw e; // last attempt failed
-        }
-      }
-      throw new Error('Server did not wake up in time');
-    };
+    // ─── EmailJS config (2FA sent directly from the browser — no server needed) ───
+    // After creating your EmailJS account, paste your three keys below.
+    // Instructions: https://www.emailjs.com/docs/tutorial/overview/
+    const EMAILJS_PUBLIC_KEY  = 'PASTE_YOUR_PUBLIC_KEY_HERE';   // Account → General → Public Key
+    const EMAILJS_SERVICE_ID  = 'PASTE_YOUR_SERVICE_ID_HERE';   // Email Services → Service ID
+    const EMAILJS_TEMPLATE_ID = 'PASTE_YOUR_TEMPLATE_ID_HERE';  // Email Templates → Template ID
 
     const LoginScreen = ({ onLogin, onGoSignup }) => {
       const [username, setUsername] = useState('');
       const [password, setPassword] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
-      const [loadingMsg, setLoadingMsg] = useState('Signing in...');
       const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
       const [otp, setOtp] = useState('');
       const [otpLoading, setOtpLoading] = useState(false);
       const [pendingUser, setPendingUser] = useState(null);
+      const [pendingOtp, setPendingOtp] = useState(null);   // generated code stored in state
+
+      // Generate a random 6-digit code and email it via EmailJS (runs entirely in the browser)
+      const sendOtpEmail = async (email) => {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        setPendingOtp(code);
+        await emailjs.send(
+          EMAILJS_SERVICE_ID,
+          EMAILJS_TEMPLATE_ID,
+          { to_email: email, code },
+          EMAILJS_PUBLIC_KEY
+        );
+        return code;
+      };
 
       const submit = async () => {
         if (!username.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
-        setLoading(true); setLoadingMsg('Signing in...'); setError('');
+        setLoading(true); setError('');
         const user = await findUser(username.trim(), password.trim());
         if (!user) { setLoading(false); setError('Invalid email or password.'); return; }
         if (isEmailFormat(username.trim())) {
-          setLoadingMsg('Sending verification code…');
           try {
-            const res = await fetchWithWakeup(
-              `${BACKEND_URL}/api/send-2fa`,
-              { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase() }) },
-              (msg) => setLoadingMsg(msg)
-            );
-            if (res.status === 404) {
-              setLoading(false);
-              setError('Email feature not deployed yet — go to Render dashboard → your service → Deploys tab → "Deploy latest commit".');
-              return;
-            }
-            if (res.status === 500) {
-              setLoading(false);
-              try { const b = await res.json(); setError('SMTP error: ' + (b.detail || 'Check SMTP env vars in Render.')); }
-              catch { setError('Server error sending email. Check SMTP env vars in Render.'); }
-              return;
-            }
-            if (!res.ok) {
-              setLoading(false);
-              setError(`Unexpected server error (HTTP ${res.status}). Check Render logs.`);
-              return;
-            }
+            await sendOtpEmail(username.trim().toLowerCase());
             setPendingUser(user);
             setLoading(false);
             setStep('otp');
           } catch(e) {
             setLoading(false);
-            setError('Could not reach the server after multiple retries. Check that your Render service is running.');
+            setError('Could not send verification code. Check your EmailJS configuration.');
           }
         } else {
           setLoading(false);
@@ -517,30 +495,21 @@
         }
       };
 
-      const submitOtp = async () => {
+      const submitOtp = () => {
         if (otp.trim().length !== 6) { setError('Enter the 6-digit code.'); return; }
         setOtpLoading(true); setError('');
-        try {
-          const res = await fetchWithWakeup(
-            `${BACKEND_URL}/api/verify-2fa`,
-            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase(), code: otp.trim() }) },
-            ()=>{}
-          );
-          const result = await res.json();
-          if (result.valid) { onLogin(pendingUser); }
-          else { setError(result.error || 'Invalid or expired code.'); }
-        } catch(e) { setError('Verification failed. Try again.'); }
-        setOtpLoading(false);
+        if (otp.trim() === pendingOtp) {
+          onLogin(pendingUser);
+        } else {
+          setError('Invalid code. Please try again.');
+          setOtpLoading(false);
+        }
       };
 
       const resendCode = async () => {
         setError('');
         try {
-          await fetchWithWakeup(
-            `${BACKEND_URL}/api/send-2fa`,
-            { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: username.trim().toLowerCase() }) },
-            ()=>{}
-          );
+          await sendOtpEmail(username.trim().toLowerCase());
         } catch(e) { setError('Could not resend code.'); }
       };
 
