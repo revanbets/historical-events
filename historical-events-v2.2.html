@@ -2670,6 +2670,606 @@
       );
     };
 
+    // ─── CHAT PAGE ───
+    const ChatPage = ({ currentUser, allEvents, allTopics, allPeople, allOrgs, openEventModal, setActiveTab }) => {
+      const myUsername = currentUser.username;
+
+      const [channels, setChannels] = React.useState([]);
+      const [activeChannelId, setActiveChannelId] = React.useState(null);
+      const [messages, setMessages] = React.useState([]);
+      const [loadingMessages, setLoadingMessages] = React.useState(false);
+      const [messageInput, setMessageInput] = React.useState('');
+      const [replyTo, setReplyTo] = React.useState(null);
+      const [editingId, setEditingId] = React.useState(null);
+      const [editContent, setEditContent] = React.useState('');
+      const [showNewChannel, setShowNewChannel] = React.useState(false);
+      const [showNewDM, setShowNewDM] = React.useState(false);
+      const [showMembers, setShowMembers] = React.useState(false);
+      const [newChName, setNewChName] = React.useState('');
+      const [newChDesc, setNewChDesc] = React.useState('');
+      const [newChMembers, setNewChMembers] = React.useState([]);
+      const [newChPrivate, setNewChPrivate] = React.useState(false);
+      const [mentionDrop, setMentionDrop] = React.useState({ visible:false, options:[], idx:0, triggerStart:0 });
+      const [chatUsers, setChatUsers] = React.useState([]);
+      const [userKarma, setUserKarma] = React.useState({});
+      const [hoveredId, setHoveredId] = React.useState(null);
+      const [sendingMsg, setSendingMsg] = React.useState(false);
+
+      const messagesEndRef = React.useRef(null);
+      const inputRef = React.useRef(null);
+      const pollRef = React.useRef(null);
+
+      const activeChannel = channels.find(c => c.id === activeChannelId) || null;
+
+      React.useEffect(() => { loadChannels(); loadChatUsers(); }, []);
+
+      React.useEffect(() => {
+        if (!activeChannelId) return;
+        setLoadingMessages(true);
+        loadMessages(activeChannelId).then(() => setLoadingMessages(false));
+        clearInterval(pollRef.current);
+        pollRef.current = setInterval(() => loadMessages(activeChannelId), 5000);
+        return () => clearInterval(pollRef.current);
+      }, [activeChannelId]);
+
+      React.useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior:'smooth' }); }, [messages]);
+
+      async function loadChannels() {
+        if (!supabaseClient) return;
+        const { data: chs } = await supabaseClient.from('chat_channels').select('*').contains('members', [myUsername]).order('last_message_at', { ascending:false });
+        const list = chs || [];
+        setChannels(list);
+        if (list.length > 0 && !activeChannelId) setActiveChannelId(list[0].id);
+      }
+
+      async function loadMessages(channelId) {
+        if (!supabaseClient) return;
+        const { data: msgs } = await supabaseClient.from('chat_messages').select('*').eq('channel_id', channelId).order('created_at', { ascending:true }).limit(300);
+        setMessages(msgs || []);
+      }
+
+      async function loadChatUsers() {
+        if (!supabaseClient) return;
+        const { data: users } = await supabaseClient.from('users').select('username, karma, role').order('username');
+        if (users) {
+          setChatUsers(users);
+          const km = {};
+          users.forEach(u => { km[u.username] = u.karma || 0; });
+          setUserKarma(km);
+        }
+      }
+
+      async function sendMessage() {
+        if (!messageInput.trim() || !activeChannelId || sendingMsg) return;
+        setSendingMsg(true);
+        try {
+          const { error } = await supabaseClient.from('chat_messages').insert({
+            channel_id: activeChannelId,
+            sender: myUsername,
+            content: messageInput.trim(),
+            reactions: {},
+            reply_to_id: replyTo?.id || null,
+            reply_to_sender: replyTo?.sender || null,
+            reply_to_preview: replyTo ? replyTo.content.slice(0,100) : null,
+          });
+          if (!error) {
+            setMessageInput(''); setReplyTo(null);
+            await supabaseClient.from('chat_channels').update({ last_message_at: new Date().toISOString() }).eq('id', activeChannelId);
+            await loadMessages(activeChannelId);
+            await loadChannels();
+          }
+        } finally { setSendingMsg(false); }
+      }
+
+      async function createChannel() {
+        if (!newChName.trim() || !supabaseClient) return;
+        const members = [...new Set([myUsername, ...newChMembers])];
+        const { data: ch, error } = await supabaseClient.from('chat_channels').insert({
+          name: newChName.trim(), description: newChDesc.trim(), type:'group', created_by: myUsername, members, is_private: newChPrivate,
+        }).select().single();
+        if (!error && ch) {
+          setShowNewChannel(false); setNewChName(''); setNewChDesc(''); setNewChMembers([]); setNewChPrivate(false);
+          await loadChannels(); setActiveChannelId(ch.id);
+        }
+      }
+
+      async function createDM(otherUsername) {
+        if (!supabaseClient) return;
+        const existing = channels.find(c => c.type==='dm' && c.members.includes(myUsername) && c.members.includes(otherUsername));
+        if (existing) { setActiveChannelId(existing.id); setShowNewDM(false); return; }
+        const { data: ch, error } = await supabaseClient.from('chat_channels').insert({
+          name: [myUsername, otherUsername].sort().join(','), description:'', type:'dm',
+          created_by: myUsername, members:[myUsername, otherUsername], is_private:true,
+        }).select().single();
+        if (!error && ch) { setShowNewDM(false); await loadChannels(); setActiveChannelId(ch.id); }
+      }
+
+      async function addReaction(messageId, emoji) {
+        if (!supabaseClient) return;
+        const msg = messages.find(m => m.id === messageId);
+        if (!msg) return;
+        const reactions = { ...(msg.reactions || {}) };
+        if (!reactions[emoji]) reactions[emoji] = [];
+        const already = reactions[emoji].includes(myUsername);
+        if (already) {
+          reactions[emoji] = reactions[emoji].filter(u => u !== myUsername);
+          if (reactions[emoji].length === 0) delete reactions[emoji];
+        } else {
+          reactions[emoji] = [...reactions[emoji], myUsername];
+          if ((emoji==='❤️'||emoji==='👍') && msg.sender !== myUsername) {
+            const { data: ud } = await supabaseClient.from('users').select('karma').eq('username', msg.sender).single();
+            await supabaseClient.from('users').update({ karma:(ud?.karma||0)+1 }).eq('username', msg.sender);
+            setUserKarma(prev => ({ ...prev, [msg.sender]:(prev[msg.sender]||0)+1 }));
+          }
+        }
+        await supabaseClient.from('chat_messages').update({ reactions }).eq('id', messageId);
+        setMessages(prev => prev.map(m => m.id===messageId ? { ...m, reactions } : m));
+      }
+
+      async function saveEdit(messageId) {
+        if (!editContent.trim() || !supabaseClient) return;
+        await supabaseClient.from('chat_messages').update({ content:editContent.trim(), edited:true, edited_at:new Date().toISOString() }).eq('id', messageId);
+        setMessages(prev => prev.map(m => m.id===messageId ? { ...m, content:editContent.trim(), edited:true } : m));
+        setEditingId(null); setEditContent('');
+      }
+
+      async function deleteMessage(messageId) {
+        if (!supabaseClient) return;
+        await supabaseClient.from('chat_messages').delete().eq('id', messageId);
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+      }
+
+      function handleInputKeyDown(e) {
+        if (mentionDrop.visible) {
+          if (e.key==='ArrowDown') { e.preventDefault(); setMentionDrop(d=>({...d,idx:Math.min(d.idx+1,d.options.length-1)})); return; }
+          if (e.key==='ArrowUp')   { e.preventDefault(); setMentionDrop(d=>({...d,idx:Math.max(d.idx-1,0)})); return; }
+          if (e.key==='Enter'||e.key==='Tab') { e.preventDefault(); if(mentionDrop.options[mentionDrop.idx]) selectMention(mentionDrop.options[mentionDrop.idx]); return; }
+          if (e.key==='Escape') { setMentionDrop(d=>({...d,visible:false})); return; }
+        }
+        if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+      }
+
+      function handleInputChange(e) {
+        const val = e.target.value;
+        setMessageInput(val);
+        const cursor = e.target.selectionStart;
+        const before = val.slice(0, cursor);
+        const m = before.match(/@([^@\s]*)$/);
+        if (m) {
+          const search = m[1].toLowerCase();
+          const opts = buildMentionOptions(search);
+          setMentionDrop({ visible:true, options:opts, idx:0, triggerStart:cursor - m[0].length });
+        } else {
+          setMentionDrop(d => ({ ...d, visible:false }));
+        }
+      }
+
+      function buildMentionOptions(search) {
+        const opts = [];
+        chatUsers.filter(u=>u.username!==myUsername && u.username.toLowerCase().includes(search)).slice(0,4)
+          .forEach(u=>opts.push({type:'user',id:u.username,label:u.username,icon:'👤'}));
+        allEvents.filter(e=>e.title&&e.title.toLowerCase().includes(search)).slice(0,5)
+          .forEach(e=>opts.push({type:'event',id:String(e.id),label:e.title,icon:'📌'}));
+        allTopics.filter(t=>t.toLowerCase().includes(search)).slice(0,3)
+          .forEach(t=>opts.push({type:'topic',id:t,label:t,icon:'#️⃣'}));
+        allPeople.filter(p=>p.toLowerCase().includes(search)).slice(0,3)
+          .forEach(p=>opts.push({type:'person',id:p,label:p,icon:'🧑'}));
+        allOrgs.filter(o=>o.toLowerCase().includes(search)).slice(0,3)
+          .forEach(o=>opts.push({type:'org',id:o,label:o,icon:'🏛'}));
+        return opts;
+      }
+
+      function selectMention(opt) {
+        const marker = `{{${opt.type}:${opt.id}:${opt.label}}}`;
+        const before = messageInput.slice(0, mentionDrop.triggerStart);
+        const after = messageInput.slice(inputRef.current?.selectionStart || mentionDrop.triggerStart+1);
+        setMessageInput(before + marker + ' ' + after);
+        setMentionDrop(d=>({...d,visible:false}));
+        setTimeout(()=>inputRef.current?.focus(), 0);
+      }
+
+      function renderContent(content) {
+        const regex = /\{\{(\w+):([^:}]+):([^}]+)\}\}/g;
+        const parts = []; let lastIdx = 0, match;
+        const colors  = {user:'#60a5fa',event:'#a78bfa',topic:'#10b981',person:'#f59e0b',org:'#f87171'};
+        const bgs     = {user:'rgba(96,165,250,0.12)',event:'rgba(167,139,250,0.12)',topic:'rgba(16,185,129,0.12)',person:'rgba(245,158,11,0.12)',org:'rgba(248,113,113,0.12)'};
+        const prefixes = {user:'@',event:'📌 ',topic:'#',person:'👤 ',org:'🏛 '};
+        while ((match = regex.exec(content)) !== null) {
+          if (match.index > lastIdx) parts.push(<span key={lastIdx}>{content.slice(lastIdx,match.index)}</span>);
+          const [,type,id,label] = match;
+          parts.push(
+            <span key={match.index}
+              onClick={e=>{e.stopPropagation();handleMentionClick(type,id,label);}}
+              title={`${type}: ${label}`}
+              style={{display:'inline-block',padding:'1px 7px',borderRadius:'4px',cursor:'pointer',fontSize:'0.86em',fontWeight:600,marginInline:'1px',background:bgs[type]||'rgba(96,165,250,0.1)',color:colors[type]||'#60a5fa',border:`1px solid ${(colors[type]||'#60a5fa')}40`}}>
+              {prefixes[type]||'@'}{label}
+            </span>
+          );
+          lastIdx = match.index + match[0].length;
+        }
+        if (lastIdx < content.length) parts.push(<span key={lastIdx}>{content.slice(lastIdx)}</span>);
+        return parts.length > 0 ? parts : content;
+      }
+
+      function handleMentionClick(type, id, label) {
+        if (type==='event') { const ev=allEvents.find(e=>String(e.id)===id); if(ev) openEventModal(ev,'chat'); }
+        else if (type==='topic')  setActiveTab('topics');
+        else if (type==='person') setActiveTab('people');
+        else if (type==='org')    setActiveTab('organizations');
+      }
+
+      function chDisplayName(ch) {
+        if (ch.type==='dm') return ch.members.find(m=>m!==myUsername)||ch.members[0]||'DM';
+        return ch.name;
+      }
+      function relTime(ts) {
+        const d = Date.now()-new Date(ts).getTime();
+        const m = Math.floor(d/60000);
+        if (m<1) return 'just now'; if (m<60) return `${m}m ago`;
+        const h = Math.floor(m/60);
+        if (h<24) return `${h}h ago`; return `${Math.floor(h/24)}d ago`;
+      }
+      function initials(u) { return (u||'?').slice(0,2).toUpperCase(); }
+
+      const groupChannels = channels.filter(c=>c.type==='group');
+      const dmChannels    = channels.filter(c=>c.type==='dm');
+      const QUICK_EMOJIS  = ['👍','❤️','😂','😮','🔥','✅'];
+
+      return (
+        <div style={{display:'flex',height:'calc(100vh - 140px)',background:'rgba(10,14,39,0.4)',borderRadius:'12px',overflow:'hidden',border:'1px solid rgba(45,53,97,0.4)'}}>
+
+          {/* ── SIDEBAR ── */}
+          <div style={{width:'248px',flexShrink:0,borderRight:'1px solid rgba(45,53,97,0.5)',display:'flex',flexDirection:'column',background:'rgba(13,16,38,0.7)'}}>
+
+            <div style={{padding:'1rem 1rem 0.75rem',borderBottom:'1px solid rgba(45,53,97,0.4)'}}>
+              <div style={{color:'#e0e6ed',fontWeight:700,fontSize:'0.95rem',fontFamily:"'Space Mono',monospace"}}>💬 Chat</div>
+              <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:'0.2rem'}}>Research discussions</div>
+            </div>
+
+            <div style={{flex:1,overflowY:'auto',padding:'0.6rem 0.4rem'}}>
+              {/* Group Channels */}
+              <div style={{marginBottom:'0.75rem'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0.2rem 0.5rem',marginBottom:'0.2rem'}}>
+                  <span style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:'0.08em',fontWeight:700}}>Channels</span>
+                  <button onClick={()=>setShowNewChannel(true)} title="Create channel" style={{background:'none',border:'none',color:'#60a5fa',cursor:'pointer',fontSize:'1.1rem',padding:'0 0.2rem',lineHeight:1}}>+</button>
+                </div>
+                {groupChannels.length===0 && <div style={{color:'#8b92b0',fontSize:'0.75rem',padding:'0.2rem 0.6rem',fontStyle:'italic'}}>No channels yet</div>}
+                {groupChannels.map(ch=>(
+                  <button key={ch.id} onClick={()=>setActiveChannelId(ch.id)}
+                    style={{width:'100%',textAlign:'left',padding:'0.38rem 0.6rem',borderRadius:'6px',border:'none',cursor:'pointer',fontFamily:'inherit',background:activeChannelId===ch.id?'rgba(96,165,250,0.15)':'transparent',color:activeChannelId===ch.id?'#93c5fd':'#b0b8cc',display:'flex',alignItems:'center',gap:'0.35rem',transition:'background 0.1s'}}>
+                    <span style={{color:'#8b92b0',fontSize:'0.85rem',flexShrink:0}}>#</span>
+                    <span style={{fontSize:'0.83rem',fontWeight:activeChannelId===ch.id?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ch.name}</span>
+                    {ch.is_private && <span style={{fontSize:'0.6rem',color:'#8b92b0',marginLeft:'auto',flexShrink:0}}>🔒</span>}
+                  </button>
+                ))}
+              </div>
+
+              {/* Direct Messages */}
+              <div>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0.2rem 0.5rem',marginBottom:'0.2rem'}}>
+                  <span style={{color:'#8b92b0',fontSize:'0.68rem',textTransform:'uppercase',letterSpacing:'0.08em',fontWeight:700}}>Direct Messages</span>
+                  <button onClick={()=>setShowNewDM(true)} title="New DM" style={{background:'none',border:'none',color:'#60a5fa',cursor:'pointer',fontSize:'1.1rem',padding:'0 0.2rem',lineHeight:1}}>+</button>
+                </div>
+                {dmChannels.length===0 && <div style={{color:'#8b92b0',fontSize:'0.75rem',padding:'0.2rem 0.6rem',fontStyle:'italic'}}>No DMs yet</div>}
+                {dmChannels.map(ch=>{
+                  const other = ch.members.find(m=>m!==myUsername)||ch.members[0]||'?';
+                  return (
+                    <button key={ch.id} onClick={()=>setActiveChannelId(ch.id)}
+                      style={{width:'100%',textAlign:'left',padding:'0.38rem 0.6rem',borderRadius:'6px',border:'none',cursor:'pointer',fontFamily:'inherit',background:activeChannelId===ch.id?'rgba(96,165,250,0.15)':'transparent',color:activeChannelId===ch.id?'#93c5fd':'#b0b8cc',display:'flex',alignItems:'center',gap:'0.4rem',transition:'background 0.1s'}}>
+                      <div style={{width:'22px',height:'22px',borderRadius:'50%',background:'rgba(96,165,250,0.22)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.58rem',color:'#60a5fa',fontWeight:700,flexShrink:0}}>{initials(other)}</div>
+                      <span style={{fontSize:'0.83rem',fontWeight:activeChannelId===ch.id?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{other}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer: current user */}
+            <div style={{padding:'0.6rem 0.75rem',borderTop:'1px solid rgba(45,53,97,0.4)',display:'flex',alignItems:'center',gap:'0.5rem'}}>
+              <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.68rem',color:'#0a0e27',fontWeight:700,flexShrink:0}}>{initials(myUsername)}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:'#e0e6ed',fontSize:'0.8rem',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{myUsername}</div>
+                <div style={{color:'#10b981',fontSize:'0.68rem'}}>⬆ {userKarma[myUsername]||0} karma</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── MAIN AREA ── */}
+          <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}>
+
+            {!activeChannel ? (
+              <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1rem',color:'#8b92b0'}}>
+                <div style={{fontSize:'3rem'}}>💬</div>
+                <div style={{fontSize:'0.9rem'}}>Select a channel or start a DM to begin</div>
+                <div style={{display:'flex',gap:'0.5rem'}}>
+                  <button className="btn btn-primary" onClick={()=>setShowNewChannel(true)} style={{fontSize:'0.82rem'}}>+ New Channel</button>
+                  <button className="btn" onClick={()=>setShowNewDM(true)} style={{fontSize:'0.82rem',background:'rgba(26,31,58,0.8)',border:'1px solid rgba(45,53,97,0.5)',color:'#c0c7d8'}}>+ New DM</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Channel header */}
+                <div style={{padding:'0.75rem 1.25rem',borderBottom:'1px solid rgba(45,53,97,0.5)',background:'rgba(13,16,38,0.5)',display:'flex',alignItems:'center',gap:'0.75rem',flexShrink:0}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'0.45rem'}}>
+                      <span style={{color:'#e0e6ed',fontWeight:700,fontSize:'0.92rem'}}>{activeChannel.type==='dm'?'':' # '}{chDisplayName(activeChannel)}</span>
+                      {activeChannel.is_private && <span style={{fontSize:'0.65rem',color:'#8b92b0'}}>🔒</span>}
+                    </div>
+                    {activeChannel.description && <div style={{color:'#8b92b0',fontSize:'0.72rem',marginTop:'0.1rem'}}>{activeChannel.description}</div>}
+                  </div>
+                  {activeChannel.type==='group' && (
+                    <button onClick={()=>setShowMembers(v=>!v)}
+                      style={{background:'rgba(26,31,58,0.7)',border:'1px solid rgba(45,53,97,0.5)',borderRadius:'8px',color:'#c0c7d8',cursor:'pointer',padding:'0.3rem 0.65rem',fontSize:'0.75rem',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'0.3rem'}}>
+                      👥 {(activeChannel.members||[]).length}
+                    </button>
+                  )}
+                </div>
+
+                {/* Members panel */}
+                {showMembers && activeChannel.type==='group' && (
+                  <div style={{position:'absolute',right:0,top:0,bottom:0,width:'185px',background:'rgba(13,16,38,0.98)',borderLeft:'1px solid rgba(45,53,97,0.5)',zIndex:30,display:'flex',flexDirection:'column'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'0.75rem',borderBottom:'1px solid rgba(45,53,97,0.4)'}}>
+                      <span style={{color:'#e0e6ed',fontWeight:700,fontSize:'0.82rem'}}>Members</span>
+                      <button onClick={()=>setShowMembers(false)} style={{background:'none',border:'none',color:'#8b92b0',cursor:'pointer',fontSize:'1.1rem'}}>×</button>
+                    </div>
+                    <div style={{overflowY:'auto',flex:1,padding:'0.5rem'}}>
+                      {(activeChannel.members||[]).map(m=>(
+                        <div key={m} style={{display:'flex',alignItems:'center',gap:'0.45rem',padding:'0.4rem 0.3rem',borderBottom:'1px solid rgba(45,53,97,0.25)'}}>
+                          <div style={{width:'26px',height:'26px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.6rem',color:'#60a5fa',fontWeight:700,flexShrink:0}}>{initials(m)}</div>
+                          <div>
+                            <div style={{color:'#c0c7d8',fontSize:'0.78rem',fontWeight:m===myUsername?600:400}}>{m}{m===myUsername?' ✦':''}</div>
+                            <div style={{color:'#10b981',fontSize:'0.65rem'}}>⬆ {userKarma[m]||0}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Messages list */}
+                <div style={{flex:1,overflowY:'auto',padding:'0.75rem 1rem',display:'flex',flexDirection:'column'}} onClick={()=>setShowMembers(false)}>
+                  {loadingMessages && <div style={{textAlign:'center',color:'#8b92b0',padding:'2rem',fontSize:'0.85rem'}}>Loading messages…</div>}
+                  {!loadingMessages && messages.length===0 && (
+                    <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#8b92b0',gap:'0.5rem',padding:'2rem'}}>
+                      <div style={{fontSize:'2.5rem'}}>🌱</div>
+                      <div style={{fontSize:'0.85rem'}}>No messages yet — be the first!</div>
+                    </div>
+                  )}
+                  {messages.map((msg,idx)=>{
+                    const prev = messages[idx-1];
+                    const compact = prev && prev.sender===msg.sender && (new Date(msg.created_at)-new Date(prev.created_at))<300000;
+                    const isOwn = msg.sender===myUsername;
+                    const rxEntries = Object.entries(msg.reactions||{}).filter(([,u])=>u.length>0);
+                    return (
+                      <div key={msg.id}
+                        onMouseEnter={()=>setHoveredId(msg.id)}
+                        onMouseLeave={()=>setHoveredId(null)}
+                        style={{display:'flex',gap:'0.55rem',padding:'0.22rem 0.4rem',borderRadius:'8px',background:hoveredId===msg.id?'rgba(255,255,255,0.025)':'transparent',position:'relative',marginTop:compact?'0.04rem':'0.6rem'}}>
+
+                        {/* Avatar column */}
+                        <div style={{width:'34px',flexShrink:0,paddingTop:'0.1rem'}}>
+                          {!compact && (
+                            <div style={{width:'32px',height:'32px',borderRadius:'50%',background:isOwn?'linear-gradient(135deg,#60a5fa,#3b82f6)':'rgba(96,165,250,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.68rem',color:isOwn?'#0a0e27':'#60a5fa',fontWeight:700}}>
+                              {initials(msg.sender)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{flex:1,minWidth:0}}>
+                          {/* Username + karma + timestamp */}
+                          {!compact && (
+                            <div style={{display:'flex',alignItems:'baseline',gap:'0.45rem',marginBottom:'0.1rem'}}>
+                              <span style={{color:isOwn?'#93c5fd':'#c0c7d8',fontWeight:700,fontSize:'0.85rem'}}>{msg.sender}</span>
+                              <span style={{background:'rgba(16,185,129,0.12)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:'10px',padding:'0 5px',color:'#10b981',fontSize:'0.65rem',fontWeight:700}}>⬆ {userKarma[msg.sender]||0}</span>
+                              <span style={{color:'#8b92b0',fontSize:'0.68rem'}}>{relTime(msg.created_at)}</span>
+                            </div>
+                          )}
+
+                          {/* Reply preview */}
+                          {msg.reply_to_id && (
+                            <div style={{background:'rgba(45,53,97,0.3)',borderLeft:'2px solid rgba(96,165,250,0.45)',borderRadius:'0 6px 6px 0',padding:'0.2rem 0.5rem',marginBottom:'0.2rem',cursor:'pointer'}}
+                              onClick={()=>{ const el=document.getElementById('msg-'+msg.reply_to_id); el?.scrollIntoView({behavior:'smooth',block:'center'}); }}>
+                              <span style={{color:'#60a5fa',fontSize:'0.72rem',fontWeight:600}}>↩ {msg.reply_to_sender}</span>
+                              <div style={{color:'#8b92b0',fontSize:'0.72rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'380px'}}>{msg.reply_to_preview}</div>
+                            </div>
+                          )}
+
+                          {/* Message content */}
+                          <div id={'msg-'+msg.id} style={{color:'#c0c7d8',fontSize:'0.875rem',lineHeight:1.55,wordBreak:'break-word',whiteSpace:'pre-wrap'}}>
+                            {editingId===msg.id ? (
+                              <div style={{display:'flex',gap:'0.4rem',alignItems:'flex-end'}}>
+                                <textarea value={editContent} onChange={e=>setEditContent(e.target.value)} autoFocus
+                                  style={{flex:1,background:'rgba(26,31,58,0.9)',border:'1px solid rgba(96,165,250,0.5)',borderRadius:'8px',padding:'0.45rem 0.65rem',color:'#e0e6ed',fontFamily:'Karla,sans-serif',fontSize:'0.875rem',resize:'none',minHeight:'56px',outline:'none'}}
+                                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();saveEdit(msg.id);}if(e.key==='Escape')setEditingId(null);}} />
+                                <div style={{display:'flex',flexDirection:'column',gap:'0.2rem'}}>
+                                  <button onClick={()=>saveEdit(msg.id)} style={{background:'rgba(16,185,129,0.2)',border:'1px solid rgba(16,185,129,0.4)',borderRadius:'6px',color:'#10b981',cursor:'pointer',padding:'0.2rem 0.45rem',fontSize:'0.72rem',fontFamily:'inherit'}}>Save</button>
+                                  <button onClick={()=>setEditingId(null)} style={{background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',color:'#8b92b0',cursor:'pointer',padding:'0.2rem 0.45rem',fontSize:'0.72rem',fontFamily:'inherit'}}>Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>{renderContent(msg.content)}{msg.edited && <span style={{color:'#8b92b0',fontSize:'0.65rem',marginLeft:'0.3rem'}}>(edited)</span>}</>
+                            )}
+                          </div>
+
+                          {/* Reactions row */}
+                          {rxEntries.length>0 && (
+                            <div style={{display:'flex',flexWrap:'wrap',gap:'0.2rem',marginTop:'0.3rem'}}>
+                              {rxEntries.map(([emoji,users])=>(
+                                <button key={emoji} onClick={()=>addReaction(msg.id,emoji)} title={users.join(', ')}
+                                  style={{padding:'1px 7px',borderRadius:'10px',border:users.includes(myUsername)?'1px solid rgba(96,165,250,0.5)':'1px solid rgba(45,53,97,0.5)',background:users.includes(myUsername)?'rgba(96,165,250,0.15)':'rgba(26,31,58,0.5)',cursor:'pointer',fontSize:'0.78rem',color:'#c0c7d8',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'0.18rem'}}>
+                                  {emoji}<span style={{fontSize:'0.72rem'}}>{users.length}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Hover action toolbar */}
+                        {hoveredId===msg.id && editingId!==msg.id && (
+                          <div style={{position:'absolute',right:'0.5rem',top:'-14px',display:'flex',gap:'0.15rem',background:'rgba(13,16,38,0.98)',border:'1px solid rgba(45,53,97,0.6)',borderRadius:'8px',padding:'0.18rem 0.3rem',zIndex:20,boxShadow:'0 4px 16px rgba(0,0,0,0.4)'}}>
+                            {QUICK_EMOJIS.map(emoji=>(
+                              <button key={emoji} onClick={e=>{e.stopPropagation();addReaction(msg.id,emoji);}}
+                                style={{background:'none',border:'none',cursor:'pointer',fontSize:'0.92rem',padding:'0.08rem 0.18rem',borderRadius:'4px',lineHeight:1}} title={`React ${emoji}`}>{emoji}</button>
+                            ))}
+                            <div style={{width:'1px',background:'rgba(45,53,97,0.6)',margin:'0.1rem 0.05rem'}} />
+                            <button onClick={()=>setReplyTo({id:msg.id,sender:msg.sender,content:msg.content})} title="Reply"
+                              style={{background:'none',border:'none',cursor:'pointer',color:'#8b92b0',fontSize:'0.78rem',padding:'0.08rem 0.28rem',borderRadius:'4px',fontFamily:'inherit'}}>↩</button>
+                            {isOwn && (
+                              <button onClick={()=>{setEditingId(msg.id);setEditContent(msg.content);}} title="Edit"
+                                style={{background:'none',border:'none',cursor:'pointer',color:'#8b92b0',fontSize:'0.78rem',padding:'0.08rem 0.28rem',borderRadius:'4px',fontFamily:'inherit'}}>✏</button>
+                            )}
+                            {(isOwn||currentUser.role==='admin'||currentUser.role==='owner') && (
+                              <button onClick={()=>deleteMessage(msg.id)} title="Delete"
+                                style={{background:'none',border:'none',cursor:'pointer',color:'#ef4444',fontSize:'0.78rem',padding:'0.08rem 0.28rem',borderRadius:'4px',fontFamily:'inherit'}}>🗑</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* ── Input area ── */}
+                <div style={{padding:'0.65rem 1rem',borderTop:'1px solid rgba(45,53,97,0.5)',background:'rgba(13,16,38,0.4)',flexShrink:0}}>
+                  {/* Reply banner */}
+                  {replyTo && (
+                    <div style={{background:'rgba(45,53,97,0.28)',borderLeft:'2px solid rgba(96,165,250,0.45)',borderRadius:'0 8px 8px 0',padding:'0.3rem 0.65rem',marginBottom:'0.45rem',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                      <div>
+                        <span style={{color:'#60a5fa',fontSize:'0.72rem',fontWeight:600}}>↩ Replying to {replyTo.sender}</span>
+                        <div style={{color:'#8b92b0',fontSize:'0.72rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'480px'}}>{replyTo.content.slice(0,100)}</div>
+                      </div>
+                      <button onClick={()=>setReplyTo(null)} style={{background:'none',border:'none',color:'#8b92b0',cursor:'pointer',fontSize:'1rem',flexShrink:0}}>×</button>
+                    </div>
+                  )}
+
+                  {/* Mention dropdown */}
+                  {mentionDrop.visible && mentionDrop.options.length>0 && (
+                    <div style={{position:'relative'}}>
+                      <div style={{position:'absolute',bottom:'100%',left:0,background:'rgba(13,16,35,0.98)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'10px',padding:'0.35rem',minWidth:'250px',maxHeight:'190px',overflowY:'auto',zIndex:100,marginBottom:'0.2rem',boxShadow:'0 8px 24px rgba(0,0,0,0.4)'}}>
+                        {mentionDrop.options.map((opt,i)=>(
+                          <div key={i} onClick={()=>selectMention(opt)}
+                            style={{padding:'0.38rem 0.55rem',borderRadius:'6px',cursor:'pointer',display:'flex',alignItems:'center',gap:'0.45rem',background:i===mentionDrop.idx?'rgba(96,165,250,0.15)':'transparent'}}>
+                            <span style={{fontSize:'0.82rem'}}>{opt.icon}</span>
+                            <div>
+                              <div style={{color:'#c0c7d8',fontSize:'0.8rem',fontWeight:600}}>{opt.label}</div>
+                              <div style={{color:'#8b92b0',fontSize:'0.67rem',textTransform:'capitalize'}}>{opt.type}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Input row */}
+                  <div style={{display:'flex',gap:'0.45rem',alignItems:'flex-end'}}>
+                    <textarea ref={inputRef} value={messageInput} onChange={handleInputChange} onKeyDown={handleInputKeyDown}
+                      placeholder={`Message ${activeChannel.type==='dm'?chDisplayName(activeChannel):'#'+chDisplayName(activeChannel)} — type @ to mention`}
+                      rows={1}
+                      style={{flex:1,background:'rgba(26,31,58,0.8)',border:'1px solid rgba(45,53,97,0.5)',borderRadius:'10px',padding:'0.55rem 0.8rem',color:'#e0e6ed',fontFamily:'Karla,sans-serif',fontSize:'0.88rem',resize:'none',outline:'none',boxSizing:'border-box',maxHeight:'110px',overflowY:'auto',lineHeight:'1.5',transition:'border-color 0.15s'}}
+                      onFocus={e=>e.target.style.borderColor='rgba(96,165,250,0.5)'}
+                      onBlur={e=>e.target.style.borderColor='rgba(45,53,97,0.5)'}
+                    />
+                    <button onClick={sendMessage} disabled={!messageInput.trim()||sendingMsg}
+                      style={{padding:'0.55rem 1rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'10px',color:'#0a0e27',cursor:messageInput.trim()?'pointer':'not-allowed',fontWeight:700,fontSize:'0.85rem',fontFamily:'inherit',opacity:messageInput.trim()&&!sendingMsg?1:0.5,flexShrink:0,transition:'all 0.15s'}}>
+                      {sendingMsg?'…':'Send'}
+                    </button>
+                  </div>
+                  <div style={{color:'#8b92b0',fontSize:'0.65rem',marginTop:'0.25rem'}}>Enter to send · Shift+Enter for new line · @ to mention users, events, topics</div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ── CREATE CHANNEL MODAL ── */}
+          {showNewChannel && (
+            <div className="modal" onClick={()=>setShowNewChannel(false)}>
+              <div className="modal-content" style={{maxWidth:'430px'}} onClick={e=>e.stopPropagation()}>
+                <div className="modal-header">
+                  <div className="modal-title">Create Channel</div>
+                  <button className="close" onClick={()=>setShowNewChannel(false)}>×</button>
+                </div>
+                <div style={{padding:'1.25rem',display:'flex',flexDirection:'column',gap:'0.8rem'}}>
+                  <div>
+                    <label style={{color:'#8b92b0',fontSize:'0.75rem',display:'block',marginBottom:'0.3rem'}}>Channel Name *</label>
+                    <input value={newChName} onChange={e=>setNewChName(e.target.value)} placeholder="e.g. 9-11-research"
+                      style={{width:'100%',background:'rgba(26,31,58,0.9)',border:'1px solid rgba(45,53,97,0.5)',borderRadius:'8px',padding:'0.48rem 0.7rem',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.85rem',outline:'none',boxSizing:'border-box'}} />
+                  </div>
+                  <div>
+                    <label style={{color:'#8b92b0',fontSize:'0.75rem',display:'block',marginBottom:'0.3rem'}}>Description</label>
+                    <input value={newChDesc} onChange={e=>setNewChDesc(e.target.value)} placeholder="What is this channel about?"
+                      style={{width:'100%',background:'rgba(26,31,58,0.9)',border:'1px solid rgba(45,53,97,0.5)',borderRadius:'8px',padding:'0.48rem 0.7rem',color:'#e0e6ed',fontFamily:'inherit',fontSize:'0.85rem',outline:'none',boxSizing:'border-box'}} />
+                  </div>
+                  <div>
+                    <label style={{color:'#8b92b0',fontSize:'0.75rem',display:'block',marginBottom:'0.3rem'}}>Add Members</label>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'0.3rem',padding:'0.35rem 0.55rem',background:'rgba(26,31,58,0.9)',border:'1px solid rgba(45,53,97,0.5)',borderRadius:'8px',minHeight:'38px'}}>
+                      {newChMembers.map(m=>(
+                        <span key={m} style={{background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'4px',padding:'1px 6px',fontSize:'0.75rem',color:'#60a5fa',display:'flex',alignItems:'center',gap:'0.2rem'}}>
+                          {m}<span onClick={()=>setNewChMembers(p=>p.filter(x=>x!==m))} style={{cursor:'pointer',color:'#8b92b0',fontWeight:700}}>×</span>
+                        </span>
+                      ))}
+                      <input placeholder="Username + Enter"
+                        style={{border:'none',background:'transparent',color:'#e0e6ed',outline:'none',fontFamily:'inherit',fontSize:'0.8rem',flex:1,minWidth:'90px'}}
+                        onKeyDown={e=>{if((e.key==='Enter'||e.key===',')&&e.target.value.trim()){e.preventDefault();const u=e.target.value.trim();if(!newChMembers.includes(u))setNewChMembers(p=>[...p,u]);e.target.value='';}}} />
+                    </div>
+                    {chatUsers.filter(u=>u.username!==myUsername).length>0 && (
+                      <div style={{display:'flex',flexWrap:'wrap',gap:'0.25rem',marginTop:'0.4rem'}}>
+                        {chatUsers.filter(u=>u.username!==myUsername&&!newChMembers.includes(u.username)).map(u=>(
+                          <button key={u.username} onClick={()=>setNewChMembers(p=>[...p,u.username])}
+                            style={{background:'rgba(26,31,58,0.6)',border:'1px solid rgba(45,53,97,0.4)',borderRadius:'5px',padding:'2px 8px',fontSize:'0.75rem',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit'}}>+ {u.username}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:'0.5rem'}}>
+                    <input type="checkbox" id="ch-priv" checked={newChPrivate} onChange={e=>setNewChPrivate(e.target.checked)} />
+                    <label htmlFor="ch-priv" style={{color:'#c0c7d8',fontSize:'0.82rem',cursor:'pointer'}}>🔒 Private channel</label>
+                  </div>
+                  <div style={{display:'flex',gap:'0.5rem',justifyContent:'flex-end',paddingTop:'0.25rem'}}>
+                    <button className="btn" onClick={()=>setShowNewChannel(false)} style={{background:'none',border:'1px solid rgba(61,69,99,0.5)',color:'#8b92b0',fontSize:'0.82rem'}}>Cancel</button>
+                    <button className="btn btn-primary" onClick={createChannel} disabled={!newChName.trim()} style={{fontSize:'0.82rem',opacity:newChName.trim()?1:0.5}}>Create Channel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── NEW DM MODAL ── */}
+          {showNewDM && (
+            <div className="modal" onClick={()=>setShowNewDM(false)}>
+              <div className="modal-content" style={{maxWidth:'370px'}} onClick={e=>e.stopPropagation()}>
+                <div className="modal-header">
+                  <div className="modal-title">New Direct Message</div>
+                  <button className="close" onClick={()=>setShowNewDM(false)}>×</button>
+                </div>
+                <div style={{padding:'1.25rem'}}>
+                  {chatUsers.filter(u=>u.username!==myUsername).length===0 ? (
+                    <div style={{color:'#8b92b0',fontSize:'0.85rem',textAlign:'center',padding:'1rem'}}>No other users yet</div>
+                  ) : (
+                    <div style={{display:'flex',flexDirection:'column',gap:'0.3rem',maxHeight:'280px',overflowY:'auto'}}>
+                      {chatUsers.filter(u=>u.username!==myUsername).map(u=>(
+                        <button key={u.username} onClick={()=>createDM(u.username)}
+                          style={{display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.5rem 0.65rem',background:'rgba(26,31,58,0.5)',border:'1px solid rgba(45,53,97,0.4)',borderRadius:'8px',cursor:'pointer',fontFamily:'inherit',textAlign:'left',transition:'border-color 0.15s'}}
+                          onMouseEnter={e=>e.currentTarget.style.borderColor='rgba(96,165,250,0.4)'}
+                          onMouseLeave={e=>e.currentTarget.style.borderColor='rgba(45,53,97,0.4)'}>
+                          <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.68rem',color:'#60a5fa',fontWeight:700,flexShrink:0}}>{initials(u.username)}</div>
+                          <div>
+                            <div style={{color:'#c0c7d8',fontSize:'0.83rem',fontWeight:600}}>{u.username}</div>
+                            <div style={{color:'#10b981',fontSize:'0.68rem'}}>⬆ {userKarma[u.username]||0} karma · {u.role}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    };
+
     // ─── MAIN APP ───
     function App() {
       const [data, setData] = useState(() => normalizeData(EMBEDDED_DATA));
@@ -2685,7 +3285,7 @@
       const [myPageTab, _setMyPageTab] = useState(() => sessionStorage.getItem('hdb_myPageTab') || 'timeline');
       const setMyPageTab = (t) => { sessionStorage.setItem('hdb_myPageTab', t); _setMyPageTab(t); };
 
-      const TABS = ['dashboard','timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications','feedback'];
+      const TABS = ['dashboard','timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications','feedback','chat'];
 
       const [mobileNavOpen, setMobileNavOpen] = useState(false);
       const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'dashboard');
@@ -6401,6 +7001,7 @@
                    : tab==='sessions' ? '🗺 Research Sessions'
                    : tab==='notifications' ? `🔔 Notifications${notifUnreadCount>0?' ('+notifUnreadCount+')':''}`
                    : tab==='feedback' ? '💬 Feedback'
+                   : tab==='chat' ? '💬 Chat'
                    : tab.charAt(0).toUpperCase()+tab.slice(1)}
                 </button>
               ))}
@@ -6453,7 +7054,7 @@
             )}
 
             {/* Show filters on all tabs except upload, account, presentations, companion, and notifications */}
-            {activeTab !== 'dashboard' && activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && <FiltersComponent {...filterProps} />}
+            {activeTab !== 'dashboard' && activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && activeTab !== 'chat' && <FiltersComponent {...filterProps} />}
 
             {/* DASHBOARD */}
             {activeTab === 'dashboard' && <DashboardPage
@@ -7536,6 +8137,17 @@
 
             {/* FEEDBACK PAGE */}
             {activeTab === 'feedback' && <FeedbackPage currentUser={currentUser} />}
+
+            {/* CHAT PAGE */}
+            {activeTab === 'chat' && currentUser && <ChatPage
+              currentUser={currentUser}
+              allEvents={data}
+              allTopics={[...new Set(data.flatMap(e => e.topics||[]))].sort()}
+              allPeople={[...new Set(data.flatMap(e => e.people||[]))].sort()}
+              allOrgs={[...new Set(data.flatMap(e => e.organizations||[]))].sort()}
+              openEventModal={openEventModal}
+              setActiveTab={setActiveTab}
+            />}
 
           </main>
 
