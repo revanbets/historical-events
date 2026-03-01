@@ -2670,6 +2670,25 @@
       );
     };
 
+    // ─── CHAT ERROR BOUNDARY ───
+    class ChatErrorBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { error: null }; }
+      static getDerivedStateFromError(err) { return { error: err }; }
+      componentDidCatch(err, info) { console.error('ChatPage error:', err, info); }
+      render() {
+        if (this.state.error) {
+          return (
+            <div style={{padding:'2rem',color:'#ef4444',background:'rgba(239,68,68,0.08)',borderRadius:'12px',border:'1px solid rgba(239,68,68,0.3)'}}>
+              <div style={{fontWeight:700,marginBottom:'0.5rem'}}>Chat failed to load</div>
+              <pre style={{fontSize:'0.75rem',color:'#fca5a5',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{String(this.state.error)}</pre>
+              <button onClick={()=>this.setState({error:null})} style={{marginTop:'1rem',padding:'0.4rem 0.9rem',background:'rgba(239,68,68,0.2)',border:'1px solid rgba(239,68,68,0.4)',borderRadius:'6px',color:'#ef4444',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>Retry</button>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
     // ─── CHAT PAGE ───
     const ChatPage = ({ currentUser, allEvents, allTopics, allPeople, allOrgs, openEventModal, setActiveTab }) => {
       const myUsername = currentUser.username;
@@ -2916,7 +2935,7 @@
       const QUICK_EMOJIS  = ['👍','❤️','😂','😮','🔥','✅'];
 
       return (
-        <div style={{display:'flex',height:'calc(100vh - 140px)',background:'rgba(10,14,39,0.4)',borderRadius:'12px',overflow:'hidden',border:'1px solid rgba(45,53,97,0.4)'}}>
+        <div style={{display:'flex',height:'calc(100vh - 260px)',minHeight:'500px',background:'rgba(10,14,39,0.4)',borderRadius:'12px',overflow:'hidden',border:'1px solid rgba(45,53,97,0.4)'}}>
 
           {/* ── SIDEBAR ── */}
           <div style={{width:'248px',flexShrink:0,borderRight:'1px solid rgba(45,53,97,0.5)',display:'flex',flexDirection:'column',background:'rgba(13,16,38,0.7)'}}>
@@ -8139,15 +8158,19 @@
             {activeTab === 'feedback' && <FeedbackPage currentUser={currentUser} />}
 
             {/* CHAT PAGE */}
-            {activeTab === 'chat' && currentUser && <ChatPage
-              currentUser={currentUser}
-              allEvents={data}
-              allTopics={[...new Set(data.flatMap(e => e.topics||[]))].sort()}
-              allPeople={[...new Set(data.flatMap(e => e.people||[]))].sort()}
-              allOrgs={[...new Set(data.flatMap(e => e.organizations||[]))].sort()}
-              openEventModal={openEventModal}
-              setActiveTab={setActiveTab}
-            />}
+            {activeTab === 'chat' && currentUser && (
+              <ChatErrorBoundary>
+                <ChatPage
+                  currentUser={currentUser}
+                  allEvents={Array.isArray(data) ? data : []}
+                  allTopics={Array.isArray(data) ? [...new Set(data.flatMap(e => Array.isArray(e.topics) ? e.topics : (e.topics ? [e.topics] : [])))].filter(Boolean).sort() : []}
+                  allPeople={Array.isArray(data) ? [...new Set(data.flatMap(e => Array.isArray(e.people) ? e.people : (e.people ? [e.people] : [])))].filter(Boolean).sort() : []}
+                  allOrgs={Array.isArray(data) ? [...new Set(data.flatMap(e => Array.isArray(e.organizations) ? e.organizations : (e.organizations ? [e.organizations] : [])))].filter(Boolean).sort() : []}
+                  openEventModal={openEventModal}
+                  setActiveTab={setActiveTab}
+                />
+              </ChatErrorBoundary>
+            )}
 
           </main>
 
