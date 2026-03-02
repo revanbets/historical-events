@@ -454,12 +454,20 @@
       const [username, setUsername] = useState('');
       const [password, setPassword] = useState('');
       const [error, setError] = useState('');
+      const [successMsg, setSuccessMsg] = useState('');
       const [loading, setLoading] = useState(false);
-      const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
+      const [step, setStep] = useState('credentials'); // 'credentials' | 'otp' | 'forgot_email' | 'forgot_otp'
       const [otp, setOtp] = useState('');
       const [otpLoading, setOtpLoading] = useState(false);
       const [pendingUser, setPendingUser] = useState(null);
       const [pendingOtp, setPendingOtp] = useState(null);   // generated code stored in state
+      // Forgot-password state
+      const [fpEmail, setFpEmail] = useState('');
+      const [fpNew, setFpNew] = useState('');
+      const [fpConfirm, setFpConfirm] = useState('');
+      const [fpOtp, setFpOtp] = useState('');
+      const [fpPendingOtp, setFpPendingOtp] = useState(null);
+      const [fpLoading, setFpLoading] = useState(false);
 
       // Generate a random 6-digit code and email it via EmailJS (runs entirely in the browser)
       const sendOtpEmail = async (email) => {
@@ -513,6 +521,101 @@
         } catch(e) { setError('Could not resend code.'); }
       };
 
+      const startForgotPassword = async () => {
+        const em = fpEmail.trim().toLowerCase();
+        if (!em) { setError('Please enter your email address.'); return; }
+        if (!isEmailFormat(em)) {
+          setError('Only email-based accounts can use password reset. Contact an admin to reset a username-only account.');
+          return;
+        }
+        setFpLoading(true); setError('');
+        const { data: userRow } = await supabaseClient.from('users').select('username').eq('username', em).single();
+        if (!userRow) { setFpLoading(false); setError('No account found with that email address.'); return; }
+        try {
+          const code = String(Math.floor(100000 + Math.random() * 900000));
+          setFpPendingOtp(code);
+          await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: em, code }, EMAILJS_PUBLIC_KEY);
+          setFpLoading(false);
+          setStep('forgot_otp');
+        } catch(e) {
+          setFpLoading(false);
+          setError('Could not send reset code. Check your email address and try again.');
+        }
+      };
+
+      const submitForgotPassword = async () => {
+        if (fpOtp.trim().length !== 6) { setError('Enter the 6-digit code.'); return; }
+        if (!fpNew || fpNew.length < 6) { setError('New password must be at least 6 characters.'); return; }
+        if (fpNew !== fpConfirm) { setError('Passwords do not match.'); return; }
+        if (fpOtp.trim() !== fpPendingOtp) { setError('Invalid code. Please try again.'); return; }
+        setFpLoading(true); setError('');
+        const { error: updErr } = await supabaseClient.from('users').update({ password: fpNew }).eq('username', fpEmail.trim().toLowerCase());
+        setFpLoading(false);
+        if (updErr) { setError('Failed to update password: ' + updErr.message); return; }
+        setFpEmail(''); setFpNew(''); setFpConfirm(''); setFpOtp(''); setFpPendingOtp(null);
+        setStep('credentials');
+        setSuccessMsg('Password updated! You can now sign in with your new password.');
+      };
+
+      if (step === 'forgot_email') {
+        return (
+          <div className="auth-screen">
+            <div className="auth-card">
+              <div style={{marginBottom:'2rem'}}>
+                <div className="auth-title">Reset Password</div>
+                <div className="auth-subtitle">Enter your email to receive a reset code</div>
+              </div>
+              {error && <div className="auth-error">{error}</div>}
+              <div className="auth-field">
+                <label className="auth-label">Email Address</label>
+                <input className="auth-input" type="email" placeholder="your@email.com" value={fpEmail}
+                  onChange={e=>setFpEmail(e.target.value)} autoFocus
+                  onKeyDown={e=>{if(e.key==='Enter')startForgotPassword();}} />
+              </div>
+              <button className="auth-btn" onClick={startForgotPassword} disabled={fpLoading}>
+                {fpLoading ? 'Sending…' : 'Send Reset Code →'}
+              </button>
+              <div className="auth-switch"><span onClick={()=>{setStep('credentials');setError('');}}>← Back to Sign In</span></div>
+            </div>
+          </div>
+        );
+      }
+
+      if (step === 'forgot_otp') {
+        return (
+          <div className="auth-screen">
+            <div className="auth-card">
+              <div style={{marginBottom:'1.5rem'}}>
+                <div className="auth-title">Reset Password</div>
+                <div className="auth-subtitle">Code sent to<br/><strong style={{color:'#60a5fa'}}>{fpEmail.trim()}</strong></div>
+              </div>
+              {error && <div className="auth-error">{error}</div>}
+              <div className="auth-field">
+                <label className="auth-label">Verification Code</label>
+                <input className="auth-input" type="text" inputMode="numeric" placeholder="000000" maxLength={6}
+                  value={fpOtp} onChange={e=>setFpOtp(e.target.value.replace(/\D/g,''))}
+                  style={{letterSpacing:'0.6rem',fontSize:'1.4rem',textAlign:'center'}} autoFocus />
+              </div>
+              <div className="auth-field">
+                <label className="auth-label">New Password</label>
+                <input className="auth-input" type="password" placeholder="Min. 6 characters"
+                  value={fpNew} onChange={e=>setFpNew(e.target.value)} />
+              </div>
+              <div className="auth-field">
+                <label className="auth-label">Confirm New Password</label>
+                <input className="auth-input" type="password" placeholder="Re-enter new password"
+                  value={fpConfirm} onChange={e=>setFpConfirm(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter')submitForgotPassword();}} />
+              </div>
+              <button className="auth-btn" onClick={submitForgotPassword} disabled={fpLoading}>
+                {fpLoading ? 'Updating…' : 'Set New Password →'}
+              </button>
+              <div className="auth-switch"><span onClick={()=>{setStep('forgot_email');setError('');}}>← Back</span></div>
+            </div>
+          </div>
+        );
+      }
+
       if (step === 'otp') {
         return (
           <div className="auth-screen">
@@ -556,8 +659,15 @@
               <input className="auth-input" type="password" placeholder="Enter password" value={password}
                 onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit();}} />
             </div>
-            <button className="auth-btn" onClick={submit} disabled={loading}>{loading ? loadingMsg : 'Sign In →'}</button>
+            <button className="auth-btn" onClick={submit} disabled={loading}>{loading ? 'Signing in…' : 'Sign In →'}</button>
+            {successMsg && <div style={{background:'rgba(16,185,129,0.15)',border:'1px solid rgba(16,185,129,0.4)',color:'#10b981',padding:'0.6rem 0.85rem',borderRadius:'8px',fontSize:'0.85rem',textAlign:'center',marginTop:'0.5rem'}}>{successMsg}</div>}
             <div className="auth-switch">Don't have an account? <span onClick={onGoSignup}>Create one</span></div>
+            <div style={{textAlign:'center',marginTop:'0.4rem'}}>
+              <span style={{color:'#8b92b0',fontSize:'0.82rem',cursor:'pointer',textDecoration:'underline'}}
+                onClick={()=>{setStep('forgot_email');setFpEmail(username);setError('');setSuccessMsg('');}}>
+                Forgot password?
+              </span>
+            </div>
           </div>
         </div>
       );
@@ -4592,8 +4702,9 @@
       };
       const deleteUserAccount = async (username) => {
         const { error } = await supabaseClient.from('users').delete().eq('username', username.toLowerCase());
-        if (error) { console.error('Delete user error:', error); return; }
+        if (error) { console.error('Delete user error:', error); return false; }
         setAdminUsers(prev => prev.filter(u => u.username !== username));
+        return true;
       };
 
       // ── Notification helpers ──
@@ -6474,11 +6585,28 @@
                 <div style={{padding:'1.5rem 2rem', maxWidth:'520px'}}>
                   <div style={{fontSize:'1.1rem',fontWeight:700,color:'#e0e6ed',marginBottom:'1.5rem'}}>Account Settings</div>
 
+                  {/* Account Overview */}
+                  <div style={sec}>
+                    <div style={secTitle}>Account Overview</div>
+                    <div style={{display:'grid',gridTemplateColumns:'130px 1fr',gap:'0.6rem 1rem',alignItems:'center'}}>
+                      <span style={{...lbl,margin:0}}>Username</span>
+                      <span style={{color:'#e0e6ed',fontWeight:700,fontFamily:"'Space Mono',monospace",fontSize:'0.9rem'}}>{currentUser.username}</span>
+                      <span style={{...lbl,margin:0}}>Role</span>
+                      <span><span className={`role-badge role-${currentUser.role}`} style={{fontSize:'0.75rem',padding:'0.2rem 0.6rem'}}>{currentUser.role}</span></span>
+                      <span style={{...lbl,margin:0}}>Member Since</span>
+                      <span style={{color:'#c0c7d8',fontSize:'0.85rem'}}>{memberSince}</span>
+                      <span style={{...lbl,margin:0}}>Total Uploads</span>
+                      <span style={{color:'#60a5fa',fontWeight:700,fontFamily:"'Space Mono',monospace",fontSize:'0.9rem'}}>{myUploads.length}</span>
+                      <span style={{...lbl,margin:0}}>Account Type</span>
+                      <span style={{color:'#c0c7d8',fontSize:'0.85rem'}}>{isEmailFormat(currentUser.username) ? '📧 Email (2FA on login)' : '👤 Username'}</span>
+                    </div>
+                  </div>
+
                   {/* Change Email / Username */}
                   <div style={sec}>
                     <div style={secTitle}>Change Email / Username</div>
                     <div style={{fontSize:'0.8rem',color:'#8b92b0',marginBottom:'1rem'}}>This is what you use to log in. Email accounts also require 2-factor verification.</div>
-                    <label style={lbl}>Email or Username</label>
+                    <label style={lbl}>New Email or Username</label>
                     <input style={fld} type="text" value={emailVal} onChange={e=>setEmailVal(e.target.value)}
                       onKeyDown={e=>{if(e.key==='Enter')handleEmailChange();}} />
                     <button className="btn btn-primary" style={{padding:'0.6rem 1.5rem',fontSize:'0.85rem'}} onClick={handleEmailChange} disabled={emailLoading}>
@@ -6502,6 +6630,24 @@
                     </button>
                     {renderMsg(pwdMsg)}
                   </div>
+
+                  {/* Danger Zone — self-delete (not available to owner) */}
+                  {currentUser.role !== 'owner' && (
+                    <div style={{...sec, borderColor:'rgba(239,68,68,0.35)'}}>
+                      <div style={{...secTitle, color:'#ef4444'}}>Danger Zone</div>
+                      <div style={{fontSize:'0.8rem',color:'#8b92b0',marginBottom:'1rem'}}>Permanently delete your account. This cannot be undone. All your uploaded events will remain in the database.</div>
+                      <button className="btn btn-danger" style={{padding:'0.6rem 1.5rem',fontSize:'0.85rem'}}
+                        onClick={async () => {
+                          if (!window.confirm('Delete your account permanently? This cannot be undone.')) return;
+                          if (!window.confirm(`Final confirmation: delete "${currentUser.username}" forever?`)) return;
+                          const { error } = await supabaseClient.from('users').delete().eq('username', currentUser.username);
+                          if (error) { alert('Failed to delete account: ' + error.message); return; }
+                          logout();
+                        }}>
+                        🗑 Delete My Account
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -6809,7 +6955,11 @@
           setUsers(updated);
         };
         const handleDelete = async (username) => {
-          await deleteUserAccount(username);
+          const ok = await deleteUserAccount(username);
+          if (!ok) {
+            alert(`Failed to delete "${username}". The Supabase row-level security policy may be blocking this delete. Check the browser console (F12) for details.`);
+            return;
+          }
           const updated = await getAllUsers();
           setUsers(updated);
         };
