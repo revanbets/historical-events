@@ -96,6 +96,26 @@
     .timeline-event.below .tl-year { bottom: calc(50% + 10px); transform: translateX(-50%); }
     .network { background: rgba(26,31,58,0.6); border-radius: 16px; border: 2px solid rgba(61,69,99,0.5); height: 700px; position: relative; backdrop-filter: blur(10px); }
     #network-graph { width: 100%; height: 100%; border-radius: 16px; }
+    /* ── Custom Network Builder ── */
+    .cnet-sub-tabs { display: flex; gap: 0.4rem; margin-bottom: 0.75rem; align-items: center; }
+    .cnet-toolbar { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; background: rgba(10,13,28,0.85); border: 1px solid rgba(61,69,99,0.5); border-radius: 10px; padding: 0.55rem 0.9rem; }
+    .cnet-toolbar button { background: rgba(96,165,250,0.07); border: 1px solid rgba(96,165,250,0.22); color: #8b9ab8; border-radius: 7px; padding: 0.32rem 0.7rem; font-size: 0.76rem; cursor: pointer; transition: all 0.15s; white-space: nowrap; font-family: inherit; }
+    .cnet-toolbar button:hover { background: rgba(96,165,250,0.16); color: #e2e8f0; border-color: rgba(96,165,250,0.45); }
+    .cnet-toolbar button.active { background: rgba(96,165,250,0.18); color: #60a5fa; border-color: rgba(96,165,250,0.5); }
+    .cnet-toolbar .sep { width: 1px; height: 22px; background: rgba(61,69,99,0.55); margin: 0 0.05rem; flex-shrink: 0; }
+    .cnet-layout { display: flex; gap: 0.75rem; height: 650px; }
+    .cnet-sidebar { width: 245px; flex-shrink: 0; display: flex; flex-direction: column; gap: 0.8rem; background: rgba(10,13,28,0.85); border: 1px solid rgba(61,69,99,0.5); border-radius: 14px; padding: 1rem; overflow-y: auto; }
+    .cnet-canvas-wrap { flex: 1; position: relative; background: rgba(26,31,58,0.6); border: 2px solid rgba(61,69,99,0.5); border-radius: 16px; overflow: hidden; }
+    #custom-network-graph { width: 100%; height: 100%; }
+    .cnet-search-results { background: rgba(10,13,28,0.97); border: 1px solid rgba(61,69,99,0.55); border-radius: 8px; max-height: 195px; overflow-y: auto; margin-top: 0.3rem; }
+    .cnet-result-row { display: flex; align-items: center; gap: 0.45rem; padding: 0.42rem 0.6rem; cursor: pointer; border-bottom: 1px solid rgba(45,53,97,0.3); transition: background 0.1s; }
+    .cnet-result-row:last-child { border-bottom: none; }
+    .cnet-result-row:hover { background: rgba(96,165,250,0.09); }
+    .cnet-badge { font-size: 0.58rem; font-weight: 700; padding: 2px 5px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+    .cnet-node-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.28rem 0.4rem; border-radius: 6px; border: 1px solid rgba(45,53,97,0.3); background: rgba(26,31,58,0.45); margin-bottom: 0.22rem; font-size: 0.71rem; color: #8b9ab8; }
+    .cnet-node-row button { background: none; border: none; color: #4b5563; cursor: pointer; font-size: 0.72rem; margin-left: auto; padding: 0 1px; line-height: 1; flex-shrink: 0; }
+    .cnet-node-row button:hover { color: #ef4444; }
+    .cnet-empty-state { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; pointer-events: none; }
     .spreadsheet { background: rgba(26,31,58,0.6); border-radius: 16px; padding: 1.5rem; border: 2px solid rgba(61,69,99,0.5); overflow-x: auto; backdrop-filter: blur(10px); }
     .table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
     .table th { background: rgba(37,43,74,0.8); padding: 1.25rem; text-align: left; font-weight: 700; color: #60a5fa; border-bottom: 3px solid rgba(61,69,99,0.8); position: sticky; top: 0; z-index: 10; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.75rem; }
@@ -3503,6 +3523,19 @@
       const [timestampEnd, setTimestampEnd] = useState('');
       const [isTimelineFullscreen, setIsTimelineFullscreen] = useState(false);
       const [isNetworkFullscreen, setIsNetworkFullscreen] = useState(false);
+      // ── Custom Network Builder ──
+      const [networkSubTab, setNetworkSubTab] = useState('auto');
+      const [netSearchQuery, setNetSearchQuery] = useState('');
+      const [netSearchResults, setNetSearchResults] = useState([]);
+      const [netPhysicsOn, setNetPhysicsOn] = useState(true);
+      const netPhysicsOnRef = React.useRef(true);
+      const [netHiddenCats, setNetHiddenCats] = useState(new Set());
+      const [customNetCanvasNodes, setCustomNetCanvasNodes] = useState([]); // [{id,label,type}] for sidebar list
+      const customNetRef = React.useRef(null);       // vis.Network instance
+      const customNodesRef = React.useRef(null);     // vis.DataSet (nodes)
+      const customEdgesRef = React.useRef(null);     // vis.DataSet (edges)
+      const customNetNodeDataRef = React.useRef([]); // full node objects for re-hydration
+      const customNetEdgeDataRef = React.useRef([]); // full edge objects for re-hydration
       const [isProcessing, setIsProcessing] = useState(false);
       const [uploadTab, _setUploadTab] = useState(() => sessionStorage.getItem('hdb_uploadTab') || 'new');
       const setUploadTab = (t) => { sessionStorage.setItem('hdb_uploadTab', t); _setUploadTab(t); };
@@ -5087,6 +5120,232 @@
         }
       };
 
+      // ── Custom Network Builder helpers ────────────────────────────────────────
+      const CNET_STYLE = {
+        event:  { shape:'ellipse',  color:{ background:'#1e3a5f', border:'#60a5fa', highlight:{ background:'#1d4ed8', border:'#93c5fd' } }, font:{ color:'#e2e8f0', size:12 } },
+        person: { shape:'box',      color:{ background:'#3b0764', border:'#c084fc', highlight:{ background:'#6d28d9', border:'#e9d5ff' } }, font:{ color:'#f0e6ff', size:12 } },
+        org:    { shape:'diamond',  color:{ background:'#064e3b', border:'#34d399', highlight:{ background:'#059669', border:'#6ee7b7' } }, font:{ color:'#d1fae5', size:12 } },
+        topic:  { shape:'triangle', color:{ background:'#7c2d12', border:'#fb923c', highlight:{ background:'#c2410c', border:'#fdba74' } }, font:{ color:'#ffedd5', size:12 } },
+      };
+
+      // Add a node to the live DataSet + re-hydration ref; returns true if actually added
+      const cnetAddNodeSafe = (nodeData) => {
+        if (!customNodesRef.current || customNodesRef.current.get(nodeData.id)) return false;
+        customNodesRef.current.add(nodeData);
+        customNetNodeDataRef.current = [...customNetNodeDataRef.current, nodeData];
+        return true;
+      };
+
+      // Add an edge (canonical id = sorted "from--to") without duplicates
+      const cnetAddEdgeSafe = (from, to) => {
+        if (!customEdgesRef.current) return;
+        const id = [String(from), String(to)].sort().join('--');
+        if (customEdgesRef.current.get(id)) return;
+        const edgeData = { id, from, to, color:{ color:'#4b5280', hover:'#7090c0' } };
+        customEdgesRef.current.add(edgeData);
+        customNetEdgeDataRef.current = [...customNetEdgeDataRef.current, edgeData];
+      };
+
+      // Recalculate degree centrality and update node `value` for scaling
+      const updateCnetDegrees = () => {
+        if (!customNodesRef.current || !customEdgesRef.current) return;
+        const nodeIds = customNodesRef.current.getIds();
+        const allEdges = customEdgesRef.current.get();
+        const deg = {};
+        nodeIds.forEach(id => { deg[id] = 0; });
+        allEdges.forEach(e => {
+          if (deg[e.from] !== undefined) deg[e.from]++;
+          if (deg[e.to] !== undefined) deg[e.to]++;
+        });
+        customNodesRef.current.update(nodeIds.map(id => ({ id, value: Math.max(1, deg[id]) })));
+      };
+
+      // Search entire database and populate autocomplete results
+      const handleNetSearch = (q) => {
+        setNetSearchQuery(q);
+        if (!q.trim() || q.length < 2) { setNetSearchResults([]); return; }
+        const qL = q.toLowerCase();
+        const results = [];
+        const seen = { person: new Set(), org: new Set(), topic: new Set() };
+        (data.events||[]).filter(e => (e.title||'').toLowerCase().includes(qL)).slice(0, 6)
+          .forEach(e => results.push({ type:'event', id: e.id, label: e.title||'Untitled' }));
+        (data.events||[]).forEach(e => {
+          (e.people||[]).forEach(p => { if (p.toLowerCase().includes(qL) && !seen.person.has(p)) { seen.person.add(p); results.push({ type:'person', id:'p-'+p, label:p }); } });
+          (e.organizations||[]).forEach(o => { if (o.toLowerCase().includes(qL) && !seen.org.has(o)) { seen.org.add(o); results.push({ type:'org', id:'o-'+o, label:o }); } });
+          (e.topics||[]).forEach(t => { if (t.toLowerCase().includes(qL) && !seen.topic.has(t)) { seen.topic.add(t); results.push({ type:'topic', id:'t-'+t, label:t }); } });
+        });
+        setNetSearchResults(results.slice(0, 16));
+      };
+
+      // Add a searched item to the canvas
+      const addNodeToCustomNet = (item) => {
+        const { type, label } = item;
+        const nodeId = type === 'event' ? item.id : `${type[0]}-${label}`;
+        const trunc = label.length > 38 ? label.substring(0, 36) + '…' : label;
+        const nodeData = { id: nodeId, label: trunc, title: label, value: 1, _type: type, ...CNET_STYLE[type] };
+        if (cnetAddNodeSafe(nodeData)) {
+          setCustomNetCanvasNodes(prev => [...prev, { id: nodeId, label, type }]);
+          updateCnetDegrees();
+          if (customNetRef.current) {
+            customNetRef.current.setOptions({ physics: true });
+            setTimeout(() => { if (customNetRef.current) customNetRef.current.setOptions({ physics: netPhysicsOnRef.current }); }, 2000);
+          }
+        }
+        setNetSearchQuery('');
+        setNetSearchResults([]);
+      };
+
+      // Double-click: fetch and render immediate connections of a node
+      const expandCustomNode = (nodeId) => {
+        if (!customNodesRef.current || !customEdgesRef.current) return;
+        const node = customNodesRef.current.get(nodeId);
+        if (!node) return;
+        let added = false;
+        const addNew = (id, nodeData) => {
+          if (cnetAddNodeSafe(nodeData)) {
+            setCustomNetCanvasNodes(prev => prev.find(n => n.id === id) ? prev : [...prev, { id, label: nodeData.title || nodeData.label, type: nodeData._type }]);
+            added = true;
+          }
+        };
+        if (node._type === 'event') {
+          const ev = (data.events||[]).find(e => e.id === nodeId);
+          if (!ev) return;
+          (ev.people||[]).forEach(p => {
+            const pid = 'p-'+p;
+            addNew(pid, { id:pid, label:p, title:p, value:1, _type:'person', ...CNET_STYLE.person });
+            cnetAddEdgeSafe(nodeId, pid);
+          });
+          (ev.organizations||[]).forEach(o => {
+            const oid = 'o-'+o;
+            addNew(oid, { id:oid, label:o, title:o, value:1, _type:'org', ...CNET_STYLE.org });
+            cnetAddEdgeSafe(nodeId, oid);
+          });
+          (ev.topics||[]).forEach(t => {
+            const tid = 't-'+t;
+            addNew(tid, { id:tid, label:t, title:t, value:1, _type:'topic', ...CNET_STYLE.topic });
+            cnetAddEdgeSafe(nodeId, tid);
+          });
+        } else {
+          const field = node._type === 'person' ? 'people' : node._type === 'org' ? 'organizations' : 'topics';
+          const entityLabel = node.title || node.label;
+          (data.events||[]).filter(e => (e[field]||[]).includes(entityLabel)).slice(0, 15).forEach(ev => {
+            const evLabel = ev.title||'Untitled';
+            addNew(ev.id, { id:ev.id, label: evLabel.length>38?evLabel.substring(0,36)+'…':evLabel, title:evLabel, value:1, _type:'event', ...CNET_STYLE.event });
+            cnetAddEdgeSafe(nodeId, ev.id);
+          });
+        }
+        if (added) {
+          updateCnetDegrees();
+          if (customNetRef.current) {
+            customNetRef.current.setOptions({ physics: true });
+            setTimeout(() => { if (customNetRef.current) customNetRef.current.setOptions({ physics: netPhysicsOnRef.current }); }, 2500);
+          }
+        }
+      };
+
+      // Remove a node (and its edges) from the canvas
+      const removeCustomNode = (nodeId) => {
+        if (!customNodesRef.current || !customEdgesRef.current) return;
+        const connEdges = customEdgesRef.current.get().filter(e => e.from === nodeId || e.to === nodeId);
+        customEdgesRef.current.remove(connEdges.map(e => e.id));
+        customNetEdgeDataRef.current = customNetEdgeDataRef.current.filter(e => e.from !== nodeId && e.to !== nodeId);
+        customNodesRef.current.remove(nodeId);
+        customNetNodeDataRef.current = customNetNodeDataRef.current.filter(n => n.id !== nodeId);
+        setCustomNetCanvasNodes(prev => prev.filter(n => n.id !== nodeId));
+        updateCnetDegrees();
+      };
+
+      // Toggle a category's visibility on the canvas
+      const toggleNetCategory = (cat) => {
+        setNetHiddenCats(prev => {
+          const next = new Set(prev);
+          if (next.has(cat)) next.delete(cat); else next.add(cat);
+          if (customNodesRef.current) {
+            const updates = customNodesRef.current.get().filter(n => n._type === cat).map(n => ({ id:n.id, hidden: next.has(cat) }));
+            if (updates.length) customNodesRef.current.update(updates);
+          }
+          return next;
+        });
+      };
+
+      // Toolbar controls
+      const toggleNetPhysics = () => {
+        const newVal = !netPhysicsOnRef.current;
+        netPhysicsOnRef.current = newVal;
+        setNetPhysicsOn(newVal);
+        if (customNetRef.current) customNetRef.current.setOptions({ physics: newVal });
+      };
+      const resetNetLayout = () => {
+        if (!customNetRef.current) return;
+        customNetRef.current.setOptions({ physics: true });
+        setTimeout(() => { if (customNetRef.current) customNetRef.current.setOptions({ physics: netPhysicsOnRef.current }); }, 2500);
+      };
+      const fitCustomNetwork = () => {
+        if (customNetRef.current) customNetRef.current.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+      };
+      const exportCustomNetworkPNG = () => {
+        const canvas = document.querySelector('#custom-network-graph canvas');
+        if (!canvas) return;
+        const link = document.createElement('a');
+        link.download = 'knowledge-graph.png';
+        link.href = canvas.toDataURL('image/png', 1.0);
+        link.click();
+      };
+      const clearCustomNetwork = () => {
+        if (customNodesRef.current) customNodesRef.current.clear();
+        if (customEdgesRef.current) customEdgesRef.current.clear();
+        customNetNodeDataRef.current = [];
+        customNetEdgeDataRef.current = [];
+        setCustomNetCanvasNodes([]);
+      };
+
+      // Initialize (or re-initialize) the custom vis.Network instance
+      const initCustomNetwork = () => {
+        const container = document.getElementById('custom-network-graph');
+        if (!container) return;
+        // Destroy any previous instance so we don't leak event listeners
+        if (customNetRef.current) { try { customNetRef.current.destroy(); } catch(e){} customNetRef.current = null; }
+        // Re-hydrate DataSets from stored data
+        const nodesDS = new vis.DataSet(customNetNodeDataRef.current);
+        const edgesDS = new vis.DataSet(customNetEdgeDataRef.current);
+        customNodesRef.current = nodesDS;
+        customEdgesRef.current = edgesDS;
+        // Apply any hidden category state
+        const hiddenUpdates = nodesDS.get().filter(n => netHiddenCats.has(n._type)).map(n => ({ id:n.id, hidden:true }));
+        if (hiddenUpdates.length) nodesDS.update(hiddenUpdates);
+        const net = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+          nodes: { margin:{ top:8, right:12, bottom:8, left:12 }, borderWidth:2, scaling:{ min:15, max:42, label:{ enabled:true, min:11, max:16 } } },
+          edges: { color:{ color:'#4b5280', hover:'#7090c0' }, smooth:{ type:'dynamic' }, hoverWidth:2 },
+          physics: { barnesHut:{ gravitationalConstant:-2000, centralGravity:0.3, springLength:95 }, stabilization:{ iterations:200 } },
+          interaction: { hover:true, tooltipDelay:150, navigationButtons:false }
+        });
+        customNetRef.current = net;
+        net.once('stabilizationIterationsDone', () => net.setOptions({ physics: netPhysicsOnRef.current }));
+        // Single-click → open modal
+        net.on('click', params => {
+          if (params.nodes.length > 0) {
+            const id = params.nodes[0];
+            const node = customNodesRef.current && customNodesRef.current.get(id);
+            if (!node) return;
+            const entityName = node.title || node.label;
+            if (node._type === 'person') openEntityDetail('person', entityName);
+            else if (node._type === 'org') openEntityDetail('org', entityName);
+            else if (node._type === 'topic') openEntityDetail('topic', entityName);
+            else { const ev = (data.events||[]).find(e => e.id === id); if (ev) openEventModal(ev, 'network'); }
+          }
+        });
+        // Double-click → expand connections
+        net.on('doubleClick', params => {
+          if (params.nodes.length > 0) expandCustomNode(params.nodes[0]);
+        });
+        // Right-click → remove node
+        net.on('oncontext', params => {
+          params.event.preventDefault();
+          if (params.nodes.length > 0) removeCustomNode(params.nodes[0]);
+        });
+      };
+      // ─────────────────────────────────────────────────────────────────────────
+
       // ── My Network (Account page) ──
       useEffect(() => {
         if (activeTab === 'account' && accountTab === 'uploads' && myPageTab === 'network' && myFiltered.length > 0)
@@ -5145,24 +5404,38 @@
       };
 
       // ── Bulk AI analysis (called by autoAnalysis path and suggestion popup) ──
+      // Handles two paths:
+      // 1. Events with _backendId → analyze via /api/analyze/{id} (uploaded files)
+      // 2. Events with links but no _backendId → analyze via /api/analyze-event-links (spreadsheet rows)
       const triggerBulkAnalysis = (eventsToProcess) => {
-        const toAnalyze = eventsToProcess.filter(e => e._backendId);
-        if (toAnalyze.length === 0) return;
-        setUploadMessage(`✓ Uploaded ${eventsToProcess.length} event(s) — analyzing ${toAnalyze.length} with AI...`);
+        const withBackend = eventsToProcess.filter(e => e._backendId);
+        const withLinks = eventsToProcess.filter(e => !e._backendId && (e.links||[]).some(l => l && l.trim()));
+        const totalToAnalyze = withBackend.length + withLinks.length;
+        if (totalToAnalyze === 0) return;
+        setUploadMessage(`✓ Uploaded ${eventsToProcess.length} event(s) — analyzing ${totalToAnalyze} with AI...`);
         (async () => {
-          for (const evt of toAnalyze) {
+          let analyzedCount = 0;
+          // Path 1: Backend-uploaded files (PDFs, images, docs)
+          for (const evt of withBackend) {
             try {
               const resp = await fetch(`${API_BASE}/api/analyze/${evt._backendId}?mode=${analysisMode}${analysisSearch.trim()?'&search_focus='+encodeURIComponent(analysisSearch.trim()):''}`, { method: 'POST' });
               if (resp.ok) {
                 const result = await resp.json();
                 const rec = result.record;
                 if (rec) {
-                  await supabaseClient.from('events').update({
+                  // Use AI-extracted event_date if the current date is just today's date (auto-set)
+                  const extractedDate = result.event_date || '';
+                  const isAutoDate = evt.date === new Date().toISOString().split('T')[0];
+                  const newDate = (extractedDate && isAutoDate) ? extractedDate : evt.date;
+
+                  const updateFields = {
                     ai_summary: rec.summary || '', description: rec.description || rec.summary || '',
                     topics: rec.topics || [], people: rec.people || [], organizations: rec.organizations || [],
                     source: rec.source || '', primary_source: rec.primary_source || '', main_link: rec.main_link || '',
                     ai_analyzed: true, analysis_mode: rec.analysis_mode || '', has_frames: rec.has_frames || false,
-                  }).eq('id', evt.id);
+                  };
+                  if (newDate !== evt.date) updateFields.date = newDate;
+                  await supabaseClient.from('events').update(updateFields).eq('id', evt.id);
                   setData(prev => ({
                     ...prev,
                     events: prev.events.map(e => e.id === evt.id ? {
@@ -5175,6 +5448,7 @@
                       source: rec.source || e.source || '',
                       primarySource: rec.primary_source || e.primarySource || '',
                       mainLink: rec.main_link || e.mainLink || '',
+                      date: newDate || e.date,
                       _aiAnalyzed: true,
                       _analysisMode: rec.analysis_mode || '',
                       _hasFrames: rec.has_frames || false,
@@ -5183,12 +5457,67 @@
                     organizations: Array.from(new Set([...prev.organizations, ...(rec.organizations||[])])).sort(),
                     topics: Array.from(new Set([...prev.topics, ...(rec.topics||[])])).sort(),
                   }));
+                  analyzedCount++;
                 }
               }
-            } catch(err) {}
+            } catch(err) { console.error('Backend analysis error:', err); }
           }
-          setUploadMessage(`✓ AI Analysis complete for ${toAnalyze.length} document(s).`);
-          createNotification('ai_analysis', 'AI Analysis Complete', `Analyzed ${toAnalyze.length} document(s) with AI.`);
+          // Path 2: Spreadsheet events with links — scrape & analyze via backend
+          for (const evt of withLinks) {
+            try {
+              setUploadMessage(`Analyzing "${(evt.title||'').substring(0,40)}..." — scraping ${evt.links.length} link(s)...`);
+              const resp = await fetch(`${API_BASE}/api/analyze-event-links`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                  title: evt.title || '', description: evt.description || '',
+                  links: (evt.links||[]).filter(l=>l&&l.trim()),
+                  mode: analysisMode,
+                  ...(analysisSearch.trim() && { search_focus: analysisSearch.trim() }),
+                }),
+              });
+              if (resp.ok) {
+                const result = await resp.json();
+                const analysis = result.analysis;
+                if (analysis) {
+                  const extractedDate = result.event_date || '';
+                  const isAutoDate = !evt.date || evt.date === new Date().toISOString().split('T')[0];
+                  const newDate = (extractedDate && isAutoDate) ? extractedDate : evt.date;
+
+                  const updateFields = {
+                    ai_summary: analysis.summary || '', description: analysis.description || analysis.summary || '',
+                    topics: analysis.topics || [], people: analysis.people || [], organizations: analysis.organizations || [],
+                    source: analysis.source || '', primary_source: analysis.primary_source || '', main_link: analysis.main_link || '',
+                    ai_analyzed: true,
+                  };
+                  if (newDate !== evt.date) updateFields.date = newDate;
+                  await supabaseClient.from('events').update(updateFields).eq('id', evt.id);
+                  setData(prev => ({
+                    ...prev,
+                    events: prev.events.map(e => e.id === evt.id ? {
+                      ...e,
+                      aiSummary: analysis.summary || e.aiSummary,
+                      description: analysis.description || analysis.summary || e.description,
+                      topics: analysis.topics && analysis.topics.length > 0 ? analysis.topics : e.topics,
+                      people: analysis.people && analysis.people.length > 0 ? analysis.people : e.people,
+                      organizations: analysis.organizations && analysis.organizations.length > 0 ? analysis.organizations : e.organizations,
+                      source: analysis.source || e.source || '',
+                      primarySource: analysis.primary_source || e.primarySource || '',
+                      mainLink: analysis.main_link || e.mainLink || '',
+                      date: newDate || e.date,
+                      _aiAnalyzed: true,
+                    } : e),
+                    people: Array.from(new Set([...prev.people, ...(analysis.people||[])])).sort(),
+                    organizations: Array.from(new Set([...prev.organizations, ...(analysis.organizations||[])])).sort(),
+                    topics: Array.from(new Set([...prev.topics, ...(analysis.topics||[])])).sort(),
+                  }));
+                  analyzedCount++;
+                }
+              }
+            } catch(err) { console.error('Link analysis error:', err); }
+          }
+          setUploadMessage(`✓ AI Analysis complete for ${analyzedCount} event(s).`);
+          createNotification('ai_analysis', 'AI Analysis Complete', `Analyzed ${analyzedCount} event(s) with AI.`);
           setTimeout(()=>setUploadMessage(''),5000);
           setData(prev => {
             const updatedEvt = prev.events.find(e => e.id === eventsToProcess[0].id);
@@ -5399,7 +5728,7 @@
       const handleUrlSubmit = async () => {
         if (!urlInput.trim()) return;
         setIsProcessing(true);
-        const isVideo = /youtube|youtu\.be|vimeo|dailymotion/i.test(urlInput);
+        const isVideo = /youtube|youtu\.be|vimeo|dailymotion|twitter\.com\/\S+\/status|x\.com\/\S+\/status|tiktok\.com|instagram\.com\/(p|reel|tv)\/|facebook\.com\/.+\/videos|fb\.watch|reddit\.com\/r\/.+\/comments|rumble\.com|bitchute\.com|odysee\.com/i.test(urlInput);
         const doAnalysis = autoAnalysis;
 
         // If using remote backend, ping it first — free tier sleeps after inactivity
@@ -5466,12 +5795,15 @@
             visualDesc += (visualDesc ? '\n' : '') + `${rec.frames_data.length} visual frame(s) captured and saved.`;
           }
 
+          // Use AI-extracted event date if available, otherwise fall back to today
+          const extractedDate = result.event_date || '';
+
           const newEvent = {
             id: generateEventId(),
             title: rec.file_name || urlInput,
             description: rec.description || (result.metadata_only && rec.video_metadata?.description ? rec.video_metadata.description.substring(0, 500) : ''),
             aiSummary: rec.summary || (result.metadata_only ? 'Not yet analyzed — select and click "Analyze Selected" for AI analysis.' : ''),
-            date: new Date().toISOString().split('T')[0],
+            date: extractedDate || new Date().toISOString().split('T')[0],
             dateUploaded: new Date().toISOString(),
             topics: rec.topics || [],
             people: rec.people || [],
@@ -5955,10 +6287,10 @@
                       {(modalData._attachments||[]).map((att,i) => (
                         <div key={i} style={{display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.5rem 0.75rem',background:'rgba(26,31,58,0.5)',borderRadius:'8px',border:'1px solid rgba(59,130,246,0.2)'}}>
                           <span style={{fontSize:'1.2rem'}}>{att.type==='image'?'🖼️':att.type==='video'?'🎬':att.type==='audio'?'🎵':att.type==='pdf'?'📄':att.type==='document'?'📃':'📎'}</span>
-                          {att.type==='image' && <img src={`/api/attachments/${att.filename}`} alt={att.original_name} style={{width:'48px',height:'48px',objectFit:'cover',borderRadius:'4px'}} />}
+                          {att.type==='image' && <img src={`${API_BASE}/api/attachments/${att.filename}`} alt={att.original_name} style={{width:'48px',height:'48px',objectFit:'cover',borderRadius:'4px'}} />}
                           <span style={{color:'#e0e6ed',flex:1,fontSize:'0.85rem'}}>{att.original_name}</span>
                           <span style={{color:'#6b7394',fontSize:'0.7rem'}}>{att.size > 1048576 ? (att.size/1048576).toFixed(1)+'MB' : (att.size/1024).toFixed(0)+'KB'}</span>
-                          <a href={`/api/attachments/${att.filename}`} download style={{padding:'0.25rem 0.5rem',background:'rgba(59,130,246,0.2)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:'4px',color:'#3b82f6',fontSize:'0.7rem',textDecoration:'none'}}>Download</a>
+                          <a href={`${API_BASE}/api/attachments/${att.filename}`} download style={{padding:'0.25rem 0.5rem',background:'rgba(59,130,246,0.2)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:'4px',color:'#3b82f6',fontSize:'0.7rem',textDecoration:'none'}}>Download</a>
                           {(modalData.uploadedBy === (currentUser||{}).username || (currentUser||{}).role === 'admin' || (currentUser||{}).role === 'owner') && (
                             <button onClick={async ()=>{
                               if (!window.confirm('Remove this attachment?')) return;
@@ -6002,7 +6334,7 @@
                 {/* Download original document */}
                 {modalData._backendFileName && (
                   <div className="form-group">
-                    <a href={`/api/uploads/${modalData._backendFileName}`} download style={{display:'inline-block',padding:'0.5rem 1rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'8px',color:'#60a5fa',fontSize:'0.85rem',textDecoration:'none',fontWeight:600}}>Download Original Document</a>
+                    <a href={`${API_BASE}/api/uploads/${modalData._backendFileName}`} download style={{display:'inline-block',padding:'0.5rem 1rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'8px',color:'#60a5fa',fontSize:'0.85rem',textDecoration:'none',fontWeight:600}}>Download Original Document</a>
                   </div>
                 )}
               </>
@@ -7898,7 +8230,7 @@
                   <>
                     <div className="url-input-section">
                       <div className="url-input-header">🔗 Add Website or Video Link</div>
-                      <p style={{color:'#8b92b0',marginBottom:'1.5rem'}}>Paste any URL — YouTube videos are auto-detected for transcription</p>
+                      <p style={{color:'#8b92b0',marginBottom:'1.5rem'}}>Paste any URL — videos (YouTube, TikTok, X/Twitter, Instagram, Rumble) and social media posts are auto-detected</p>
                       <div style={{display:'flex',gap:'1rem',alignItems:'flex-end'}}>
                         <div className="url-input-group" style={{flex:1}}>
                           <label className="filter-label">URL</label>

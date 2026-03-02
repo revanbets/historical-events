@@ -25,9 +25,10 @@ Analyze the following extracted text and return a JSON object with these fields:
 - "source": The publisher or outlet that created/published this document (e.g., "Al Jazeera", "New York Times", "CDC", "Wikipedia"). If it's a personal document with no publisher, use "Unknown".
 - "primary_source": The ORIGINAL source of the information described. For example, if a news article reports on a politician's statement, the primary source is the politician's statement (e.g., "Trump's Truth Social post, Nov 28 2025"), not the news outlet. If the document IS the primary source, say "This document".
 - "main_link": If a URL/link appears in the document text (especially at the beginning), extract it as the canonical link. If no URL found, return "".
+- "event_date": The most accurate date for WHEN the event(s) described actually occurred. Look for explicit dates in the text (publication dates, event dates, "on March 15, 1963", etc.). Use the format "YYYY-MM-DD" if you can determine month and day, "YYYY-MM" if only month and year, or "YYYY" if only the year. If multiple events span a range, use the earliest significant date. If no date can be determined, return "".
 
 Return ONLY valid JSON, no markdown fences, no explanation. Example:
-{{"summary": "...", "description": "- Fact 1\\n- Fact 2\\n- Fact 3", "topics": ["..."], "people": ["..."], "organizations": ["..."], "source": "...", "primary_source": "...", "main_link": ""}}
+{{"summary": "...", "description": "- Fact 1\\n- Fact 2\\n- Fact 3", "topics": ["..."], "people": ["..."], "organizations": ["..."], "source": "...", "primary_source": "...", "main_link": "", "event_date": "1963-11-22"}}
 
 Document text:
 {text}"""
@@ -45,6 +46,7 @@ Analyze the following extracted text and return a JSON object with these fields:
 - "source": The publisher or outlet (e.g., "Al Jazeera", "CDC"). Use "Unknown" if none.
 - "primary_source": The ORIGINAL source of the information. If this IS the primary source, say "This document".
 - "main_link": If a URL appears in the text, extract it. Otherwise return "".
+- "event_date": The most accurate date for WHEN the event(s) described actually occurred. Format: "YYYY-MM-DD", "YYYY-MM", or "YYYY". Use "" if unknown.
 
 Return ONLY valid JSON, no markdown fences, no explanation.
 
@@ -84,6 +86,7 @@ def analyze_text(text: str, file_name: str, mode: str = "long", search_focus: st
             "source": "",
             "primary_source": "",
             "main_link": "",
+            "event_date": "",
         }
 
     import anthropic
@@ -145,6 +148,7 @@ def analyze_text(text: str, file_name: str, mode: str = "long", search_focus: st
         "source": _to_str(result.get("source", "")),
         "primary_source": _to_str(result.get("primary_source", "")),
         "main_link": _to_str(result.get("main_link", "")),
+        "event_date": _to_str(result.get("event_date", "")),
     }
 
 

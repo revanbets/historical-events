@@ -67,8 +67,25 @@ def extract_video_id(url):
 
 
 def is_video_url(url):
-    """Check if URL is a supported video platform."""
-    return bool(re.search(r'youtube|youtu\.be|vimeo|dailymotion', url, re.I))
+    """Check if URL is a supported video/media platform (yt-dlp handles all of these)."""
+    return bool(re.search(
+        r'youtube|youtu\.be|vimeo|dailymotion'
+        r'|twitter\.com/\S+/status|x\.com/\S+/status'  # Twitter/X posts (may have video)
+        r'|tiktok\.com'                                  # TikTok
+        r'|instagram\.com/(p|reel|tv)/'                  # Instagram posts/reels
+        r'|facebook\.com/.+/videos|fb\.watch'            # Facebook videos
+        r'|reddit\.com/r/.+/comments'                    # Reddit posts (may have video)
+        r'|rumble\.com|bitchute\.com|odysee\.com',       # Alt video platforms
+        url, re.I
+    ))
+
+
+def is_social_media_url(url):
+    """Check if URL is a social media post (text-only, no guaranteed video)."""
+    return bool(re.search(
+        r'twitter\.com|x\.com|instagram\.com|facebook\.com|reddit\.com|threads\.net|truthsocial\.com|gab\.com|telegram\.me|t\.me',
+        url, re.I
+    ))
 
 
 # ── Step 1: Extract metadata (always, no download) ──
@@ -352,6 +369,7 @@ Return a JSON object with these fields:
 - "source": The channel or uploader name.
 - "primary_source": The original source of the information discussed. If the video creator IS the primary source, say "This video".
 - "main_link": The video URL.
+- "event_date": The most accurate date for WHEN the event(s) discussed actually occurred (not the upload date). Look for dates mentioned in speech or shown on screen. Format: "YYYY-MM-DD", "YYYY-MM", or "YYYY". Use "" if unknown.
 
 Return ONLY valid JSON, no markdown fences, no explanation."""
 
@@ -372,6 +390,7 @@ Return a JSON object:
 - "source": Channel/uploader name.
 - "primary_source": Original source of info discussed.
 - "main_link": The video URL.
+- "event_date": The most accurate date for WHEN the event(s) discussed actually occurred (not the upload date). Format: "YYYY-MM-DD", "YYYY-MM", or "YYYY". Use "" if unknown.
 
 Return ONLY valid JSON, no markdown fences."""
 
@@ -388,6 +407,7 @@ Return a JSON object:
 - "source": Channel/uploader name.
 - "primary_source": Original source of info discussed.
 - "main_link": The video URL.
+- "event_date": Date the event(s) discussed actually occurred. Format: "YYYY-MM-DD", "YYYY-MM", or "YYYY". Use "" if unknown.
 
 Return ONLY valid JSON."""
 
@@ -404,6 +424,7 @@ Return JSON:
 - "source": Channel name.
 - "primary_source": Original source.
 - "main_link": Video URL.
+- "event_date": Date the event occurred. Format: "YYYY-MM-DD" or "YYYY". Use "" if unknown.
 
 Return ONLY valid JSON."""
 
@@ -424,6 +445,7 @@ def analyze_video_with_claude(transcript, frames, title="", uploader="", url="",
             "description": "", "visual_content": "",
             "topics": [], "people": [], "organizations": [],
             "source": uploader, "primary_source": "", "main_link": url,
+            "event_date": "",
         }
 
     import anthropic
@@ -508,6 +530,7 @@ def analyze_video_with_claude(transcript, frames, title="", uploader="", url="",
         "source": _to_str(result.get("source", uploader)),
         "primary_source": _to_str(result.get("primary_source", "")),
         "main_link": _to_str(result.get("main_link", url)),
+        "event_date": _to_str(result.get("event_date", "")),
     }
 
 

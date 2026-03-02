@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from database import init_db, insert_record, update_record, get_record, get_all_records, get_pending_records
 from extractors import extract, get_file_type
 from analyzer import analyze_text, condense_text, generate_presentation_slides, analyze_entity_profile
-from video_analyzer import analyze_video_url, fetch_video_metadata_only, is_video_url, save_frames_to_disk, save_transcript_to_disk
+from video_analyzer import analyze_video_url, fetch_video_metadata_only, is_video_url, is_social_media_url, save_frames_to_disk, save_transcript_to_disk
 from web_scraper import scrape_url
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -255,7 +255,11 @@ async def analyze_record(record_id: int, mode: str = "long", search_focus: str =
             main_link=analysis.get("main_link", ""),
             analysis_mode=mode,
         )
-        return JSONResponse(content={"record": updated})
+        # Include event_date in response (not stored in backend DB — frontend uses it to update Supabase)
+        resp_data = {"record": updated}
+        if analysis.get("event_date"):
+            resp_data["event_date"] = analysis["event_date"]
+        return JSONResponse(content=resp_data)
     except Exception as e:
         update_record(record_id, status="error", summary=f"Analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
@@ -319,8 +323,14 @@ async def analyze_url(body: dict):
     if not url:
         raise HTTPException(status_code=400, detail="No URL provided")
 
+    # For social media URLs, try video pipeline first but fall back to web scraping
+    _is_social = is_social_media_url(url)
+
+    _use_web_fallback = False  # Set True if social media video pipeline fails
+
     try:
-        if is_video_url(url):
+        if is_video_url(url) and not _use_web_fallback:
+          try:
             if skip_analysis:
                 # ── Metadata-only path (no AI) ──
                 result = fetch_video_metadata_only(url)
@@ -368,63 +378,77 @@ async def analyze_url(body: dict):
                                            start_time=start_time, end_time=end_time,
                                            search_focus=search_focus)
                 if "error" in result:
-                    raise HTTPException(status_code=500, detail=result["error"])
+                    if _is_social:
+                        print(f"[analyze-url] Social media video pipeline failed, falling back to web scraping: {result['error']}")
+                        _use_web_fallback = True
+                    else:
+                        raise HTTPException(status_code=500, detail=result["error"])
 
-                analysis = result["analysis"]
-                metadata = result.get("metadata", {})
-                video_title = metadata.get("title", "") or url
+                if not _use_web_fallback:
+                    analysis = result["analysis"]
+                    metadata = result.get("metadata", {})
+                    video_title = metadata.get("title", "") or url
 
-                # Insert record into DB
-                record_id = insert_record(
-                    file_name=video_title,
-                    file_type="Video URL",
-                    extracted_text=result.get("transcript", "")[:100000],
-                )
+                    # Insert record into DB
+                    record_id = insert_record(
+                        file_name=video_title,
+                        file_type="Video URL",
+                        extracted_text=result.get("transcript", "")[:100000],
+                    )
 
-                # Save frames to disk
-                frames_saved = []
-                if result.get("frames"):
-                    frames_saved = save_frames_to_disk(result["frames"], record_id, title=video_title)
+                    # Save frames to disk
+                    frames_saved = []
+                    if result.get("frames"):
+                        frames_saved = save_frames_to_disk(result["frames"], record_id, title=video_title)
 
-                # Save transcript to disk
-                transcript_file = save_transcript_to_disk(
-                    result.get("transcript", ""),
-                    title=video_title,
-                    record_id=record_id,
-                )
+                    # Save transcript to disk
+                    transcript_file = save_transcript_to_disk(
+                        result.get("transcript", ""),
+                        title=video_title,
+                        record_id=record_id,
+                    )
 
-                # Update record with analysis results
-                updated = update_record(
-                    record_id,
-                    status="analyzed",
-                    summary=analysis.get("summary", ""),
-                    description=analysis.get("description", ""),
-                    visual_content=analysis.get("visual_content", ""),
-                    topics=analysis.get("topics", []),
-                    people=analysis.get("people", []),
-                    organizations=analysis.get("organizations", []),
-                    source=analysis.get("source", metadata.get("uploader", "")),
-                    primary_source=analysis.get("primary_source", ""),
-                    main_link=url,
-                    source_url=url,
-                    content_type="video",
-                    transcript=result.get("transcript", "")[:100000],
-                    video_metadata=metadata,
-                    frames_data=frames_saved,
-                    transcript_file=transcript_file or "",
-                    analysis_mode=mode,
-                    has_frames=1 if len(frames_saved) > 0 else 0,
-                )
+                    # Update record with analysis results
+                    updated = update_record(
+                        record_id,
+                        status="analyzed",
+                        summary=analysis.get("summary", ""),
+                        description=analysis.get("description", ""),
+                        visual_content=analysis.get("visual_content", ""),
+                        topics=analysis.get("topics", []),
+                        people=analysis.get("people", []),
+                        organizations=analysis.get("organizations", []),
+                        source=analysis.get("source", metadata.get("uploader", "")),
+                        primary_source=analysis.get("primary_source", ""),
+                        main_link=url,
+                        source_url=url,
+                        content_type="video",
+                        transcript=result.get("transcript", "")[:100000],
+                        video_metadata=metadata,
+                        frames_data=frames_saved,
+                        transcript_file=transcript_file or "",
+                        analysis_mode=mode,
+                        has_frames=1 if len(frames_saved) > 0 else 0,
+                    )
 
-                return JSONResponse(content={
-                    "record": updated,
-                    "type": "video",
-                    "has_visual_analysis": result.get("has_visual_analysis", False),
-                    "frames_count": len(frames_saved),
-                    "transcript_file": transcript_file,
-                })
+                    resp_data = {
+                        "record": updated,
+                        "type": "video",
+                        "has_visual_analysis": result.get("has_visual_analysis", False),
+                        "frames_count": len(frames_saved),
+                        "transcript_file": transcript_file,
+                    }
+                    if analysis.get("event_date"):
+                        resp_data["event_date"] = analysis["event_date"]
+                    return JSONResponse(content=resp_data)
+          except Exception as video_err:
+              if _is_social:
+                  print(f"[analyze-url] Social media video pipeline exception, falling back to web: {video_err}")
+                  _use_web_fallback = True
+              else:
+                  raise
 
-        else:
+        if not is_video_url(url) or _use_web_fallback:
             # ── Web page analysis pipeline ──
             scraped = scrape_url(url)
             text = scraped.get("text", "")
@@ -476,10 +500,13 @@ async def analyze_url(body: dict):
                 analysis_mode=mode,
             )
 
-            return JSONResponse(content={
+            resp_data = {
                 "record": updated,
                 "type": "web",
-            })
+            }
+            if analysis.get("event_date"):
+                resp_data["event_date"] = analysis["event_date"]
+            return JSONResponse(content=resp_data)
 
     except HTTPException:
         raise
@@ -635,6 +662,65 @@ async def analyze_entity(body: dict):
         return JSONResponse(content=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Entity analysis failed: {e}")
+
+
+# --- Analyze Event with Links (for spreadsheet rows) ---
+
+@app.post("/api/analyze-event-links")
+async def analyze_event_links(body: dict):
+    """
+    Analyze an event that has links/URLs — scrapes each link and combines
+    the content with the event's existing text for comprehensive AI analysis.
+    Used for spreadsheet-imported events that have reference URLs.
+    """
+    title = body.get("title", "")
+    description = body.get("description", "")
+    links = body.get("links", [])
+    mode = body.get("mode", "long")
+    search_focus = body.get("search_focus", "")
+
+    if not links and not description:
+        raise HTTPException(status_code=400, detail="No links or description provided")
+
+    # Scrape each link and combine content
+    scraped_texts = []
+    for link_url in links[:5]:  # Limit to 5 links to avoid timeout
+        if not link_url or not link_url.strip():
+            continue
+        try:
+            print(f"[analyze-event-links] Scraping: {link_url}")
+            scraped = scrape_url(link_url.strip())
+            link_text = scraped.get("text", "")
+            link_title = scraped.get("title", "")
+            if link_text and not link_text.startswith("["):
+                header = f"--- Content from: {link_title or link_url} ---"
+                scraped_texts.append(f"{header}\n{link_text[:10000]}")
+        except Exception as e:
+            print(f"[analyze-event-links] Failed to scrape {link_url}: {e}")
+
+    # Build combined text for analysis
+    parts = []
+    if title:
+        parts.append(f"Event Title: {title}")
+    if description:
+        parts.append(f"Event Description: {description}")
+    if scraped_texts:
+        parts.append("\n\n=== LINKED SOURCE DOCUMENTS ===\n")
+        parts.extend(scraped_texts)
+
+    combined_text = "\n\n".join(parts)
+
+    if not combined_text or len(combined_text.strip()) < 20:
+        raise HTTPException(status_code=400, detail="No analyzable content found in the event or its links")
+
+    try:
+        analysis = analyze_text(combined_text, title or "Spreadsheet Event", mode=mode, search_focus=search_focus)
+        resp_data = {"analysis": analysis}
+        if analysis.get("event_date"):
+            resp_data["event_date"] = analysis["event_date"]
+        return JSONResponse(content=resp_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
 
 
 # --- Condense ---
