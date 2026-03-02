@@ -456,7 +456,7 @@
       const [error, setError] = useState('');
       const [successMsg, setSuccessMsg] = useState('');
       const [loading, setLoading] = useState(false);
-      const [step, setStep] = useState('credentials'); // 'credentials' | 'otp' | 'forgot_email' | 'forgot_otp'
+      const [step, setStep] = useState('credentials'); // 'credentials' | 'otp' | 'forgot_email' | 'forgot_nomail' | 'forgot_otp'
       const [otp, setOtp] = useState('');
       const [otpLoading, setOtpLoading] = useState(false);
       const [pendingUser, setPendingUser] = useState(null);
@@ -468,6 +468,10 @@
       const [fpOtp, setFpOtp] = useState('');
       const [fpPendingOtp, setFpPendingOtp] = useState(null);
       const [fpLoading, setFpLoading] = useState(false);
+      // Non-email account reset request state
+      const [fpReqMsg, setFpReqMsg] = useState('');
+      const [fpReqSent, setFpReqSent] = useState(false);
+      const [fpReqLoading, setFpReqLoading] = useState(false);
 
       // Generate a random 6-digit code and email it via EmailJS (runs entirely in the browser)
       const sendOtpEmail = async (email) => {
@@ -521,11 +525,28 @@
         } catch(e) { setError('Could not resend code.'); }
       };
 
+      const submitResetRequest = async () => {
+        const uname = fpEmail.trim().toLowerCase();
+        if (!uname) { setError('Please enter your username first.'); return; }
+        setFpReqLoading(true); setError('');
+        await supabaseClient.from('notifications').insert([{
+          type: 'password_reset_request',
+          title: 'Password Reset Request',
+          message: `User "${uname}" is locked out and needs a manual password reset.${fpReqMsg.trim() ? ' Message: ' + fpReqMsg.trim() : ''}`,
+          created_by: uname, created_by_role: 'user',
+          event_id: null, metadata: { username: uname }, read_by: [], dismissed_by: [],
+        }]).catch(() => {});
+        setFpReqLoading(false);
+        setFpReqSent(true);
+      };
+
       const startForgotPassword = async () => {
         const em = fpEmail.trim().toLowerCase();
-        if (!em) { setError('Please enter your email address.'); return; }
+        if (!em) { setError('Please enter your email or username.'); return; }
+        // Non-email account → route to the username help screen
         if (!isEmailFormat(em)) {
-          setError('Only email-based accounts can use password reset. Contact an admin to reset a username-only account.');
+          setError('');
+          setStep('forgot_nomail');
           return;
         }
         setFpLoading(true); setError('');
@@ -563,19 +584,92 @@
             <div className="auth-card">
               <div style={{marginBottom:'2rem'}}>
                 <div className="auth-title">Reset Password</div>
-                <div className="auth-subtitle">Enter your email to receive a reset code</div>
+                <div className="auth-subtitle">Enter your email or username — we'll figure out the right next step</div>
               </div>
               {error && <div className="auth-error">{error}</div>}
               <div className="auth-field">
-                <label className="auth-label">Email Address</label>
-                <input className="auth-input" type="email" placeholder="your@email.com" value={fpEmail}
+                <label className="auth-label">Email or Username</label>
+                <input className="auth-input" type="text" placeholder="your@email.com or username" value={fpEmail}
                   onChange={e=>setFpEmail(e.target.value)} autoFocus
                   onKeyDown={e=>{if(e.key==='Enter')startForgotPassword();}} />
               </div>
               <button className="auth-btn" onClick={startForgotPassword} disabled={fpLoading}>
-                {fpLoading ? 'Sending…' : 'Send Reset Code →'}
+                {fpLoading ? 'Checking…' : 'Continue →'}
               </button>
               <div className="auth-switch"><span onClick={()=>{setStep('credentials');setError('');}}>← Back to Sign In</span></div>
+            </div>
+          </div>
+        );
+      }
+
+      if (step === 'forgot_nomail') {
+        const nameDisplay = fpEmail.trim() || 'your account';
+        // "request sent" success view
+        if (fpReqSent) {
+          return (
+            <div className="auth-screen">
+              <div className="auth-card" style={{textAlign:'center'}}>
+                <div style={{fontSize:'2.5rem',marginBottom:'1rem'}}>✓</div>
+                <div className="auth-title" style={{color:'#10b981'}}>Request Sent</div>
+                <div className="auth-subtitle" style={{marginBottom:'2rem'}}>
+                  An admin has been notified and will manually reset the password for <strong style={{color:'#e0e6ed'}}>{fpEmail.trim()}</strong>. Check back soon.
+                </div>
+                <button className="auth-btn" onClick={()=>{setStep('credentials');setFpReqSent(false);setFpReqMsg('');setError('');}}>← Back to Sign In</button>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="auth-screen">
+            <div className="auth-card" style={{maxWidth:'480px'}}>
+              <div className="auth-title" style={{marginBottom:'0.4rem'}}>Account Help</div>
+              <div style={{color:'#8b92b0',fontSize:'0.82rem',textAlign:'center',marginBottom:'1.5rem',lineHeight:1.6}}>
+                <strong style={{color:'#e0e6ed'}}>{nameDisplay}</strong> uses a <strong style={{color:'#e0e6ed'}}>username</strong> (not an email address).<br/>
+                Password reset codes are sent by email — without one on file, we can't send you a code automatically.
+              </div>
+
+              {/* Path A: can still log in */}
+              <div style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:'12px',padding:'1.1rem 1.25rem',marginBottom:'1rem'}}>
+                <div style={{color:'#10b981',fontWeight:700,fontSize:'0.85rem',marginBottom:'0.6rem'}}>✅ I still know my password</div>
+                <div style={{color:'#8b92b0',fontSize:'0.8rem',lineHeight:1.7,marginBottom:'0.85rem'}}>
+                  Once you're logged in, add an email so future resets are automatic:
+                  <ol style={{marginTop:'0.4rem',paddingLeft:'1.1rem',color:'#c0c7d8'}}>
+                    <li>Sign in with your current password</li>
+                    <li>Open <strong style={{color:'#e0e6ed'}}>Account → ⚙️ Settings</strong></li>
+                    <li>Under <em>Change Email / Username</em>, replace your username with your email address</li>
+                    <li>Done — "Forgot password?" will work automatically from now on</li>
+                  </ol>
+                </div>
+                <button className="auth-btn" style={{marginTop:'0'}}
+                  onClick={()=>{setStep('credentials');setFpEmail('');setError('');}}>
+                  ← Go to Sign In
+                </button>
+              </div>
+
+              {/* Path B: locked out */}
+              <div style={{background:'rgba(96,165,250,0.07)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'12px',padding:'1.1rem 1.25rem'}}>
+                <div style={{color:'#60a5fa',fontWeight:700,fontSize:'0.85rem',marginBottom:'0.4rem'}}>🔒 I'm locked out — I don't know my password</div>
+                <div style={{color:'#8b92b0',fontSize:'0.8rem',lineHeight:1.6,marginBottom:'0.85rem'}}>
+                  Submit a reset request. An admin will be notified and can manually reset your password in the Admin Panel.
+                </div>
+                {error && <div className="auth-error" style={{marginBottom:'0.75rem'}}>{error}</div>}
+                <label className="auth-label">Your Username</label>
+                <input className="auth-input" value={fpEmail} onChange={e=>setFpEmail(e.target.value)}
+                  placeholder="Enter your username" style={{marginBottom:'0.75rem'}} />
+                <label className="auth-label">Message for admin <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optional)</span></label>
+                <input className="auth-input" value={fpReqMsg} onChange={e=>setFpReqMsg(e.target.value)}
+                  placeholder="e.g. My email is x@y.com, please reset to that"
+                  onKeyDown={e=>{if(e.key==='Enter')submitResetRequest();}}
+                  style={{marginBottom:'0.85rem'}} />
+                <button className="auth-btn" style={{background:'linear-gradient(135deg,#3b82f6,#2563eb)'}}
+                  onClick={submitResetRequest} disabled={fpReqLoading}>
+                  {fpReqLoading ? 'Sending…' : 'Submit Reset Request →'}
+                </button>
+              </div>
+
+              <div className="auth-switch" style={{marginTop:'1rem'}}>
+                <span onClick={()=>{setStep('forgot_email');setError('');}}>← Back</span>
+              </div>
             </div>
           </div>
         );
