@@ -947,7 +947,7 @@
     // Update LATEST_EXT_VERSION whenever a new extension zip is published.
     // content.js stamps data-hdb-ext-version on every page so the web app
     // can detect if the user's installed version is outdated.
-    const LATEST_EXT_VERSION = '1.2.0';
+    const LATEST_EXT_VERSION = '1.2.1';
     const EXT_RELEASE_NOTES = {
       '1.1.0': {
         title: 'Sessions Tab & Continuation Controls',
@@ -964,6 +964,14 @@
           'New pause/play toggle button in popup header to temporarily disable "Save to DB" popup',
           'Toggle state persists across browser sessions and all tabs',
           'All tabs are instantly notified when capture is toggled on or off'
+        ]
+      },
+      '1.2.1': {
+        title: 'Pause State Fix',
+        notes: [
+          'Fixed: "Save to DB" popup no longer appears when capture is paused',
+          'Improved: Capture state now loads correctly before page interaction',
+          'Better: Pause toggle now works reliably from page load onwards'
         ]
       }
     };
