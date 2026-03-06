@@ -419,6 +419,8 @@
       ai_topics: e.aiTopics || [],
       ai_people: e.aiPeople || [],
       ai_orgs:   e.aiOrgs   || [],
+      is_deleted: e.isDeleted || false,
+      deleted_at: e.deletedAt || null,
     });
     const fromDbRow = (r) => ({
       id: r.id, title: r.title, description: r.description, date: r.date,
@@ -439,6 +441,8 @@
       aiTopics: r.ai_topics || [],
       aiPeople: r.ai_people || [],
       aiOrgs:   r.ai_orgs   || [],
+      isDeleted: r.is_deleted || false,
+      deletedAt: r.deleted_at || null,
     });
     const generateEventId = () => 'EVT-' + crypto.randomUUID().substring(0, 8);
     const rebuildAggregates = (events) => {
@@ -3524,7 +3528,7 @@
       const [authScreen, setAuthScreen] = useState('login');
       const [accountTab, _setAccountTab] = useState(() => sessionStorage.getItem('hdb_accountTab') || 'uploads');
       const setAccountTab = (t) => { sessionStorage.setItem('hdb_accountTab', t); _setAccountTab(t); };
-      const [myFilters, setMyFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const [myFilters, setMyFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false, sortBy:'dateUploaded', sortDir:'desc', viewMode:'both', docTypes:[], uploadedFrom:'', uploadedTo:'' });
       const [myPageTab, _setMyPageTab] = useState(() => sessionStorage.getItem('hdb_myPageTab') || 'timeline');
       const setMyPageTab = (t) => { sessionStorage.setItem('hdb_myPageTab', t); _setMyPageTab(t); };
 
@@ -3533,7 +3537,7 @@
       const [mobileNavOpen, setMobileNavOpen] = useState(false);
       const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'dashboard');
       const setActiveTab = (t) => { sessionStorage.setItem('hdb_activeTab', t); _setActiveTab(t); };
-      const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const [filters, setFilters] = useState({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false, sortBy:'dateUploaded', sortDir:'desc', viewMode:'both', docTypes:[], uploadedFrom:'', uploadedTo:'' });
       const [showModal, setShowModal] = useState(false);
       const [modalData, setModalData] = useState(null);
       const [isEditing, setIsEditing] = useState(false);
@@ -3573,6 +3577,8 @@
       const [selectedForAnalysis, setSelectedForAnalysis] = useState(new Set());
       const [recentHoursFilter, setRecentHoursFilter] = useState(24);
       const [autoAnalysis, setAutoAnalysis] = useState(false);
+      const [lastDeleted, setLastDeleted] = useState(null); // { eventId, event, expiresAt }
+      const undoTimeoutRef = React.useRef(null);
       const [showAnalysisSuggestion, setShowAnalysisSuggestion] = useState(false);
       const [analysisSuggestionCtx, setAnalysisSuggestionCtx] = useState(null);
       const [analysisMode, setAnalysisMode] = useState(()=>sessionStorage.getItem('hdb_analysisMode')||'long');
@@ -4813,8 +4819,13 @@
       // ── Visibility: what the current user can see ──
       const visibleEvents = useMemo(() => {
         if (!currentUser) return [];
-        if (currentUser.role === 'admin' || currentUser.role === 'owner') return data.events;
-        return data.events.filter(e => e.isPublic || e.uploadedBy === currentUser.username);
+        let filtered = data.events;
+        if (currentUser.role === 'admin' || currentUser.role === 'owner') {
+          filtered = data.events.filter(e => !e.isDeleted);
+        } else {
+          filtered = data.events.filter(e => !e.isDeleted && (e.isPublic || e.uploadedBy === currentUser.username));
+        }
+        return filtered;
       }, [data.events, currentUser]);
 
       // ── Event management ──
@@ -4832,16 +4843,52 @@
         setData(prev => ({ ...prev, events: prev.events.map(e => e.id === eventId ? { ...e, eventStatus: status } : e) }));
       };
       const deleteEvent = async (eventId) => {
-        const evtTitle = data.events.find(e => e.id === eventId)?.title || 'event';
-        const { error } = await supabaseClient.from('events').delete().eq('id', eventId);
-        if (error) { console.error('Delete error:', error); return; }
-        createNotification('event_deleted', 'Event Deleted', `"${evtTitle}" was permanently deleted.`);
+        const event = data.events.find(e => e.id === eventId);
+        if (!event) return;
+        const evtTitle = event.title || 'event';
+
+        // Store the event for undo
+        const expiresAt = Date.now() + 5000; // 5 second undo window
+        setLastDeleted({ eventId, event, expiresAt });
+
+        // Clear previous timeout if any
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+
+        // Schedule permanent deletion after 5 seconds
+        undoTimeoutRef.current = setTimeout(async () => {
+          const { error } = await supabaseClient.from('events').delete().eq('id', eventId);
+          if (error) console.error('Permanent delete error:', error);
+          setLastDeleted(null);
+        }, 5000);
+
+        // Soft delete: mark as deleted in DB and UI
+        const { error } = await supabaseClient.from('events').update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq('id', eventId);
+        if (error) { console.error('Soft delete error:', error); return; }
+
+        createNotification('event_deleted', 'Event Deleted', `"${evtTitle}" was deleted — ${5} sec undo`);
+
+        // Remove from visible events immediately
         setData(prev => {
-          const updated = prev.events.filter(e => e.id !== eventId);
-          const agg = rebuildAggregates(updated);
-          return { ...prev, events: updated, ...agg, metadata:{...prev.metadata, totalEvents:updated.length} };
+          const updated = prev.events.map(e => e.id === eventId ? { ...e, isDeleted: true, deletedAt: new Date().toISOString() } : e);
+          const agg = rebuildAggregates(updated.filter(e => !e.isDeleted));
+          return { ...prev, events: updated, ...agg, metadata:{...prev.metadata, totalEvents:updated.filter(e => !e.isDeleted).length} };
         });
         setShowModal(false);
+      };
+
+      const undoDeleteEvent = async (eventId) => {
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+        const { error } = await supabaseClient.from('events').update({ is_deleted: false, deleted_at: null }).eq('id', eventId);
+        if (error) { console.error('Undo delete error:', error); return; }
+
+        // Restore event
+        setData(prev => {
+          const updated = prev.events.map(e => e.id === eventId ? { ...e, isDeleted: false, deletedAt: null } : e);
+          const agg = rebuildAggregates(updated.filter(e => !e.isDeleted));
+          return { ...prev, events: updated, ...agg, metadata:{...prev.metadata, totalEvents:updated.filter(e => !e.isDeleted).length} };
+        });
+        setLastDeleted(null);
+        createNotification('success', 'Restored', 'Event has been restored.');
       };
 
       // ── User management (admin panel, Supabase-backed) ──
@@ -4877,6 +4924,15 @@
         if (days === 1) return 'yesterday';
         if (days < 7) return `${days}d ago`;
         return new Date(ts).toLocaleDateString();
+      };
+
+      const getDocType = (event) => {
+        if (event.isVideo) return 'video';
+        if (event.sourceType?.includes('Excel') || event.sourceType?.includes('CSV')) return 'spreadsheet';
+        if (event.sourceType?.includes('PDF') || event.sourceType?.includes('Word')) return 'document';
+        if (event.sourceType?.includes('Image')) return 'image';
+        if (event.mainLink || event.sourceType?.includes('URL')) return 'link';
+        return 'other';
       };
 
       const NOTIF_META = {
@@ -5005,16 +5061,29 @@
           if (filters.researchLevels.length > 0 && !filters.researchLevels.includes(String(e.researchLevel))) return false;
           if (filters.dateFrom && e.date && e.date < filters.dateFrom) return false;
           if (filters.dateTo && e.date && e.date > filters.dateTo) return false;
+          if (filters.docTypes.length > 0 && !filters.docTypes.includes(getDocType(e))) return false;
+          if (filters.viewMode === 'public' && !e.isPublic) return false;
+          if (filters.viewMode === 'personal' && e.uploadedBy !== currentUser?.username) return false;
+          if (filters.uploadedFrom && e.dateUploaded && e.dateUploaded < filters.uploadedFrom) return false;
+          if (filters.uploadedTo && e.dateUploaded && e.dateUploaded > filters.uploadedTo) return false;
           return true;
         });
-      }, [data.events, filters]);
+      }, [data.events, filters, currentUser]);
 
       const sortedEvents = useMemo(() => [...filteredEvents].sort((a,b) => {
-        if (!a.date && !b.date) return 0;
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return new Date(b.date) - new Date(a.date);
-      }), [filteredEvents]);
+        const dir = filters.sortDir === 'asc' ? 1 : -1;
+        if (filters.sortBy === 'title') return dir * (a.title || '').localeCompare(b.title || '');
+        if (filters.sortBy === 'date') {
+          if (!a.date && !b.date) return 0;
+          if (!a.date) return 1;
+          if (!b.date) return -1;
+          return dir * (new Date(b.date) - new Date(a.date));
+        }
+        // default: dateUploaded
+        const aTime = new Date(a.dateUploaded || 0).getTime();
+        const bTime = new Date(b.dateUploaded || 0).getTime();
+        return dir * (bTime - aTime);
+      }), [filteredEvents, filters]);
 
       const timelineEvents = useMemo(() =>
         filteredEvents.filter(e => e.date).sort((a,b) => new Date(a.date) - new Date(b.date))
@@ -5073,14 +5142,27 @@
           if (myFilters.organizations.length > 0 && !(e.organizations||[]).some(o => myFilters.organizations.includes(o))) return false;
           if (myFilters.dateFrom && e.date && new Date(e.date) < new Date(myFilters.dateFrom)) return false;
           if (myFilters.dateTo && e.date && new Date(e.date) > new Date(myFilters.dateTo)) return false;
+          if (myFilters.docTypes.length > 0 && !myFilters.docTypes.includes(getDocType(e))) return false;
+          if (myFilters.viewMode === 'public' && !e.isPublic) return false;
+          if (myFilters.viewMode === 'personal' && e.uploadedBy !== currentUser?.username) return false;
+          if (myFilters.uploadedFrom && e.dateUploaded && new Date(e.dateUploaded) < new Date(myFilters.uploadedFrom)) return false;
+          if (myFilters.uploadedTo && e.dateUploaded && new Date(e.dateUploaded) > new Date(myFilters.uploadedTo)) return false;
           return true;
         });
-      }, [myUploads, myFilters]);
+      }, [myUploads, myFilters, currentUser]);
 
       const mySortedEvents = useMemo(() => [...myFiltered].sort((a,b) => {
-        if (!a.date && !b.date) return 0; if (!a.date) return 1; if (!b.date) return -1;
-        return new Date(b.date) - new Date(a.date);
-      }), [myFiltered]);
+        const dir = myFilters.sortDir === 'asc' ? 1 : -1;
+        if (myFilters.sortBy === 'title') return dir * (a.title || '').localeCompare(b.title || '');
+        if (myFilters.sortBy === 'date') {
+          if (!a.date && !b.date) return 0; if (!a.date) return 1; if (!b.date) return -1;
+          return dir * (new Date(b.date) - new Date(a.date));
+        }
+        // default: dateUploaded
+        const aTime = new Date(a.dateUploaded || 0).getTime();
+        const bTime = new Date(b.dateUploaded || 0).getTime();
+        return dir * (bTime - aTime);
+      }), [myFiltered, myFilters]);
 
       const myTimelineEvents = useMemo(() =>
         myFiltered.filter(e => e.date).sort((a,b) => new Date(a.date) - new Date(b.date))

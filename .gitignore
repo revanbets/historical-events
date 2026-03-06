@@ -36,3 +36,11 @@ old-versions/
 
 # Database backups
 db 1/
+
+# Mobile app — Node modules and Expo build artifacts
+mobile-app/node_modules/
+mobile-app/.expo/
+mobile-app/dist/
+mobile-app/android/
+mobile-app/ios/
+mobile-app/expo-env.d.ts

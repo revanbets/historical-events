@@ -1,0 +1,83 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CLAUDE CODE — DAILY STARTUP GUIDE
+  Account: joshstryker24@gmail.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+════════════════════════════════════════════════════════
+  EVERY TIME YOU OPEN VS CODE — 3 STEPS
+════════════════════════════════════════════════════════
+
+  STEP 1 — Open your project folder
+  ──────────────────────────────────
+  File → Open Folder → Select "Claude Research App"
+
+  ⚠️  This is the most important step.
+      Without it, Claude can't find your sessions
+      or remember anything about your project.
+
+
+  STEP 2 — Open the Terminal
+  ──────────────────────────
+  Press  Cmd + `  (the key above Tab, top-left keyboard)
+  A black panel will appear at the bottom of VS Code.
+
+
+  STEP 3 — Check you're logged in with Pro
+  ─────────────────────────────────────────
+  Type this and press Enter:
+
+      claude auth status
+
+  ✅ You're good if you see:
+      "email": "joshstryker24@gmail.com"
+      "subscriptionType": "pro"
+
+  ❌ Problem if you see:
+      "subscriptionType": null
+
+      → Follow the fix below before doing anything else.
+
+
+════════════════════════════════════════════════════════
+  🔧  FIX: subscriptionType shows "null"
+════════════════════════════════════════════════════════
+
+  In the Terminal, type each line and press Enter:
+
+      claude auth logout
+
+      claude auth login
+
+  A browser window will open automatically.
+  Sign in with:  joshstryker24@gmail.com
+
+  Come back to VS Code and run:
+      claude auth status
+
+  It should now show "subscriptionType": "pro"
+  You're ready to work!
+
+
+════════════════════════════════════════════════════════
+  ▶️  NOW START WORKING
+════════════════════════════════════════════════════════
+
+  Start a new Claude Code session and say something like:
+
+  "I'm working on the historical events database.
+   This session is to add [X feature].
+   Here's what I want..."
+
+  Claude will read your project files automatically and
+  know your full tech stack, Supabase setup, and more.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REMINDER
+
+  The ONE thing that fixes almost everything:
+  File → Open Folder → Claude Research App
+
+  That's it. Everything else follows from that.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,0 +1,430 @@
+═══════════════════════════════════════════════════════════════════════════════
+          HISTODB MOBILE APP — USER GUIDE
+          For iPhone & Android
+═══════════════════════════════════════════════════════════════════════════════
+
+Welcome to HistoDB — the mobile companion to the Historical Events Research
+Database. This guide explains how to use every part of the app in plain
+language. No technical knowledge needed.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — GETTING STARTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: Get the app on your phone
+──────────────────────────────────
+  A) Install "Expo Go" from the App Store (iPhone) or Google Play (Android).
+     It's free and published by "Expo Project."
+
+  B) Your administrator will share a QR code or a link that looks like:
+       exp.host/... or a standard QR code
+     Open Expo Go → tap "Scan QR Code" → scan it.
+     The HistoDB app loads on your phone.
+
+  Note: You need internet access for this. The app connects to the cloud
+  database — it doesn't store all events locally on your device.
+
+
+STEP 2: Log in
+──────────────
+  When the app opens you'll see the Login screen.
+
+  • Enter your username and password (same as the desktop website).
+  • Tap "Sign In."
+
+  DEFAULT ACCOUNTS (for initial testing):
+    Username: owner     Password: owner123   (full access)
+    Username: admin     Password: admin123   (admin)
+    Username: testuser  Password: test123    (basic user)
+
+  After logging in once, the app remembers your session so you don't have to
+  log in every single time.
+
+  FACE ID / TOUCH ID (iPhone/Android biometrics):
+  After you've logged in with your password once, a "Use Face ID" (or
+  "Use Fingerprint") button appears on the login screen. Tap it to log in
+  instantly with your face or fingerprint next time — no typing needed.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — NAVIGATING THE APP (The 5 Tabs)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+At the bottom of the screen you'll see 5 icons. These are your main sections:
+
+  🏠  HOME       — Dashboard overview (quick stats, recent activity)
+  📋  EVENTS     — Browse and search all events in the database
+  🔬  RESEARCH   — Research session hub (the main mobile-exclusive feature)
+  ➕  ADD        — Upload a new source (URL, photo, document, camera scan)
+  👤  ACCOUNT    — Your profile, uploads, settings, notifications
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — HOME TAB (Dashboard)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The Home tab shows you a snapshot of everything:
+
+  • Total Events — how many events are in the database
+  • Total Sources — total uploaded source documents
+  • Active Research Session — if you have a session open, a banner appears
+    here showing the session name and how many URLs you've captured so far.
+    Tap it to go straight to that session.
+  • Recent Events — the most recently added events. Tap any event card to
+    open its full detail page.
+  • Quick Actions — buttons to jump to Research or Add screens.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — EVENTS TAB (Browse the Database)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is where you search and browse every event in the database.
+
+SEARCHING:
+  • The search bar at the top searches titles and descriptions.
+  • Just start typing — results update as you type.
+  • Tap the X in the search bar to clear it.
+
+FILTERING:
+  • Tap the "Filters" button to open the filter panel.
+  • Filter by: date range, topics, people, organizations, research level,
+    source type, and more.
+  • Tap "Apply" to see filtered results. Tap "Clear" to remove all filters.
+
+SORTING:
+  • Tap "Sort" to change the order: newest first, oldest first, A-Z, etc.
+
+READING AN EVENT:
+  • Tap any event card to open the full Event Detail page.
+  • The detail page shows: full description, key topics, people mentioned,
+    organizations involved, source links, AI summary, and related events.
+  • Tap a topic, person, or organization chip to see all events connected
+    to that entity.
+  • Tap a source link to open it in your phone's browser.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — RESEARCH TAB (The Big Mobile Feature)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The Research tab is the mobile app's most powerful screen. It's designed for
+when you're scrolling through TikTok, Instagram, YouTube, X, or any other
+app and find something worth saving for research.
+
+On desktop, you'd use the Chrome browser extension. On mobile, you have two
+ways to capture content — both are described below.
+
+
+───────────────────────────────────────────────────────────────────────────
+HOW RESEARCH SESSIONS WORK (overview)
+───────────────────────────────────────────────────────────────────────────
+
+A "Research Session" is a container for a batch of related sources you're
+collecting. Think of it like a folder:
+
+  1. You start a session (give it a name like "FEMA investigation")
+  2. You browse other apps and capture URLs into it
+  3. When done browsing, you come back and tap "Analyze & Save"
+  4. The AI reads all your captured links and saves them as events to the
+     database — all in one go.
+
+
+───────────────────────────────────────────────────────────────────────────
+METHOD 1 — CLIPBOARD DETECTION (works automatically, no setup)
+───────────────────────────────────────────────────────────────────────────
+
+This is the easiest method. It works with every app automatically.
+
+HOW IT WORKS:
+
+  1. Open any other app — TikTok, Instagram, YouTube, X, Reddit, anything.
+  2. Find a video or post you want to capture.
+  3. Tap the "Share" button → tap "Copy Link" (exact words vary by app):
+       • TikTok: tap "..." → "Copy Link"
+       • Instagram: tap "..." → "Copy Link"
+       • YouTube: tap "Share" → "Copy Link"
+       • X (Twitter): tap "Share" → "Copy post link"
+       • Any website: copy the URL from the address bar
+  4. Switch back to HistoDB (tap its icon in your app switcher or home screen).
+  5. As soon as HistoDB comes to the front, it checks your clipboard and
+     shows a banner at the top:
+
+       ┌─────────────────────────────────────────────┐
+       │  🎵 TikTok link detected                     │
+       │  tiktok.com/@username/video/12345            │
+       │  [Add to Session]  [Quick Analyze]  [Dismiss]│
+       └─────────────────────────────────────────────┘
+
+  6. Choose what to do:
+       • "Add to Session" — saves the URL to your active research session
+         without analyzing it yet. Best when you're collecting many links.
+       • "Quick Analyze" — immediately sends it to the AI for analysis and
+         creates an event. Best for one-off captures.
+       • "Dismiss" — ignores this clipboard URL (it won't re-appear for
+         this same link).
+
+SUPPORTED PLATFORMS (auto-detected with logo and color):
+  • TikTok      • Instagram     • YouTube       • X (Twitter)
+  • Reddit       • Facebook      • Substack      • Any other website
+
+You don't have to do anything special — just copy a link in any app and
+switch back to HistoDB. The detection is automatic.
+
+
+───────────────────────────────────────────────────────────────────────────
+METHOD 2 — iOS SHORTCUT (one-tap capture without switching apps)
+───────────────────────────────────────────────────────────────────────────
+
+This takes 5 minutes to set up once, then works forever. It lets you tap
+the standard "Share" button in any app and instantly capture to HistoDB —
+without having to copy a link manually.
+
+SETUP (one time only):
+
+  1. Open the Shortcuts app on your iPhone (it's built in — white icon with
+     colored geometric shapes, usually in the Utilities folder).
+
+  2. Tap the "+" button in the top-right corner.
+
+  3. Tap "Add Action."
+
+  4. In the search bar, type "URL" and tap "URL" (just the URL action).
+
+  5. Tap the blue "+" circle below that first action to add another one.
+
+  6. Search for "Open URLs" and tap it.
+
+  7. In the "Open URLs" action, tap the "URL" field and type exactly:
+       histodb://share?url=[Shortcut Input]
+
+     To insert [Shortcut Input]:
+       • Tap the URL field
+       • Tap the "Variable" option (looks like a magic wand or "Insert Variable")
+       • Choose "Shortcut Input"
+       The field should now show: histodb://share?url=[Shortcut Input]
+
+  8. Tap the settings icon (three dots or the name at the top) and:
+       • Name it: "Add to HistoDB"
+       • Tap "Add to Share Sheet" toggle to turn it ON
+
+  9. Tap "Done."
+
+HOW TO USE IT (after setup):
+
+  1. In TikTok, Instagram, YouTube, X, Safari, or anywhere — tap the Share
+     button (the box with an arrow pointing up).
+  2. Scroll through the share options and tap "Add to HistoDB."
+  3. HistoDB opens automatically with the URL ready to add to your session.
+
+This is faster than Method 1 because you never have to copy and switch apps.
+
+
+───────────────────────────────────────────────────────────────────────────
+STARTING & MANAGING SESSIONS
+───────────────────────────────────────────────────────────────────────────
+
+STARTING A SESSION:
+  1. Go to the Research tab.
+  2. Tap "Start New Session."
+  3. Type a name (e.g., "CIA document dump" or "climate whistleblowers").
+  4. Optionally add a description.
+  5. Tap "Start Session."
+
+WHILE A SESSION IS ACTIVE:
+  • You can continue browsing and capturing URLs. Each one gets added to
+    the session automatically when you tap "Add to Session."
+  • You can also manually type or paste a URL in the "Quick Capture" box
+    and tap "Add."
+  • The session shows a running count of captures.
+
+PAUSING A SESSION:
+  • Tap "Pause" — the session stays saved. You can continue it tomorrow.
+  • A paused session appears on the Research screen under "Your Sessions."
+  • Tap "Resume" to continue where you left off.
+
+ENDING & ANALYZING A SESSION:
+  1. Tap the session name to open Session Detail.
+  2. Tap "Analyze & Save All."
+  3. The app sends each captured URL to the AI for analysis.
+  4. A progress bar shows how many have been processed.
+  5. When complete, all captures become full events in the database.
+  6. Tap any result to open the new event.
+
+VIEWING PAST SESSIONS:
+  • The Research tab shows all your sessions (active, paused, and completed).
+  • Tap any session to view its full trail and captures.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — ADD TAB (Upload Sources)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use this tab to upload a new source directly — without starting a full
+research session. Good for single documents or quick uploads.
+
+UPLOAD BY URL:
+  • Paste any link: YouTube video, web article, tweet, TikTok, news site, etc.
+  • Tap "Analyze URL."
+  • The backend downloads the content, the AI analyzes it, and a new event
+    is created with a summary, topics, people, and organizations automatically
+    extracted.
+  • For YouTube/videos: you can optionally set a start and end timestamp
+    to analyze only a portion of the video (e.g., minutes 12:00 to 24:30).
+
+CAMERA SCAN (iPhone/Android exclusive):
+  • Tap "Scan Document" → the camera opens.
+  • Point at a physical document (a printed article, a book page, a flyer).
+  • Tap the shutter button.
+  • The app sends the photo to the backend, which extracts the text using
+    OCR (optical character recognition), then the AI analyzes it.
+
+UPLOAD PHOTO / FILE FROM YOUR PHONE:
+  • Tap "Choose from Photos" to pick an image from your camera roll.
+  • Tap "Choose File" to pick a PDF, Word document, or text file from your
+    phone's Files app.
+  • The backend extracts the text and the AI creates a structured event.
+
+AUTO-ANALYZE TOGGLE:
+  • When ON:  AI analysis starts automatically as soon as you upload.
+  • When OFF: You'll see a prompt after uploading asking whether to analyze.
+              Good for when you're uploading multiple things and want to
+              analyze them in batches to save cost.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — ACCOUNT TAB (Profile & Settings)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MY UPLOADS:
+  • Shows every event you personally added to the database.
+  • Tap any event to view its full detail page.
+  • You can filter and sort your own uploads here.
+
+NOTIFICATIONS:
+  • Shows system notifications (e.g., "Your analysis is complete").
+  • Tap a notification to jump to the related event.
+  • Unread notifications show a blue dot.
+
+SETTINGS:
+  • Biometric Login — toggle Face ID / Touch ID on or off.
+  • Sign Out — logs you out of your account. Your data stays in the database.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 8 — FEATURES NOT ON MOBILE (and why)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+These features are on the desktop website but not the mobile app:
+
+  Network/Relationship Graph
+    The graph that shows connections between events, people, and organizations
+    uses a library that only works in a desktop web browser. A mobile version
+    may be added in a future update.
+
+  Presentations Editor
+    Building slide presentations with drag-and-drop is very complex on a
+    touch screen and is desktop-only for now. You can still view presentations
+    on mobile.
+
+  Spreadsheet View
+    The wide data table is hard to use on a small screen. Mobile shows events
+    in card format instead.
+
+  Full Admin Panel
+    Advanced admin controls (managing users, bulk edits) are desktop-only.
+
+  All data is shared. Anything you add on mobile instantly appears on desktop
+  and vice versa. You're not missing any data — just some specialized views.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 9 — TIPS & TRICKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• RESEARCH WORKFLOW TIP: Before a heavy research session (e.g., going down a
+  rabbit hole on TikTok or YouTube), start a session first. Then just copy
+  every interesting link you see. Come back to HistoDB when done and tap
+  "Analyze & Save All" — the AI handles all the descriptions and tags.
+
+• AI ANALYSIS IS SLOW THE FIRST TIME: The AI server goes to sleep after
+  15 minutes of no use. The very first analysis of the day takes ~30 seconds
+  to wake it up. This is normal. Don't tap Analyze again — just wait.
+
+• SAVE BATTERY: The app checks your clipboard only when you bring it to the
+  front (it doesn't run in the background). There's no battery drain from
+  keeping HistoDB installed.
+
+• CLIPBOARD IS PRIVACY-RESPECTING: The app only reads your clipboard when you
+  manually switch to it. It never reads clipboard data in the background.
+
+• iOS SHORTCUT TIP: After you set up the Shortcut (Part 5, Method 2), add it
+  to your Home Screen for one-tap access:
+  Open Shortcuts app → long-press "Add to HistoDB" → "Add to Home Screen."
+
+• SEARCHING EVENTS: On the Events tab, you can combine a text search with
+  filters at the same time. For example: search "CIA" AND filter by
+  "Research Level: High" to see only the most heavily sourced CIA events.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART 10 — TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  PROBLEM → WHAT TO TRY
+
+  "Events not loading" / blank screens
+    → Check your internet connection.
+    → The database (Supabase) might have paused. Ask the admin to restore it.
+
+  AI analysis says "failed" or nothing happens
+    → Wait 30 seconds and try again — the server may be waking up.
+    → If it fails 3 times in a row, the server may be down. Try again later.
+
+  "Clipboard URL detected" banner isn't appearing
+    → Make sure you copied the link BEFORE switching to HistoDB.
+    → Some apps copy the URL differently — try "Share → Copy Link" instead
+      of just copying text.
+    → If it still doesn't work, paste the URL manually in the Research tab's
+      Quick Capture box.
+
+  App opens but shows a login error
+    → Double-check your username and password (case-sensitive).
+    → Ask the admin if your account is active.
+
+  Face ID / Touch ID says "no saved session"
+    → Log in once with your username and password first.
+    → After that, biometric login works automatically.
+
+  "SDK version incompatible" error (tech error)
+    → Update the Expo Go app to the latest version in the App Store.
+    → If the error continues, contact your administrator.
+
+  App is very slow or freezes
+    → Close and reopen the app.
+    → If Expo Go is being used: close Expo Go completely, reopen, re-scan QR.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+QUICK REFERENCE CARD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  RESEARCH SESSION (quick steps):
+    1. Research tab → "Start New Session" → name it → Start
+    2. Go to TikTok/Instagram/YouTube/X → copy a link
+    3. Switch to HistoDB → tap "Add to Session" on the banner
+    4. Repeat steps 2-3 for every link you find
+    5. When done → tap session name → "Analyze & Save All"
+    6. Done! All links are now saved as events in the database.
+
+  QUICK UPLOAD (no session needed):
+    Add tab → paste URL or pick file → Analyze
+
+  LOG IN WITH FACE ID:
+    Login screen → tap "Use Face ID" (must have logged in once with password)
+
+  BROWSE DATABASE:
+    Events tab → search bar or Filters button
+
+═══════════════════════════════════════════════════════════════════════════════

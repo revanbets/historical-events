@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HDB Research Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════
+       LOGIN SCREEN
+  ══════════════════════════════════════════════════════════ -->
+  <div id="login-screen" class="screen">
+    <div class="login-logo">
+      <span class="logo-icon">◈</span>
+      <div class="logo-text">
+        <div class="logo-main">HDB Research</div>
+        <div class="logo-sub">Historical Events Assistant</div>
+      </div>
+    </div>
+
+    <div class="login-form">
+      <div class="field-group">
+        <label class="field-label">Username</label>
+        <input type="text" id="login-username" class="field-input" placeholder="Enter username" autocomplete="username" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <input type="password" id="login-password" class="field-input" placeholder="Enter password" autocomplete="current-password" />
+      </div>
+      <div id="login-error" class="error-msg" style="display:none;"></div>
+      <button id="login-btn" class="btn-primary">Log In</button>
+      <p class="login-hint">Use your Historical Events Database credentials.</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       MAIN SCREEN
+  ══════════════════════════════════════════════════════════ -->
+  <div id="main-screen" class="screen" style="display:none;">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <span class="logo-icon-sm">◈</span>
+        <div>
+          <div class="header-title">HDB Research</div>
+          <div id="header-user" class="header-user"></div>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="capture-toggle-btn" class="btn-icon" title="Toggle 'Save to DB' popup (currently: ON)">⏸</button>
+        <a id="open-app-btn" class="btn-icon" title="Open Database" target="_blank">↗</a>
+        <button id="logout-btn" class="btn-icon" title="Log out">⏏</button>
+      </div>
+    </div>
+
+    <!-- Current Page Card -->
+    <div class="current-page-card" id="current-page-card">
+      <div class="page-card-left">
+        <img id="page-favicon" class="page-favicon" src="" alt="" style="display:none;" />
+        <div class="page-card-text">
+          <div id="page-title" class="page-title">—</div>
+          <div id="page-url" class="page-url">—</div>
+        </div>
+      </div>
+      <button id="capture-url-btn" class="btn-capture-url" title="Save this page to DB">
+        Save Page
+      </button>
+    </div>
+
+    <!-- Video Range Capture Panel (shown only on video pages) -->
+    <div id="video-capture-panel" class="video-capture-panel" style="display:none;">
+      <div class="video-panel-header">🎬 Video Range Capture</div>
+      <div class="video-panel-body">
+        <div class="video-ts-row">
+          <div class="video-ts-slot">
+            <span class="video-ts-label">Start</span>
+            <span id="vc-start-display" class="video-ts-value">—</span>
+            <button id="vc-mark-start" class="btn-vc-mark">Mark</button>
+          </div>
+          <span class="video-ts-arrow">→</span>
+          <div class="video-ts-slot">
+            <span class="video-ts-label">End</span>
+            <span id="vc-end-display" class="video-ts-value">—</span>
+            <button id="vc-mark-end" class="btn-vc-mark">Mark</button>
+          </div>
+        </div>
+        <button id="vc-capture-btn" class="btn-vc-capture" disabled>📷 Capture Frames</button>
+        <div id="vc-status" class="vc-status" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Session Bar -->
+    <div class="session-bar">
+      <div class="session-bar-left">
+        <div class="session-status-dot" id="session-dot"></div>
+        <div>
+          <div id="session-name-display" class="session-name">No active session</div>
+          <div id="session-trail-count" class="session-trail-count" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="session-bar-right">
+        <button id="rename-session-btn" class="btn-text" style="display:none;" title="Rename this session">✎</button>
+        <button id="session-pause-btn" class="btn-session-pause" style="display:none;" title="Pause session">⏸</button>
+        <button id="session-toggle-btn" class="btn-session-start">Start Session</button>
+      </div>
+    </div>
+
+    <!-- Rename session inline input (hidden by default) -->
+    <div id="rename-row" class="rename-row" style="display:none;">
+      <input type="text" id="rename-input" class="field-input field-input-sm" placeholder="Session name…" />
+      <button id="rename-confirm-btn" class="btn-primary btn-sm">Save</button>
+      <button id="rename-cancel-btn" class="btn-ghost btn-sm">✕</button>
+    </div>
+
+    <!-- Tab Nav -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="captured">
+        Captured
+        <span id="captured-count-badge" class="tab-badge" style="display:none;">0</span>
+      </button>
+      <button class="tab-btn" data-tab="trail">
+        Trail
+        <span id="trail-count-badge" class="tab-badge" style="display:none;">0</span>
+      </button>
+      <button class="tab-btn" data-tab="sessions">
+        Sessions
+        <span id="sessions-count-badge" class="tab-badge" style="display:none;">0</span>
+      </button>
+    </div>
+
+    <!-- Tab: Captured Items -->
+    <div id="tab-captured" class="tab-content active">
+      <div id="captured-empty" class="empty-state">
+        <div class="empty-icon">📎</div>
+        <div class="empty-title">No captures yet</div>
+        <div class="empty-desc">Highlight text on any page and click <strong>"Save to DB"</strong>, or use the right-click menu.</div>
+      </div>
+      <div id="captured-list" class="item-list"></div>
+    </div>
+
+    <!-- Tab: Research Trail -->
+    <div id="tab-trail" class="tab-content" style="display:none;">
+      <div class="trail-header">
+        <span class="section-label">Pages visited this session</span>
+        <button id="clear-trail-btn" class="btn-text btn-danger-text" style="display:none;">Clear</button>
+      </div>
+      <div id="trail-empty" class="empty-state">
+        <div class="empty-icon">🗺</div>
+        <div class="empty-title">No trail yet</div>
+        <div class="empty-desc">Start a session and browse — every page you visit gets tracked here.</div>
+      </div>
+      <div id="trail-list" class="trail-list"></div>
+    </div>
+
+    <!-- Tab: Sessions History -->
+    <div id="tab-sessions" class="tab-content" style="display:none;">
+
+      <!-- Filter Bar (sticky) -->
+      <div class="sessions-filter-bar">
+        <div class="sessions-filter-top">
+          <input type="text" id="sessions-search" class="sessions-search-input" placeholder="Search sessions…" />
+          <button id="sessions-filter-toggle" class="btn-filter-toggle">⚙ Filters</button>
+        </div>
+        <div id="sessions-filter-panel" class="sessions-filter-panel" style="display:none;">
+          <div class="filter-section">
+            <div class="filter-section-label">Date</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="date" data-value="all">All Time</button>
+              <button class="filter-pill" data-filter="date" data-value="today">Today</button>
+              <button class="filter-pill" data-filter="date" data-value="week">This Week</button>
+              <button class="filter-pill" data-filter="date" data-value="month">This Month</button>
+            </div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label">Captures</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="captures" data-value="any">Any</button>
+              <button class="filter-pill" data-filter="captures" data-value="has">Has Captures</button>
+              <button class="filter-pill" data-filter="captures" data-value="none">None</button>
+            </div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-section-label">Page Count</div>
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="pages" data-value="any">Any</button>
+              <button class="filter-pill" data-filter="pages" data-value="1-5">1–5</button>
+              <button class="filter-pill" data-filter="pages" data-value="6-20">6–20</button>
+              <button class="filter-pill" data-filter="pages" data-value="20+">20+</button>
+            </div>
+          </div>
+          <div class="filter-section filter-section-row">
+            <div class="filter-section-label">Sort by</div>
+            <select id="sessions-sort" class="filter-select">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="most-pages">Most Pages</option>
+              <option value="most-captures">Most Captures</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading / Empty / List -->
+      <div id="sessions-loading" class="sessions-loading-state" style="display:none;">
+        <span class="spinner"></span> Loading sessions…
+      </div>
+      <div id="sessions-empty" class="empty-state" style="display:none;">
+        <div class="empty-icon">📚</div>
+        <div class="empty-title">No sessions found</div>
+        <div class="empty-desc">End a research session and it will appear here. Try adjusting your filters.</div>
+      </div>
+      <div id="sessions-list" class="sessions-list"></div>
+
+    </div>
+
+  </div>
+
+  <!-- Extension version footer -->
+  <div class="ext-version-footer" id="ext-version-footer">
+    <span id="ext-version-display">HDB Research Extension</span>
+    <span id="ext-update-badge" class="ext-update-badge" style="display:none;">Update available</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "HistoDB",
+    "slug": "historical-events-db",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "histodb",
+    "splash": {
+      "backgroundColor": "#0F1223"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.historicaldatabase.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to photograph and scan documents for research.",
+        "NSPhotoLibraryUsageDescription": "Used to select photos and documents to upload for research.",
+        "NSFaceIDUsageDescription": "Used for quick biometric login.",
+        "NSMicrophoneUsageDescription": "Used for voice note capture during research sessions."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1223"
+      },
+      "package": "com.historicaldatabase.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow HistoDB to access your camera to scan documents."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow HistoDB to access your photos for uploading research material."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow HistoDB to use Face ID for biometric login."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

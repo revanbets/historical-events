@@ -1,0 +1,596 @@
+═══════════════════════════════════════════════════════════════════════════════
+          HISTORICAL EVENTS DATABASE — OWNER'S MANUAL
+          Last Updated: March 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+This document is your master reference for every service running the database.
+It is written for a non-developer. No coding knowledge required to use it.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1 — QUICK SYSTEM MAP (What's Running)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  5 external services power the database:
+
+  1. GITHUB      — Stores the code. The "master copy" of the project.
+  2. NETLIFY      — Puts the website online. Reads from GitHub automatically.
+  3. SUPABASE     — The database. Stores all events, research, and user data.
+  4. RENDER       — The AI brain server. Runs the Python backend (analysis,
+                    video transcription, file reading).
+  5. ANTHROPIC    — The AI company (makes Claude). Used for document & video
+                    analysis. You pay per use.
+
+  MOBILE APP (local — not a hosted service):
+  6. NODE.JS      — Software installed on your Mac that lets you run the mobile
+                    app development server. Free, one-time install.
+  7. EXPO GO      — Free app installed on iPhones/Android phones. Lets anyone
+                    preview the mobile app without going through the App Store.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2 — VISUAL FLOWCHART
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  HOW EVERYTHING CONNECTS:
+
+
+                         ┌─────────────────────┐
+                         │       GITHUB         │
+                         │  (Code storage/repo) │
+                         └──────────┬──────────┘
+                                    │ auto-deploy on every git push
+                                    ▼
+                         ┌─────────────────────┐
+                         │      NETLIFY         │  ◄── User visits website
+                         │  (Hosts the website) │      historical-events-
+                         │                      │      databse.netlify.app
+                         └──────────┬──────────┘
+                                    │ browser fetches/saves data
+                                    ▼
+                         ┌─────────────────────┐       ┌──────────────────┐
+                         │      SUPABASE        │ ◄─────│  MOBILE APP      │
+                         │  (Cloud database)    │       │  (iPhone/Android)│
+                         │  Stores all events,  │       │  Same database,  │
+                         │  topics, people,     │       │  syncs instantly  │
+                         │  user accounts       │       └──────────────────┘
+                         └─────────────────────┘
+
+  The mobile app connects to the SAME Supabase database and Render backend
+  as the website. Events added on mobile appear instantly on desktop and
+  vice versa. No separate database or server needed.
+
+  When a user uploads a file or URL, a SEPARATE path fires:
+
+    User uploads file/URL
+            │
+            ▼
+    ┌───────────────────────────────────────────────────────┐
+    │                   RENDER (Backend Server)              │
+    │                                                        │
+    │  • Reads PDFs, Word docs, images (text extraction)     │
+    │  • Scrapes web pages                                   │
+    │  • Downloads/streams YouTube videos (yt-dlp)           │
+    │  • Transcribes audio (Whisper AI — runs locally here)  │
+    │  • Extracts video frames (OpenCV — runs locally here)  │
+    │                          │                             │
+    └──────────────────────────┼─────────────────────────────┘
+                               │ sends text to AI for analysis
+                               ▼
+                    ┌─────────────────────┐
+                    │     ANTHROPIC        │
+                    │  (Claude AI — paid)  │
+                    │  Reads the content,  │
+                    │  returns structured  │
+                    │  summary, topics,    │
+                    │  people, orgs        │
+                    └─────────────────────┘
+                               │ AI results come back to Render
+                               │ then saved to Supabase
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3 — SERVICE DETAILS (Logins, Limits, Billing)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  1. GITHUB                                                                  │
+│  Website: github.com                                                        │
+│  Dashboard: github.com/your-username                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  WHAT IT DOES:                                                              │
+│    Stores all your project code. Every change you make is saved here as a  │
+│    "commit." Think of it as Google Docs version history for code. When you  │
+│    push a change to GitHub, Netlify automatically picks it up and updates   │
+│    the live website within ~1-2 minutes.                                    │
+│                                                                             │
+│  HOW YOU SIGNED UP: Email/password (or possibly via Google)                 │
+│                                                                             │
+│  FREE TIER LIMITS:                                                          │
+│    • Unlimited public repositories — no limit                               │
+│    • Unlimited storage for normal project sizes                             │
+│    • This project is well within free limits indefinitely                   │
+│                                                                             │
+│  CONNECTED TO: Netlify (Netlify watches GitHub and auto-deploys)            │
+│                                                                             │
+│  WHEN TO CHECK IT:                                                          │
+│    • If the live site doesn't update after a code change                   │
+│    • To see the history of all changes: github.com/your-username/your-repo  │
+│    • To roll back a bad change (or ask Claude Code to do it)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  2. NETLIFY                                                                 │
+│  Website: netlify.com                                                       │
+│  Dashboard: app.netlify.com                                                 │
+│  Your live site: https://historical-events-databse.netlify.app              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  WHAT IT DOES:                                                              │
+│    Makes your HTML file available on the internet as a real website.       │
+│    Watches your GitHub repo — every time you push code, Netlify            │
+│    automatically rebuilds and publishes the new version. Usually takes      │
+│    about 1-2 minutes.                                                       │
+│                                                                             │
+│  HOW YOU SIGNED UP: Almost certainly via "Sign in with GitHub" (very       │
+│    common for Netlify). Check app.netlify.com — if it shows your GitHub    │
+│    username in the top-right, that confirms it.                             │
+│                                                                             │
+│  FREE TIER LIMITS:                                                          │
+│    • 100 GB bandwidth per month (very generous — thousands of users)        │
+│    • 300 build minutes per month (each deploy ~1 min, so 300 deploys/mo)   │
+│    • 1 website on free plan                                                 │
+│    • Custom domain available on free plan (you'd just need to buy the      │
+│      domain name separately, ~$10-15/yr on Namecheap or Google Domains)    │
+│                                                                             │
+│  COST IF YOU EXCEED: ~$19/month for the next tier (Pro)                    │
+│                                                                             │
+│  CONNECTED TO: GitHub (reads code), your browser (serves the website)      │
+│                                                                             │
+│  WHEN TO CHECK IT:                                                          │
+│    • If the site is down or showing an old version                         │
+│    • To see deploy history and status: app.netlify.com → your site         │
+│    • To check bandwidth usage (under Site Settings → Analytics)            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  3. SUPABASE                                                                │
+│  Website: supabase.com                                                      │
+│  Dashboard: supabase.com/dashboard                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  WHAT IT DOES:                                                              │
+│    This is your actual database — where all the events, people, topics,    │
+│    organizations, and user account data are stored. When you or a user     │
+│    creates/edits/deletes an event, it's saved here. The database keeps      │
+│    everything synced across all devices.                                    │
+│                                                                             │
+│  HOW YOU SIGNED UP: Via GitHub OAuth or email. Check the dashboard and     │
+│    look at your profile icon — it will show which method you used.         │
+│                                                                             │
+│  FREE TIER LIMITS:                                                          │
+│    • 500 MB database storage                                                │
+│    • 5 GB file/media storage                                                │
+│    • 5 GB outgoing bandwidth per month                                      │
+│    • 50,000 monthly active users                                            │
+│    • ⚠ IMPORTANT: Free projects PAUSE after 1 week of inactivity.          │
+│      When paused, the database won't respond. To unpause: go to your       │
+│      Supabase dashboard → click your project → click "Restore project."    │
+│      Takes about 1-2 minutes. This only happens if nobody uses the site    │
+│      for 7+ days.                                                           │
+│                                                                             │
+│  COST IF YOU EXCEED: $25/month for Pro plan                                │
+│                                                                             │
+│  CONNECTED TO: Netlify frontend (reads/writes events), Render backend      │
+│    (writes analyzed results)                                                │
+│                                                                             │
+│  WHEN TO CHECK IT:                                                          │
+│    • If events aren't loading or saving                                     │
+│    • If the site seems to work but data is missing                          │
+│    • To check database size: Dashboard → Project → Database → disk usage   │
+│    • To see your tables/data directly: Dashboard → Table Editor            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  4. RENDER                                                                  │
+│  Website: render.com                                                        │
+│  Dashboard: dashboard.render.com                                            │
+│  Your backend URL: https://historical-events-api-n45u.onrender.com         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  WHAT IT DOES:                                                              │
+│    Hosts the Python "brain" server. This is what handles:                   │
+│    • Reading PDF, Word, and image files (extracting text from them)         │
+│    • Scraping web pages                                                     │
+│    • Downloading YouTube videos and pulling captions/transcripts            │
+│    • Extracting frames from videos                                          │
+│    • Sending content to Claude AI for analysis                              │
+│    • Returning structured results (summary, topics, people, orgs) back     │
+│      to the website to be saved in Supabase                                │
+│                                                                             │
+│  HOW YOU SIGNED UP: Almost certainly via "Sign in with GitHub."            │
+│                                                                             │
+│  FREE TIER LIMITS:                                                          │
+│    • ⚠ SERVICE SLEEPS after 15 minutes of no activity.                     │
+│      When someone uploads something after it's been sleeping, the first    │
+│      request takes ~30 seconds before a response. This is normal.          │
+│    • 750 hours per month (enough to keep 1 service alive all month)        │
+│    • 512 MB RAM                                                             │
+│    • The service has no persistent disk on the free plan — uploaded files  │
+│      stored temporarily on the server are wiped on restart/redeploy.      │
+│      (Event data is safe because it's saved to Supabase, not Render's disk)│
+│                                                                             │
+│  COST IF YOU UPGRADE: $7/month for "Starter" (no sleeping, more RAM)      │
+│                                                                             │
+│  CONNECTED TO: Supabase (writes results), Anthropic (sends text for AI),  │
+│    Netlify frontend (receives upload requests)                              │
+│                                                                             │
+│  WHEN TO CHECK IT:                                                          │
+│    • If AI analysis is failing or timing out repeatedly                    │
+│    • If video uploads aren't working                                        │
+│    • To see logs (error messages): dashboard.render.com → your service     │
+│      → "Logs" tab. This shows exactly what went wrong.                     │
+│    • To manually wake it up: just visit the backend URL in your browser    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  5. ANTHROPIC (Claude AI)                                                   │
+│  Website: anthropic.com                                                     │
+│  Dashboard: console.anthropic.com                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  WHAT IT DOES:                                                              │
+│    Provides the AI that reads and analyzes uploaded documents, web pages,  │
+│    and video transcripts. When you upload something and click "Analyze     │
+│    with AI," the text gets sent to Claude (made by Anthropic) which        │
+│    returns a structured summary, key topics, people mentioned,             │
+│    organizations, and source info.                                          │
+│                                                                             │
+│  HOW YOU SIGNED UP: Email/password — Anthropic does NOT offer GitHub       │
+│    login. You signed up at console.anthropic.com with an email address.    │
+│                                                                             │
+│  FREE TIER / COST:                                                          │
+│    • ⚠ NO FREE TIER. You pay per use.                                      │
+│    • The model used is Claude Sonnet (mid-tier, good balance of quality    │
+│      and cost).                                                             │
+│    • Approximate costs per analysis:                                        │
+│        - Short document: ~$0.01–0.05                                        │
+│        - Long document / web page: ~$0.05–0.15                              │
+│        - Video with transcript: ~$0.10–0.30                                 │
+│    • You pre-load credits. Set a spending limit to avoid surprises.        │
+│                                                                             │
+│  HOW TO MONITOR SPENDING:                                                   │
+│    console.anthropic.com → "Usage" tab → shows daily/monthly usage charts  │
+│    console.anthropic.com → "Settings" → "Limits" → set a monthly cap       │
+│                                                                             │
+│  WHERE THE API KEY LIVES:                                                   │
+│    In the file: /Users/mac/Desktop/Claude research app/analysis/.env       │
+│    The key looks like: ANTHROPIC_API_KEY=sk-ant-...                        │
+│    ⚠ Never share this key or commit it to GitHub. It's your credit card.  │
+│                                                                             │
+│  CONNECTED TO: Render (Render calls the Anthropic API on every analysis)   │
+│                                                                             │
+│  WHEN TO CHECK IT:                                                          │
+│    • If AI analysis stops working ("Analysis failed" errors)               │
+│    • Monthly — review your spending at console.anthropic.com               │
+│    • If you get an error about "invalid API key" — the key may have        │
+│      expired or been revoked. Generate a new one at                        │
+│      console.anthropic.com → "API Keys"                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4 — FREE LIBRARIES (No Login Needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+These are tools loaded from the internet when the page opens. No accounts,
+no bills, no logins required. They just work.
+
+  • React 18.2         — The UI framework the app is built on
+  • Babel Standalone   — Lets React's JSX code run in a browser without a
+                         build step
+  • vis-network        — Draws the network/relationship graph view
+  • SheetJS (xlsx)     — Reads Excel and CSV files
+  • Google Fonts       — Loads the Space Mono and Karla fonts
+
+  All loaded from free public CDNs (unpkg.com, cdnjs.cloudflare.com,
+  fonts.googleapis.com). No accounts, no limits to worry about.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5 — BACKEND TOOLS (No Login Needed — Run on Render)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+These Python tools run inside the Render server. They're open-source and
+free. No accounts or API keys needed.
+
+  • yt-dlp             — Downloads or streams YouTube videos. Used to grab
+                         captions and video streams for frame extraction.
+  • OpenAI Whisper     — AI transcription tool. Converts video/audio to text
+                         when no captions are available. Runs entirely on the
+                         Render server (no OpenAI account needed).
+  • OpenCV             — Extracts screenshots (frames) from videos.
+  • pdfplumber         — Extracts text from PDF files.
+  • python-docx        — Extracts text from Word documents.
+  • pytesseract        — Reads text from images (OCR).
+  • Trafilatura /      — Scrapes text content from web pages.
+    BeautifulSoup
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6 — APP USER ACCOUNTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The database has its own internal login system (separate from all the
+platforms above). See accounts.txt for the full list.
+
+  DEFAULT HARDCODED ACCOUNTS:
+  ┌────────────────┬──────────────┬──────────────────────────────────────────┐
+  │ Username       │ Password     │ Role                                     │
+  ├────────────────┼──────────────┼──────────────────────────────────────────┤
+  │ owner          │ owner123     │ Full access. Your main account.          │
+  │ admin          │ admin123     │ Can manage users and events              │
+  │ testuser       │ test123      │ Basic user — for testing only            │
+  └────────────────┴──────────────┴──────────────────────────────────────────┘
+
+  ⚠ CHANGE THESE PASSWORDS before sharing the site with anyone.
+    To change them: open historical-events-v2.2.html and search for
+    HARDCODED_USERS — the passwords are right there in plain text.
+
+  REGISTERED USERS (people who sign up themselves):
+    Stored in each visitor's browser localStorage. Not stored in Supabase.
+    This means registered users are tied to the browser they signed up on.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 7 — MONTHLY MAINTENANCE CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Do this once a month to keep everything healthy:
+
+  □ Check Anthropic usage + spending
+      → console.anthropic.com → Usage
+      → Make sure you have credits and haven't hit your limit
+
+  □ Check Netlify bandwidth
+      → app.netlify.com → your site → Analytics
+      → Stays well under 100 GB unless you have thousands of daily users
+
+  □ Check Supabase database size
+      → supabase.com/dashboard → your project → Database
+      → 500 MB free. Text data is tiny — you'd need millions of events to
+        approach this limit.
+
+  □ Check Render logs if AI analysis has been acting up
+      → dashboard.render.com → your service → Logs tab
+
+  □ If Supabase paused (site loads but no data appears)
+      → supabase.com/dashboard → your project → click "Restore project"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 8 — QUICK TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  PROBLEM → LIKELY CAUSE → WHERE TO CHECK
+
+  Site is down / won't load
+    → Netlify outage or deploy failed
+    → app.netlify.com → look for failed deploy in red
+
+  Events not loading / blank database
+    → Supabase paused (inactive for 7+ days)
+    → supabase.com/dashboard → restore the project
+
+  AI analysis not working / "Analysis failed" error
+    → Could be: Render asleep (wait 30 sec and retry)
+    → Could be: Anthropic API key expired or out of credits
+    → Check: console.anthropic.com → API Keys + Usage
+
+  First upload after a while takes forever (~30 seconds)
+    → Normal. Render (the backend server) is waking up from sleep.
+    → Nothing is broken. Retry the upload once it's awake.
+
+  Site doesn't reflect code changes I made
+    → Check GitHub push was successful
+    → Check Netlify deploy status (app.netlify.com → Deploys)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 9 — ALL IMPORTANT URLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  YOUR LIVE WEBSITE:      https://historical-events-databse.netlify.app
+  YOUR BACKEND API:       https://historical-events-api-n45u.onrender.com
+
+  DASHBOARDS TO BOOKMARK:
+    GitHub:               https://github.com
+    Netlify:              https://app.netlify.com
+    Supabase:             https://supabase.com/dashboard
+    Render:               https://dashboard.render.com
+    Anthropic/Claude:     https://console.anthropic.com
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 10 — SIGN-UP METHOD SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Service       Likely Signed Up With
+  ──────────    ───────────────────────────────────────────────────────────
+  GitHub        Email/password OR Google account
+  Netlify       "Sign in with GitHub" (most common method)
+  Render        "Sign in with GitHub" (most common method)
+  Supabase      "Sign in with GitHub" OR email/password
+  Anthropic     Email/password — no GitHub login option available
+
+  To find which you used: go to each site's login page and look for
+  "Continue with GitHub" vs email/password options. Try GitHub first —
+  if it logs you in, that's how you signed up.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 11 — MOBILE APP (iPhone & Android)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The database has a full mobile app (iOS + Android) that mirrors the website.
+It connects to the same Supabase database — everything syncs automatically.
+
+  APP FOLDER:   /Users/mac/Desktop/Claude research app/mobile-app/
+  USER GUIDE:   /Users/mac/Desktop/Claude research app/mobile-app/USER_GUIDE.txt
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PREREQUISITE — Node.js must be installed on your Mac                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Node.js is free software that lets you run the mobile app development      │
+│  server. You only install this once.                                         │
+│                                                                             │
+│  INSTALL:  Go to https://nodejs.org → download "LTS" version → install it  │
+│  VERIFY:   Open Terminal, type:  node --version                              │
+│            Should print something like v20.x.x                              │
+│                                                                             │
+│  Without Node.js, the next steps will not work.                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  HOW TO START THE MOBILE APP (Development Server)                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  FIRST TIME ONLY — install dependencies (do this once after setup):        │
+│    1. Open Terminal                                                          │
+│    2. Type exactly:                                                          │
+│         cd "/Users/mac/Desktop/Claude research app/mobile-app"              │
+│         npm install                                                          │
+│    3. Wait for it to finish (1-2 minutes)                                   │
+│                                                                             │
+│  EVERY TIME — start the development server:                                 │
+│    1. Open Terminal                                                          │
+│    2. Type:                                                                  │
+│         cd "/Users/mac/Desktop/Claude research app/mobile-app"              │
+│         npx expo start                                                       │
+│    3. A QR code appears in the Terminal                                      │
+│                                                                             │
+│  ON YOUR PHONE:                                                             │
+│    • iPhone: Open Camera app → point at QR code → tap the notification     │
+│    • Android: Open the Expo Go app → tap "Scan QR code"                    │
+│                                                                             │
+│  RESULT: The app opens on your phone. Any changes you make to the code     │
+│    refresh automatically on the phone.                                      │
+│                                                                             │
+│  TO STOP: Press Ctrl+C in the Terminal window                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SHARING WITH FRIENDS & FAMILY (No App Store Required)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  OPTION A — Same WiFi Network (Instant, easiest)                           │
+│    • Start the app server: npx expo start                                   │
+│    • Friends install "Expo Go" from the App Store (free)                   │
+│    • They scan your QR code — app opens immediately                         │
+│    • Limitation: only works when you and friends are on the same WiFi      │
+│                                                                             │
+│  OPTION B — Any Network / Remote Sharing (works anywhere)                  │
+│    • Start the app server: npx expo start --tunnel                          │
+│    • This generates a public link instead of a local one                   │
+│    • Share the QR code or the "exp.host/..." link via text/email           │
+│    • Friends install "Expo Go" and scan it from anywhere                   │
+│    • Requires your Mac to be running the server while they use it          │
+│                                                                             │
+│  OPTION C — EAS Build / TestFlight (best — works like a real app)         │
+│    This creates a standalone app that doesn't need your Mac running.        │
+│    Steps:                                                                   │
+│      1. Create a free Expo account at expo.dev                             │
+│      2. In Terminal:                                                        │
+│           npm install -g eas-cli                                            │
+│           eas login                                                         │
+│           cd "/Users/mac/Desktop/Claude research app/mobile-app"           │
+│           eas build --platform ios --profile preview                        │
+│      3. This builds the app in the cloud (~10-15 min, free tier)           │
+│      4. You get a TestFlight link to share with up to 100 testers          │
+│    • NO Apple Developer account needed for TestFlight internal testing      │
+│    • Looks and feels like a real installed app                              │
+│                                                                             │
+│  OPTION D — App Store (long-term, public release)                          │
+│    • Requires Apple Developer account ($99/year at developer.apple.com)    │
+│    • Run: eas build --platform ios --profile production                    │
+│    • Then: eas submit --platform ios                                        │
+│    • Apple reviews it (1-7 days) → goes live on App Store                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  WHAT'S IN THE MOBILE APP vs. DESKTOP-ONLY FEATURES                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  MOBILE HAS EVERYTHING DESKTOP HAS, PLUS MOBILE-EXCLUSIVE FEATURES:       │
+│    ✅ Browse events (search, filter)                                        │
+│    ✅ Event detail view                                                     │
+│    ✅ Research sessions (start, capture, analyze, end)                      │
+│    ✅ Upload: URL, camera scan, photos, documents                           │
+│    ✅ AI analysis                                                            │
+│    ✅ My Uploads + account settings                                         │
+│    ✅ Notifications                                                          │
+│    📱 Clipboard detection — auto-detects URLs when switching from           │
+│       social media apps (TikTok, Instagram, YouTube, X, etc.)              │
+│    📱 Face ID / Touch ID login                                              │
+│    📱 Camera document scanning                                              │
+│                                                                             │
+│  DESKTOP-ONLY (not on mobile — too complex or requires web libraries):     │
+│    ❌ Network/relationship graph (uses a web-only library)                  │
+│    ❌ Presentations editor (drag-and-drop is too complex on touch)          │
+│    ❌ Spreadsheet/table view (too wide for mobile screens)                  │
+│    ❌ Full admin panel                                                       │
+│                                                                             │
+│  These may be added in future updates. The app explains this in-screen.    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MOBILE APP TROUBLESHOOTING                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  "Metro bundler fails to start" or strange startup errors                   │
+│    → Run: npx expo start --clear                                            │
+│                                                                             │
+│  "Dependency errors" on npm install                                          │
+│    → Run: rm -rf node_modules && npm install                               │
+│                                                                             │
+│  "Incompatible SDK version" error on phone                                  │
+│    → Update Expo Go on your phone to the latest version from the App Store │
+│    → Then run: npx expo install --fix (auto-corrects package versions)     │
+│    → Then run: npm install                                                  │
+│                                                                             │
+│  Events not loading on mobile                                                │
+│    → Same database as the website — if the website shows events, mobile    │
+│      should too. Check your internet connection.                            │
+│    → Check if Supabase is paused (see Section 8)                           │
+│                                                                             │
+│  Biometric login says "no saved session"                                    │
+│    → Log in once with your password first. Biometric then re-uses it.      │
+│                                                                             │
+│  App takes ~30 seconds to analyze a URL                                     │
+│    → Normal. The Render backend is waking up from sleep. See Section 8.    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MOBILE APP COSTS & ACCOUNTS NEEDED                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Node.js         — Free. Install from nodejs.org. No account needed.       │
+│  Expo Go (app)   — Free. Download from App Store / Google Play.            │
+│  Expo account    — Free at expo.dev. Only needed for EAS Builds (Option C) │
+│  EAS Build       — Free tier: 30 builds/month (plenty for personal use)    │
+│  Apple Developer — $99/year. Only needed for App Store submission (Opt D)  │
+│  Google Play     — $25 one-time. Only needed for Android Play Store submit │
+│                                                                             │
+│  For personal/friend sharing: $0 total (Options A + B are completely free) │
+│  For TestFlight sharing: $0 (free Expo account + EAS free tier)            │
+│  For App Store: $99/year Apple Developer account                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+═══════════════════════════════════════════════════════════════════════════════
+  NOTE TO CLAUDE: Update this file whenever a new service is added/removed
+  or when free tier limits change. Keep Section 1, 2, 3, 9, and 11 in sync.
+═══════════════════════════════════════════════════════════════════════════════

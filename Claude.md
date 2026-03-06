@@ -109,6 +109,18 @@ The `triggerBulkAnalysis(events)` function handles the actual AI analysis loop â
 
 ---
 
+## Presentations Page
+- Allows users to build slide-style presentations from event data
+- Supports selecting events, topics, people, organizations, and documents for inclusion
+- Uses AI to generate presentation content based on selected items
+- Organized by 3 levels of contextual depth:
+  - **Level 1:** Introduce key figures for first-time audience members
+  - **Level 2:** Intermediate audience with some background knowledge
+  - **Level 3:** Advanced audience familiar with key figures and their organizations
+- Presentations include links to event modals and source documents for credibility
+
+---
+
 ## Video Analysis (Backend Pipeline)
 - Backend file: `video_analyzer.py`
 - Extracts video metadata first (title, uploader, duration) without downloading
@@ -129,7 +141,7 @@ The `triggerBulkAnalysis(events)` function handles the actual AI analysis loop â
 ---
 
 ## Key Rules
-1. **Filters & Pages parity:** Any change to the Filters section or Pages nav must be applied to BOTH the global app AND the "My Uploads" tab inside the Account page. Only skip this if explicitly told to change just one.
+1. **Filters & Pages parity:** Any change to the Filters section or Pages nav must be applied to ALL spreadsheet views: global app, "My Uploads" tab, "Recent Uploads" tab, and "Presentations" tab inside the Account page. Only skip this if explicitly told to change just one.
 2. **Single file:** Do not create new files for features. Everything goes in `historical-events-v2.2.html`.
 3. **No build tools:** Do not suggest npm, webpack, or any build process. Everything runs from CDNs.
 4. **Always push at end of session** â€” the user tests on the live Netlify site, not locally.
@@ -143,5 +155,4 @@ The `triggerBulkAnalysis(events)` function handles the actual AI analysis loop â
 ---
 
 ## Upcoming Features (Not Yet Built)
-- **Presentations:** Allow users to build slide-style presentations from the event data
-- **UI overhaul:** Make the overall design more polished and modern, especially the timeline and network views
+- **UI overhaul:** Make the overall design more polished and modern, especially the timeline and network views. This will be manually requested when ready.
