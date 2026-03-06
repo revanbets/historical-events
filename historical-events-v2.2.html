@@ -4933,6 +4933,76 @@
         cleanup();
       }, [dbReady]);
 
+      // ── Shared Spreadsheet Toolbar ──
+      const DOC_TYPES = ['video','link','spreadsheet','document','image','other'];
+      const DOC_TYPE_LABELS = {video:'Video',link:'Link',spreadsheet:'Spreadsheet',document:'Document',image:'Image',other:'Other'};
+      const renderSpreadsheetToolbar = (f, setF, resultCount) => (
+        <div style={{marginBottom:'1rem',display:'flex',flexWrap:'wrap',gap:'0.75rem',alignItems:'center',padding:'0.75rem 1rem',background:'rgba(26,31,58,0.5)',borderRadius:'10px',border:'1px solid rgba(61,69,99,0.4)'}}>
+          {/* Sort */}
+          <div style={{display:'flex',alignItems:'center',gap:'0.4rem'}}>
+            <span style={{fontSize:'0.7rem',color:'#8b92b0',textTransform:'uppercase',fontWeight:700,letterSpacing:'0.5px'}}>Sort</span>
+            <select value={f.sortBy||'dateUploaded'} onChange={e=>setF(prev=>({...prev,sortBy:e.target.value}))} style={{fontSize:'0.78rem',padding:'0.35rem 0.5rem',background:'rgba(61,69,99,0.6)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'5px',color:'#e2e8f8',fontFamily:'inherit'}}>
+              <option value="dateUploaded">Date Added</option>
+              <option value="date">Date Created</option>
+              <option value="title">Name</option>
+            </select>
+            <select value={f.sortDir||'desc'} onChange={e=>setF(prev=>({...prev,sortDir:e.target.value}))} style={{fontSize:'0.78rem',padding:'0.35rem 0.5rem',background:'rgba(61,69,99,0.6)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'5px',color:'#e2e8f8',fontFamily:'inherit'}}>
+              <option value="desc">Newest</option>
+              <option value="asc">Oldest</option>
+            </select>
+          </div>
+
+          {/* Separator */}
+          <div style={{width:'1px',height:'24px',background:'rgba(61,69,99,0.6)'}} />
+
+          {/* View Mode */}
+          {currentUser && (
+            <div style={{display:'flex',alignItems:'center',gap:'0.4rem'}}>
+              <span style={{fontSize:'0.7rem',color:'#8b92b0',textTransform:'uppercase',fontWeight:700,letterSpacing:'0.5px'}}>View</span>
+              <div style={{display:'flex',background:'rgba(61,69,99,0.3)',borderRadius:'5px',padding:'2px'}}>
+                {['both','public','personal'].map(mode=>(
+                  <button key={mode} onClick={()=>setF(prev=>({...prev,viewMode:mode}))} style={{fontSize:'0.7rem',padding:'0.3rem 0.65rem',background:(f.viewMode||'both')===mode?'rgba(96,165,250,0.25)':'transparent',border:'none',borderRadius:'4px',color:(f.viewMode||'both')===mode?'#60a5fa':'#6b7394',cursor:'pointer',fontWeight:600,transition:'all 0.15s'}}>
+                    {mode==='both'?'All':mode==='public'?'Public':'Mine'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Separator */}
+          <div style={{width:'1px',height:'24px',background:'rgba(61,69,99,0.6)'}} />
+
+          {/* Doc Type */}
+          <div style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+            <span style={{fontSize:'0.7rem',color:'#8b92b0',textTransform:'uppercase',fontWeight:700,letterSpacing:'0.5px'}}>Type</span>
+            {DOC_TYPES.map(dt=>{
+              const active = (f.docTypes||[]).includes(dt);
+              return (
+                <button key={dt} onClick={()=>setF(prev=>{
+                  const cur = prev.docTypes||[];
+                  return {...prev, docTypes: active ? cur.filter(d=>d!==dt) : [...cur, dt]};
+                })} style={{fontSize:'0.68rem',padding:'0.25rem 0.55rem',background:active?'rgba(96,165,250,0.2)':'rgba(61,69,99,0.2)',border:`1px solid ${active?'rgba(96,165,250,0.4)':'rgba(61,69,99,0.4)'}`,borderRadius:'12px',color:active?'#60a5fa':'#6b7394',cursor:'pointer',fontWeight:active?700:500,transition:'all 0.15s'}}>
+                  {DOC_TYPE_LABELS[dt]}
+                </button>
+              );
+            })}
+            {(f.docTypes||[]).length>0 && (
+              <button onClick={()=>setF(prev=>({...prev,docTypes:[]}))} style={{fontSize:'0.65rem',color:'#ef4444',background:'none',border:'none',cursor:'pointer',fontWeight:600,padding:'0.2rem'}}>clear</button>
+            )}
+          </div>
+
+          {/* Results count */}
+          <div style={{marginLeft:'auto',fontSize:'0.75rem',color:'#8b92b0',fontWeight:600}}>{resultCount} result{resultCount!==1?'s':''}</div>
+        </div>
+      );
+
+      // Helper: can this user delete this event?
+      const canDelete = (event) => {
+        if (!currentUser) return false;
+        if (currentUser.role === 'owner' || currentUser.role === 'admin') return true;
+        return event.uploadedBy === currentUser.username;
+      };
+
       // ── User management (admin panel, Supabase-backed) ──
       const [adminUsers, setAdminUsers] = useState([]);
       const refreshAdminUsers = async () => { const users = await getAllUsers(); setAdminUsers(users); };
@@ -5151,11 +5221,12 @@
       }, [visibleEvents, recentHoursFilter]);
 
       const myUploads = useMemo(() =>
-        data.events.filter(e => e.uploadedBy === (currentUser ? currentUser.username : '__none__'))
+        data.events.filter(e => !e.isDeleted && e.uploadedBy === (currentUser ? currentUser.username : '__none__'))
       , [data.events, currentUser]);
 
       const filteredMyUploads = useMemo(() => {
-        return myUploads.filter(e => {
+        const filtered = myUploads.filter(e => {
+          if (e.isDeleted) return false;
           if (filters.appliedSearch) {
             const s = filters.appliedSearch.toLowerCase();
             if (!(e.title||'').toLowerCase().includes(s) && !(e.description||'').toLowerCase().includes(s)) return false;
@@ -5163,9 +5234,21 @@
           if (filters.topics.length > 0 && !(e.topics||[]).some(t => filters.topics.includes(t))) return false;
           if (filters.people.length > 0 && !(e.people||[]).some(p => filters.people.includes(p))) return false;
           if (filters.organizations.length > 0 && !(e.organizations||[]).some(o => filters.organizations.includes(o))) return false;
+          if (filters.docTypes.length > 0 && !filters.docTypes.includes(getDocType(e))) return false;
+          if (filters.viewMode === 'public' && !e.isPublic) return false;
+          if (filters.viewMode === 'personal' && e.uploadedBy !== currentUser?.username) return false;
           return true;
         });
-      }, [myUploads, filters]);
+        return [...filtered].sort((a,b) => {
+          const dir = filters.sortDir === 'asc' ? 1 : -1;
+          if (filters.sortBy === 'title') return dir * (a.title||'').localeCompare(b.title||'');
+          if (filters.sortBy === 'date') {
+            if (!a.date && !b.date) return 0; if (!a.date) return 1; if (!b.date) return -1;
+            return dir * (new Date(b.date) - new Date(a.date));
+          }
+          return dir * (new Date(b.dateUploaded||0).getTime() - new Date(a.dateUploaded||0).getTime());
+        });
+      }, [myUploads, filters, currentUser]);
 
       // ── My Uploads scoped memos (for Account page) ──
       const myFiltered = useMemo(() => {
@@ -6345,6 +6428,7 @@
       const UploadsContent = () => (
         <div>
           <FiltersComponent {...filterProps} />
+          {renderSpreadsheetToolbar(filters, setFilters, filteredMyUploads.length)}
           {filteredMyUploads.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">📂</div>
@@ -6353,14 +6437,14 @@
           ) : (
             <div className="spreadsheet">
               <table className="table">
-                <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Visibility</th><th>Type</th><th>Date</th><th>Topics</th></tr></thead>
+                <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Visibility</th><th>Type</th><th>Date</th><th>Topics</th><th style={{width:'36px'}}></th></tr></thead>
                 <tbody>
                   {filteredMyUploads.map(e => (
-                    <tr key={e.id} style={{cursor:'pointer'}}>
-                      <td onClick={()=>openEventModal(e,'my uploads')}>{e.id}</td>
-                      <td onClick={()=>openEventModal(e,'my uploads')} style={{fontWeight:600}}>{e.title}</td>
+                    <tr key={e.id} style={{cursor:'pointer'}} onClick={()=>openEventModal(e,'my uploads')}>
+                      <td>{e.id}</td>
+                      <td style={{fontWeight:600}}>{e.title}</td>
                       <td><span className={`status-${e.eventStatus||'unverified'}`}>{e.eventStatus==='historical_record'?'Historical Record':e.eventStatus==='contested'?'Contested':'Unverified'}</span></td>
-                      <td>
+                      <td onClick={ev=>ev.stopPropagation()}>
                         <button onClick={()=>toggleEventPublic(e.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0}}>
                           <span className={e.isPublic ? 'vis-public' : 'vis-private'}>{e.isPublic ? '🌐 Public' : '🔒 Private'}</span>
                         </button>
@@ -6368,6 +6452,11 @@
                       <td><span style={{padding:'0.25rem 0.6rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',fontSize:'0.75rem',color:'#60a5fa'}}>{e.sourceType}</span></td>
                       <td>{e.dateUploaded ? new Date(e.dateUploaded).toLocaleDateString() : '—'}</td>
                       <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
+                      <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
+                        {canDelete(e) && (
+                          <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -7041,22 +7130,7 @@
                 {/* Spreadsheet */}
                 {myPageTab === 'spreadsheet' && (
                   <div className="spreadsheet">
-                    {/* Filter Toolbar */}
-                    <div style={{marginBottom:'1rem',display:'flex',flexWrap:'wrap',gap:'1rem',alignItems:'center',padding:'0.75rem',background:'rgba(26,31,58,0.5)',borderRadius:'8px'}}>
-                      <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',fontWeight:700,letterSpacing:'0.5px'}}>Sort</div>
-                      <select value={myFilters.sortBy} onChange={(e)=>setMyFilters(prev=>({...prev,sortBy:e.target.value}))} style={{fontSize:'0.8rem',padding:'0.4rem 0.6rem',background:'rgba(61,69,99,0.6)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'4px',color:'#e2e8f8',fontFamily:'inherit'}}>
-                        <option value="dateUploaded">Date Added</option>
-                        <option value="date">Date Created</option>
-                        <option value="title">Name</option>
-                      </select>
-                      <select value={myFilters.sortDir} onChange={(e)=>setMyFilters(prev=>({...prev,sortDir:e.target.value}))} style={{fontSize:'0.8rem',padding:'0.4rem 0.6rem',background:'rgba(61,69,99,0.6)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'4px',color:'#e2e8f8',fontFamily:'inherit'}}>
-                        <option value="desc">Newest First</option>
-                        <option value="asc">Oldest First</option>
-                      </select>
-
-                      <div style={{marginLeft:'auto',fontSize:'0.75rem',color:'#8b92b0',fontWeight:700}}>Results: {mySortedEvents.length}</div>
-                    </div>
-
+                    {renderSpreadsheetToolbar(myFilters, setMyFilters, mySortedEvents.length)}
                     {selectedMyEvents.size > 0 && (
                       <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',alignItems:'center'}}>
                         <span style={{color:'#a78bfa',fontSize:'0.85rem',fontWeight:600}}>{selectedMyEvents.size} selected</span>
@@ -7092,7 +7166,7 @@
                               </button>
                             </td>
                             <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
-                              <button onClick={()=>deleteEvent(e.id)} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>🗑</button>
+                              <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
                             </td>
                           </tr>
                         ))}
@@ -8017,35 +8091,7 @@
             {/* SPREADSHEET */}
             {activeTab === 'spreadsheet' && (
               <div className="spreadsheet">
-                {/* Filter Toolbar */}
-                <div style={{marginBottom:'1rem',display:'flex',flexWrap:'wrap',gap:'1rem',alignItems:'center',padding:'0.75rem',background:'rgba(26,31,58,0.5)',borderRadius:'8px'}}>
-                  <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',fontWeight:700,letterSpacing:'0.5px'}}>Sort</div>
-                  <select value={filters.sortBy} onChange={(e)=>setFilters(prev=>({...prev,sortBy:e.target.value}))} style={{fontSize:'0.8rem',padding:'0.4rem 0.6rem',background:'rgba(61,69,99,0.6)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'4px',color:'#e2e8f8',fontFamily:'inherit'}}>
-                    <option value="dateUploaded">Date Added</option>
-                    <option value="date">Date Created</option>
-                    <option value="title">Name</option>
-                  </select>
-                  <select value={filters.sortDir} onChange={(e)=>setFilters(prev=>({...prev,sortDir:e.target.value}))} style={{fontSize:'0.8rem',padding:'0.4rem 0.6rem',background:'rgba(61,69,99,0.6)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'4px',color:'#e2e8f8',fontFamily:'inherit'}}>
-                    <option value="desc">Newest First</option>
-                    <option value="asc">Oldest First</option>
-                  </select>
-
-                  {currentUser && (
-                    <>
-                      <div style={{fontSize:'0.75rem',color:'#8b92b0',textTransform:'uppercase',fontWeight:700,letterSpacing:'0.5px'}}>View</div>
-                      <div style={{display:'flex',gap:'0.3rem',background:'rgba(61,69,99,0.3)',borderRadius:'4px',padding:'2px'}}>
-                        {['both','public','personal'].map(mode=>(
-                          <button key={mode} onClick={()=>setFilters(prev=>({...prev,viewMode:mode}))} style={{fontSize:'0.7rem',padding:'0.35rem 0.7rem',background:filters.viewMode===mode?'rgba(96,165,250,0.3)':'transparent',border:'none',borderRadius:'3px',color:filters.viewMode===mode?'#60a5fa':'#8b92b0',cursor:'pointer',fontWeight:600,transition:'all 0.2s'}}>
-                            {mode.charAt(0).toUpperCase()+mode.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  <div style={{marginLeft:'auto',fontSize:'0.75rem',color:'#8b92b0',fontWeight:700}}>Results: {sortedEvents.length}</div>
-                </div>
-
+                {renderSpreadsheetToolbar(filters, setFilters, sortedEvents.length)}
                 {selectedEvents.size > 0 && (
                   <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',alignItems:'center'}}>
                     <span style={{color:'#a78bfa',fontSize:'0.85rem',fontWeight:600}}>{selectedEvents.size} selected</span>
@@ -8058,7 +8104,7 @@
                     <th style={{width:'40px',textAlign:'center'}}>
                       <button onClick={()=>{if(selectedEvents.size===sortedEvents.length)setSelectedEvents(new Set());else setSelectedEvents(new Set(sortedEvents.map(e=>e.id)));}} style={{padding:'0.2rem 0.5rem',fontSize:'0.7rem',color:'#a78bfa',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit'}}>{selectedEvents.size===sortedEvents.length&&sortedEvents.length>0?'✓ All':'All'}</button>
                     </th>
-                    <th>ID</th><th>Title</th><th>AI Summary</th><th>Topics</th><th>Level</th><th>Date</th><th>Source</th><th>Link</th><th style={{width:'30px'}}></th>
+                    <th>ID</th><th>Title</th><th>AI Summary</th><th>Topics</th><th>Level</th><th>Date</th><th>Source</th><th>Link</th><th style={{width:'36px'}}></th>
                   </tr></thead>
                   <tbody>
                     {sortedEvents.map(e=>(
@@ -8080,8 +8126,8 @@
                           )}
                         </td>
                         <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
-                          {(currentUser?.role==='owner'||currentUser?.role==='admin'||e.uploadedBy===currentUser?.username)&&(
-                            <button onClick={()=>deleteEvent(e.id)} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>🗑</button>
+                          {canDelete(e) && (
+                            <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
                           )}
                         </td>
                       </tr>
@@ -8837,6 +8883,7 @@
                           </select>
                         </div>
                       </div>
+                      {renderSpreadsheetToolbar(filters, setFilters, recentUploads.length)}
                       {recentUploads.length === 0 ? (
                         <div style={{textAlign:'center',padding:'2rem',color:'#8b92b0'}}>No uploads in the last {recentHoursFilter >= 24 ? `${recentHoursFilter/24} day${recentHoursFilter/24!==1?'s':''}` : `${recentHoursFilter} hour${recentHoursFilter!==1?'s':''}`}.</div>
                       ) : (
@@ -8858,6 +8905,7 @@
                               <th>Level</th>
                               <th>Uploaded</th>
                               <th>Source</th>
+                              <th style={{width:'36px'}}></th>
                             </tr></thead>
                             <tbody>
                               {recentUploads.map(e=>(
@@ -8874,6 +8922,11 @@
                                   <td><span className={`level-${e.researchLevel}`}>L{e.researchLevel}</span></td>
                                   <td style={{fontSize:'0.8rem'}}>{e.dateUploaded ? new Date(e.dateUploaded).toLocaleString() : '—'}</td>
                                   <td>{e.sourceType}</td>
+                                  <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
+                                    {canDelete(e) && (
+                                      <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
+                                    )}
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -9472,6 +9525,15 @@
                   <div style={{width:`${exportTotal>0?Math.round(exportProgress/exportTotal*100):0}%`,height:'100%',background:'linear-gradient(90deg,#10b981,#34d399)',borderRadius:'3px',transition:'width 0.35s ease'}}/>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Undo Delete Toast */}
+          {lastDeleted && (
+            <div style={{position:'fixed',bottom:'24px',left:'50%',transform:'translateX(-50%)',zIndex:99999,display:'flex',alignItems:'center',gap:'0.75rem',padding:'0.75rem 1.25rem',background:'rgba(15,18,35,0.95)',border:'1px solid rgba(239,68,68,0.4)',borderRadius:'12px',boxShadow:'0 8px 32px rgba(0,0,0,0.5)',backdropFilter:'blur(12px)',maxWidth:'440px'}}>
+              <span style={{color:'#f87171',fontSize:'0.9rem',fontWeight:600}}>🗑 Deleted</span>
+              <span style={{color:'#8b92b0',fontSize:'0.85rem',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>"{lastDeleted.event?.title}"</span>
+              <button onClick={()=>undoDeleteEvent(lastDeleted.eventId)} style={{padding:'0.4rem 0.85rem',fontSize:'0.82rem',fontWeight:700,color:'#60a5fa',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.4)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>Undo</button>
             </div>
           )}
         </div>
