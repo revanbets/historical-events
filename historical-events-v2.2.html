@@ -4891,6 +4891,48 @@
         createNotification('success', 'Restored', 'Event has been restored.');
       };
 
+      const getTrashEvents = useMemo(() => {
+        return data.events.filter(e => e.isDeleted && (currentUser?.role === 'admin' || currentUser?.role === 'owner' || e.uploadedBy === currentUser?.username));
+      }, [data.events, currentUser]);
+
+      const permanentlyDeleteEvent = async (eventId) => {
+        const { error } = await supabaseClient.from('events').delete().eq('id', eventId);
+        if (error) { console.error('Permanent delete error:', error); return; }
+        setData(prev => {
+          const updated = prev.events.filter(e => e.id !== eventId);
+          const agg = rebuildAggregates(updated.filter(e => !e.isDeleted));
+          return { ...prev, events: updated, ...agg, metadata:{...prev.metadata, totalEvents:updated.filter(e => !e.isDeleted).length} };
+        });
+        createNotification('success', 'Deleted', 'Event permanently deleted.');
+      };
+
+      const emptyTrash = async () => {
+        const trashIds = getTrashEvents.map(e => e.id);
+        if (trashIds.length === 0) return;
+        const { error } = await supabaseClient.from('events').delete().in('id', trashIds);
+        if (error) { console.error('Empty trash error:', error); return; }
+        setData(prev => {
+          const updated = prev.events.filter(e => !trashIds.includes(e.id));
+          const agg = rebuildAggregates(updated.filter(e => !e.isDeleted));
+          return { ...prev, events: updated, ...agg, metadata:{...prev.metadata, totalEvents:updated.filter(e => !e.isDeleted).length} };
+        });
+        createNotification('success', 'Trash Emptied', `${trashIds.length} event(s) permanently deleted.`);
+      };
+
+      // Auto-cleanup: permanently delete events older than 30 days on app load
+      useEffect(() => {
+        const cleanup = async () => {
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          const oldDeleted = data.events.filter(e => e.isDeleted && e.deletedAt && e.deletedAt < thirtyDaysAgo);
+          if (oldDeleted.length > 0) {
+            const ids = oldDeleted.map(e => e.id);
+            const { error } = await supabaseClient.from('events').delete().in('id', ids);
+            if (error) console.error('Auto-cleanup error:', error);
+          }
+        };
+        cleanup();
+      }, [dbReady]);
+
       // ── User management (admin panel, Supabase-backed) ──
       const [adminUsers, setAdminUsers] = useState([]);
       const refreshAdminUsers = async () => { const users = await getAllUsers(); setAdminUsers(users); };
@@ -5040,9 +5082,9 @@
       // ── Filters ──
       const applySearch = () => setFilters(prev => ({ ...prev, appliedSearch: prev.search }));
 
-      const clearAllFilters = () => setFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const clearAllFilters = () => setFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false, sortBy:'dateUploaded', sortDir:'desc', viewMode:'both', docTypes:[], uploadedFrom:'', uploadedTo:'' });
       const applyMySearch = () => setMyFilters(prev => ({...prev, appliedSearch: prev.search}));
-      const clearMyFilters = () => setMyFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false });
+      const clearMyFilters = () => setMyFilters({ search:'', appliedSearch:'', topics:[], researchLevels:[], people:[], organizations:[], dateFrom:'', dateTo:'', showMajorOnly:false, sortBy:'dateUploaded', sortDir:'desc', viewMode:'both', docTypes:[], uploadedFrom:'', uploadedTo:'' });
 
       const filteredEvents = useMemo(() => {
         return visibleEvents.filter(e => {
@@ -6909,6 +6951,7 @@
             {/* Sub-tabs */}
             <div className="account-tabs">
               <button className={`account-tab ${accountTab==='uploads'?'active':''}`} onClick={()=>setAccountTab('uploads')}>📂 My Uploads</button>
+              <button className={`account-tab ${accountTab==='trash'?'active':''}`} onClick={()=>setAccountTab('trash')}>🗑 Trash {getTrashEvents.length > 0 ? `(${getTrashEvents.length})` : ''}</button>
               <button className={`account-tab ${accountTab==='sessions'?'active':''}`} onClick={()=>setAccountTab('sessions')}>🗺 Research Sessions</button>
               <button className={`account-tab ${accountTab==='settings'?'active':''}`} onClick={()=>setAccountTab('settings')}>⚙️ Settings</button>
               {isAdminOrOwner && (
@@ -7293,6 +7336,57 @@
                 </div>
               );
             })()}
+
+            {/* Trash Tab */}
+            {accountTab === 'trash' && (
+              <div style={{padding:'1.5rem 2rem',maxWidth:'1200px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1.5rem'}}>
+                  <h2 style={{fontSize:'1.4rem',fontWeight:700,color:'#e2e8f8',margin:0}}>Trash</h2>
+                  {getTrashEvents.length > 0 && (
+                    <button onClick={() => {
+                      if (window.confirm(`Delete ${getTrashEvents.length} event(s) permanently? This cannot be undone.`)) {
+                        emptyTrash();
+                      }
+                    }} style={{marginLeft:'auto',fontSize:'0.875rem',background:'#ef4444',color:'#fff',border:'none',borderRadius:'8px',padding:'0.5rem 1rem',cursor:'pointer',fontWeight:600}}>
+                      🗑 Empty Trash
+                    </button>
+                  )}
+                </div>
+                {getTrashEvents.length === 0 ? (
+                  <div style={{padding:'2rem',textAlign:'center',color:'#8b92b0',background:'rgba(26,31,58,0.4)',borderRadius:'10px',border:'1px solid rgba(61,69,99,0.5)'}}>
+                    No deleted events.
+                  </div>
+                ) : (
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'1rem'}}>
+                    {getTrashEvents.map(e => {
+                      const daysUntilDelete = Math.ceil((new Date(e.deletedAt).getTime() + 30*24*60*60*1000 - Date.now()) / (24*60*60*1000));
+                      return (
+                        <div key={e.id} style={{background:'rgba(26,31,58,0.6)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'10px',padding:'1rem',display:'flex',flexDirection:'column'}}>
+                          <div style={{color:'#ef4444',fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'0.4rem'}}>Deleted {getRelativeTime(e.deletedAt)}</div>
+                          <h3 style={{fontSize:'1rem',fontWeight:700,color:'#e2e8f8',margin:'0 0 0.5rem 0',lineHeight:1.3}}>{e.title}</h3>
+                          {e.description && <p style={{fontSize:'0.82rem',color:'#8b92b0',margin:'0 0 0.7rem 0',lineHeight:1.4}}>{e.description.substring(0,100)}{e.description.length > 100 ? '…' : ''}</p>}
+                          <div style={{fontSize:'0.72rem',color:'#8b92b0',marginBottom:'0.8rem'}}>
+                            {daysUntilDelete > 0 ? `Deletes in ${daysUntilDelete} day${daysUntilDelete === 1 ? '' : 's'}` : 'Deleting soon…'}
+                          </div>
+                          <div style={{display:'flex',gap:'0.5rem',marginTop:'auto'}}>
+                            <button onClick={() => undoDeleteEvent(e.id)} style={{flex:1,fontSize:'0.875rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',color:'#60a5fa',borderRadius:'6px',padding:'0.5rem',cursor:'pointer',fontWeight:600}}>
+                              ↺ Restore
+                            </button>
+                            <button onClick={() => {
+                              if (window.confirm(`Permanently delete "${e.title}"? This cannot be undone.`)) {
+                                permanentlyDeleteEvent(e.id);
+                              }
+                            }} style={{flex:1,fontSize:'0.875rem',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',borderRadius:'6px',padding:'0.5rem',cursor:'pointer',fontWeight:600}}>
+                              🗑 Forever
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
                         {/* Admin / Owner Panel */}
             {accountTab === 'admin' && isAdminOrOwner && <AdminPanel />}
