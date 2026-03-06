@@ -8261,11 +8261,23 @@
                       </div>
                     </div>
                     <input ref={fileInputRef} type="file" style={{display:'none'}} multiple accept=".xlsx,.xls,.csv,.txt,.pdf,.docx,.doc,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" onChange={handleFileUpload} />
-                    <div className="upload" onClick={()=>fileInputRef.current.click()}>
+                    <div
+                      className="upload"
+                      onClick={()=>fileInputRef.current.click()}
+                      onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor='#60a5fa';e.currentTarget.style.background='linear-gradient(135deg, rgba(37,43,74,0.95), rgba(61,69,99,0.8))';}}
+                      onDragLeave={e=>{e.currentTarget.style.borderColor='rgba(96,165,250,0.3)';e.currentTarget.style.background='linear-gradient(135deg, rgba(26,31,58,0.6), rgba(45,53,97,0.4))';}}
+                      onDrop={e=>{
+                        e.preventDefault();
+                        e.currentTarget.style.borderColor='rgba(96,165,250,0.3)';
+                        e.currentTarget.style.background='linear-gradient(135deg, rgba(26,31,58,0.6), rgba(45,53,97,0.4))';
+                        const files = e.dataTransfer.files;
+                        if(files && files.length > 0) handleFileUpload({target:{files}});
+                      }}
+                    >
                       <div className="upload-icon">🚀</div>
                       <h2 style={{fontSize:'1.75rem',marginBottom:'1rem'}}>Upload Documents</h2>
                       <p style={{fontSize:'1.125rem',marginBottom:'0.5rem',color:'#a78bfa'}}>AI-powered analysis & auto-tagging</p>
-                      <p style={{fontSize:'0.875rem',color:'#8b92b0'}}>Excel · CSV · TXT · PDF · Word (.docx)</p>
+                      <p style={{fontSize:'0.875rem',color:'#8b92b0'}}>Drag & drop or click • Excel · CSV · TXT · PDF · Word (.docx)</p>
                     </div>
                     {/* ── AI Analysis Controls ── */}
                     <div style={{display:'flex',gap:'0.75rem',margin:'1rem 0',flexWrap:'wrap',alignItems:'center'}}>
