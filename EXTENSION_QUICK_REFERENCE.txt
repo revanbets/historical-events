@@ -1,0 +1,81 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║   BROWSER EXTENSION UPDATE — QUICK REFERENCE                              ║
+║   Historical Events Database Research Companion                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+CURRENT VERSION: v1.2.0 (with popup toggle feature)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHEN YOU HAVE AN EXTENSION UPDATE:
+
+1. EDIT SOURCE FILES
+   └─ /Users/mac/Desktop/Claude research app/extension-working/chrome-extension/
+
+2. UPDATE VERSION NUMBER
+   └─ manifest.json → "version": "X.Y.Z"
+
+3. BUILD ZIP
+   cd extension-working && zip -r ../hdb-extension-vX.Y.Z.zip chrome-extension/
+
+4. UPDATE RESEARCH COMPANION PAGE
+   File: research-companion.html
+
+   Find: <a href="https://historical-events-databse.netlify.app/hdb-extension-vX.X.X.zip"
+   Replace with: new version number
+
+   Optional: Update "How to Use" section if features changed
+   (Look for ExtensionBanner component, then the <details> section)
+
+5. COMMIT BOTH FILES
+   git add research-companion.html hdb-extension-vX.Y.Z.zip
+   git commit -m "Update extension to vX.Y.Z in Research Companion page"
+
+6. VERIFY LIVE
+   https://historical-events-databse.netlify.app/research-companion.html
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE LOCATIONS:
+
+Source Code
+  └─ extension-working/chrome-extension/
+     ├─ manifest.json (bump version here)
+     ├─ popup.html
+     ├─ popup.js
+     ├─ popup.css
+     ├─ content.js
+     ├─ background.js
+     └─ icons/
+
+Distribution
+  └─ hdb-extension-vX.Y.Z.zip (generated, multiple versions can exist)
+
+Web Page
+  └─ research-companion.html (ExtensionBanner component)
+
+Documentation
+  └─ EXTENSION_UPDATE_PROCEDURES.md (detailed steps & checklist)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CURRENT FEATURES (v1.2.0):
+
+✓ Text selection capture with floating "Save to DB" popup
+✓ URL capture from any webpage
+✓ YouTube timecode capture (current playback position)
+✓ Video frame capture (mark start/end, extract frames)
+✓ Toggle button (⏸/▶) to temporarily disable popup (NEW!)
+  → Click button to pause/resume capture prompts
+  → Persists across sessions
+  → Notifies all open tabs of state change
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KEY NOTES:
+
+• Netlify auto-deploys research-companion.html when you push to GitHub
+• Download zip file should always match the version in manifest.json
+• Keep old zip files for rollback (git history preserved)
+• The ExtensionBanner shows installation steps + "How to Use" collapsible section
+• For detailed procedures, see: EXTENSION_UPDATE_PROCEDURES.md
