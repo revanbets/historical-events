@@ -939,7 +939,7 @@
     // Update LATEST_EXT_VERSION whenever a new extension zip is published.
     // content.js stamps data-hdb-ext-version on every page so the web app
     // can detect if the user's installed version is outdated.
-    const LATEST_EXT_VERSION = '1.1.0';
+    const LATEST_EXT_VERSION = '1.2.0';
     const EXT_RELEASE_NOTES = {
       '1.1.0': {
         title: 'Sessions Tab & Continuation Controls',
@@ -948,6 +948,14 @@
           'All source links and trail entries are now clickable — opens the original page',
           'Continue past sessions — old trail and captures imported without re-analysis by AI',
           'Active session controls (Pause, Resume, End) available directly inside the Sessions tab',
+        ]
+      },
+      '1.2.0': {
+        title: 'Capture Toggle Control',
+        notes: [
+          'New pause/play toggle button in popup header to temporarily disable "Save to DB" popup',
+          'Toggle state persists across browser sessions and all tabs',
+          'All tabs are instantly notified when capture is toggled on or off'
         ]
       }
     };
