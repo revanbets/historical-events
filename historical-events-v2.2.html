@@ -947,7 +947,7 @@
     // Update LATEST_EXT_VERSION whenever a new extension zip is published.
     // content.js stamps data-hdb-ext-version on every page so the web app
     // can detect if the user's installed version is outdated.
-    const LATEST_EXT_VERSION = '1.2.1';
+    const LATEST_EXT_VERSION = '1.2.2';
     const EXT_RELEASE_NOTES = {
       '1.1.0': {
         title: 'Sessions Tab & Continuation Controls',
@@ -972,6 +972,13 @@
           'Fixed: "Save to DB" popup no longer appears when capture is paused',
           'Improved: Capture state now loads correctly before page interaction',
           'Better: Pause toggle now works reliably from page load onwards'
+        ]
+      },
+      '1.2.2': {
+        title: 'Chrome Web Store Compliance',
+        notes: [
+          'Removed unused "scripting" permission to comply with Chrome Web Store policies',
+          'All functionality remains the same — only permission cleanup for store approval'
         ]
       }
     };
