@@ -162,6 +162,7 @@ const KEYS = {
   sessActive:    'hdb_companion_sess_active',
   sessName:      'hdb_companion_sess_name',
   bookmarkletAck:'hdb_companion_bm_ack',
+  extensionAck:  'hdb_companion_ext_ack',
 };
 
 function lsGet(key, fallback = null) {
@@ -398,6 +399,83 @@ function BookmarkletBanner({ onDismiss }) {
           </div>
         </div>
       </details>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// EXTENSION SETUP BANNER
+// ══════════════════════════════════════════════════════════════
+function ExtensionBanner({ onDismiss }) {
+  const [copied, setCopied] = useState(false);
+
+  function copyDownloadLink() {
+    const link = 'https://historical-events-databse.netlify.app/hdb-extension-v1.2.0.zip';
+    navigator.clipboard?.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(()=>setCopied(false), 2000);
+    }).catch(() => {});
+  }
+
+  return (
+    <div className="fade-in" style={{ margin:'12px 14px 0',
+      background:'linear-gradient(135deg,rgba(74,222,128,0.08),rgba(74,222,128,0.03))',
+      border:'1px solid rgba(74,222,128,0.3)', borderRadius:'10px', padding:'12px 14px' }}>
+      <div style={{ ...S.row(8), marginBottom:'8px' }}>
+        <span style={{ fontSize:'16px' }}>⚡</span>
+        <span style={{ fontSize:'12px', fontWeight:700, color:'#e2e8f8' }}>Browser Extension (Faster)</span>
+        <span style={{ fontSize:'10px', color:'#4ade80', background:'rgba(74,222,128,0.15)',
+          border:'1px solid rgba(74,222,128,0.3)', borderRadius:'4px', padding:'2px 6px', marginLeft:'6px' }}>
+          v1.2.0
+        </span>
+        <button onClick={onDismiss} style={{ ...S.btnText('#4a5270'), marginLeft:'auto', fontSize:'14px' }}>✕</button>
+      </div>
+      <p style={{ fontSize:'11px', color:'#8b95b0', lineHeight:1.6, marginBottom:'10px' }}>
+        For the fastest research experience, install the Chrome extension. It captures text selections and video timecodes instantly while you browse.
+      </p>
+
+      <div style={{ ...S.col(8), gap:'10px' }}>
+        {/* Installation Steps */}
+        <div style={{ fontSize:'11px', color:'#8b95b0', lineHeight:1.6 }}>
+          <strong style={{ color:'#e2e8f8', display:'block', marginBottom:'6px' }}>How to Install:</strong>
+          <ol style={{ paddingLeft:'18px', margin:'0' }}>
+            <li>Download: <a href="https://historical-events-databse.netlify.app/hdb-extension-v1.2.0.zip"
+              style={{ color:'#60a5fa', textDecoration:'none' }} target="_blank">hdb-extension-v1.2.0.zip</a></li>
+            <li>Unzip the file</li>
+            <li>Open Chrome → <code style={{ color:'#8b95b0' }}>chrome://extensions/</code></li>
+            <li>Turn on Developer Mode (top right)</li>
+            <li>Click "Load unpacked" → select the <code style={{ color:'#8b95b0' }}>chrome-extension</code> folder</li>
+          </ol>
+        </div>
+
+        {/* How to Use Section */}
+        <details>
+          <summary style={{ fontSize:'11px', color:'#60a5fa', cursor:'pointer', fontWeight:600 }}>How to Use</summary>
+          <div style={{ marginTop:'8px', ...S.col(6), fontSize:'11px', color:'#8b95b0', lineHeight:1.6 }}>
+            <strong style={{ color:'#e2e8f8', display:'block', marginBottom:'4px' }}>Quick Start:</strong>
+            <ul style={{ paddingLeft:'18px', margin:'0 0 10px 0' }}>
+              <li>Start a research session to enable the extension</li>
+              <li>Highlight any text on a webpage — the extension captures it instantly</li>
+              <li>On video pages, you'll see a timecode of the current playback position</li>
+              <li>Click <strong>"Save to DB"</strong> to add it to your session</li>
+            </ul>
+
+            <strong style={{ color:'#e2e8f8', display:'block', marginBottom:'4px' }}>Features:</strong>
+            <ul style={{ paddingLeft:'18px', margin:'0 0 10px 0' }}>
+              <li><strong>Capture Mode Toggle (⏸/▶):</strong> In the extension popup, click the pause/play button to temporarily disable the "Save to DB" popup while browsing other content</li>
+              <li><strong>Video Frame Capture:</strong> Mark a start and end timecode to capture multiple frames from that range</li>
+              <li>View all captures in the <strong>Captures</strong> tab before uploading</li>
+            </ul>
+
+            <strong style={{ color:'#e2e8f8', display:'block', marginBottom:'4px' }}>Tips:</strong>
+            <ul style={{ paddingLeft:'18px', margin:'0' }}>
+              <li>Use the toggle to avoid popups when doing general browsing</li>
+              <li>Your captures stay in the extension until you save them to the database</li>
+              <li>The extension works on all websites (YouTube, news sites, etc.)</li>
+            </ul>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }
@@ -1000,6 +1078,7 @@ function App() {
   // UI state
   const [tab, setTab] = useState('captures'); // captures | trail | sessions
   const [showBookmarklet, setShowBookmarklet] = useState(() => !lsGet(KEYS.bookmarkletAck, false));
+  const [showExtension, setShowExtension] = useState(() => !lsGet(KEYS.extensionAck, false));
   const [prefill, setPrefill] = useState(null);
   const [renamingSession, setRenamingSession] = useState(false);
   const [renameVal, setRenameVal] = useState('');
@@ -1205,6 +1284,11 @@ function App() {
     lsSet(KEYS.bookmarkletAck, true);
   }
 
+  function dismissExtension() {
+    setShowExtension(false);
+    lsSet(KEYS.extensionAck, true);
+  }
+
   if (!session) return <LoginScreen onLogin={handleLogin} />;
 
   const captureCount = captures.length;
@@ -1251,6 +1335,8 @@ function App() {
 
       {/* ── Bookmarklet Banner ───────────────────────────── */}
       {showBookmarklet && <BookmarkletBanner onDismiss={dismissBookmarklet} />}
+
+      {showExtension && <ExtensionBanner onDismiss={dismissExtension} />}
 
       {/* ── Session Bar ──────────────────────────────────── */}
       <div style={{ ...S.row(10), padding:'9px 14px',
