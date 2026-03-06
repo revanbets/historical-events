@@ -8340,25 +8340,28 @@
                       <button disabled={isProcessing} onClick={async ()=>{
                         const selected = [...selectedForAnalysis].map(evtId => {
                           const evt = recentUploads.find(e => e.id === evtId);
-                          return evt ? { evtId, backendId: evt._backendId } : null;
-                        }).filter(x => x && x.backendId);
-                        if (selected.length === 0) { alert('Select documents with backend records first (PDF, Word, or Image uploads).'); return; }
-                        const alreadyAnalyzed = selected.filter(({evtId}) => recentUploads.find(e=>e.id===evtId)?._aiAnalyzed);
+                          return evt;
+                        }).filter(evt => evt && (evt._backendId || (evt.link && evt.link.trim())));
+                        if (selected.length === 0) { alert('Select documents to analyze (spreadsheet events, PDF, Word, or Image uploads).'); return; }
+                        const alreadyAnalyzed = selected.filter(evt => evt._aiAnalyzed);
                         if (alreadyAnalyzed.length > 0 && !window.confirm(`${alreadyAnalyzed.length} of ${selected.length} document(s) have already been analyzed. Re-analyze them?`)) return;
                         setIsProcessing(true);
                         setUploadMessage(`Analyzing ${selected.length} document(s) with AI...`);
                         let successCount = 0;
-                        let lastAnalyzedEvent = null;
-                        for (const { evtId, backendId } of selected) {
+                        // Separate into two types: backend uploads and spreadsheet links
+                        const withBackend = selected.filter(e => e._backendId);
+                        const withLinks = selected.filter(e => !e._backendId && (e.link && e.link.trim()));
+                        for (const evt of withBackend) {
                           try {
-                            setUploadMessage(`Analyzing document ${successCount + 1} of ${selected.length}...`);
-                            const resp = await fetch(`${API_BASE}/api/analyze/${backendId}?mode=${analysisMode}${analysisSearch.trim()?'&search_focus='+encodeURIComponent(analysisSearch.trim()):''}`, { method: 'POST' });
+                            successCount++;
+                            setUploadMessage(`Analyzing document ${successCount} of ${selected.length}...`);
+                            const resp = await fetch(`${API_BASE}/api/analyze/${evt._backendId}?mode=${analysisMode}${analysisSearch.trim()?'&search_focus='+encodeURIComponent(analysisSearch.trim()):''}`, { method: 'POST' });
                             if (resp.ok) {
                               const result = await resp.json();
                               const rec = result.record;
                               if (rec) {
                                 const updatedEvent = {
-                                  ...(data.events.find(e => e.id === evtId) || {}),
+                                  ...(data.events.find(e => e.id === evt.id) || {}),
                                   aiSummary: rec.summary || '',
                                   description: rec.description || rec.summary || '',
                                   topics: rec.topics && rec.topics.length > 0 ? rec.topics : [],
@@ -8375,13 +8378,56 @@
                                 };
                                 setData(prev => ({
                                   ...prev,
-                                  events: prev.events.map(e => e.id === evtId ? {...e, ...updatedEvent} : e),
+                                  events: prev.events.map(e => e.id === evt.id ? {...e, ...updatedEvent} : e),
                                   people: Array.from(new Set([...prev.people, ...(rec.people||[])])).sort(),
                                   organizations: Array.from(new Set([...prev.organizations, ...(rec.organizations||[])])).sort(),
                                   topics: Array.from(new Set([...prev.topics, ...(rec.topics||[])])).sort(),
                                 }));
                                 lastAnalyzedEvent = updatedEvent;
                                 successCount++;
+                              }
+                            }
+                          } catch(err) {}
+                        }
+                        // Path 2: Spreadsheet events with links
+                        for (const evt of withLinks) {
+                          try {
+                            successCount++;
+                            setUploadMessage(`Analyzing document ${successCount} of ${selected.length} — scraping ${(evt.link||'').length > 0 ? 'link' : 'links'}...`);
+                            const resp = await fetch(`${API_BASE}/api/analyze-event-links`, {
+                              method: 'POST',
+                              headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify({
+                                title: evt.title || '', description: evt.description || '',
+                                links: evt.link ? [evt.link] : [],
+                                mode: analysisMode,
+                                ...(analysisSearch.trim() && { search_focus: analysisSearch.trim() }),
+                              }),
+                            });
+                            if (resp.ok) {
+                              const result = await resp.json();
+                              const analysis = result.analysis;
+                              if (analysis) {
+                                const updatedEvent = {
+                                  ...(data.events.find(e => e.id === evt.id) || {}),
+                                  aiSummary: analysis.summary || '',
+                                  description: analysis.description || analysis.summary || '',
+                                  topics: analysis.topics && analysis.topics.length > 0 ? analysis.topics : [],
+                                  people: analysis.people && analysis.people.length > 0 ? analysis.people : [],
+                                  organizations: analysis.organizations && analysis.organizations.length > 0 ? analysis.organizations : [],
+                                  source: analysis.source || '',
+                                  primarySource: analysis.primary_source || '',
+                                  mainLink: analysis.main_link || '',
+                                  _aiAnalyzed: true,
+                                };
+                                setData(prev => ({
+                                  ...prev,
+                                  events: prev.events.map(e => e.id === evt.id ? {...e, ...updatedEvent} : e),
+                                  people: Array.from(new Set([...prev.people, ...(analysis.people||[])])).sort(),
+                                  organizations: Array.from(new Set([...prev.organizations, ...(analysis.organizations||[])])).sort(),
+                                  topics: Array.from(new Set([...prev.topics, ...(analysis.topics||[])])).sort(),
+                                }));
+                                lastAnalyzedEvent = updatedEvent;
                               }
                             }
                           } catch(err) {}
