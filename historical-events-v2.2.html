@@ -160,6 +160,8 @@
     .tags { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
     .tag { padding: 0.5rem 1rem; background: linear-gradient(135deg, rgba(45,53,97,0.8), rgba(61,69,99,0.8)); border-radius: 24px; font-size: 0.8125rem; color: #a78bfa; border: 2px solid rgba(167,139,250,0.3); font-weight: 600; transition: all 0.2s; cursor: pointer; }
     .tag:hover { background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(139,92,246,0.2)); border-color: #a78bfa; transform: scale(1.05); }
+    .tag.ai-tag { background: linear-gradient(135deg, rgba(6,182,212,0.3) 0%, rgba(139,92,246,0.35) 60%, rgba(236,72,153,0.3) 100%); border: 2px solid rgba(139,92,246,0.55); color: #e0d4ff; box-shadow: 0 0 8px rgba(139,92,246,0.2); }
+    .tag.ai-tag:hover { background: linear-gradient(135deg, rgba(6,182,212,0.45) 0%, rgba(139,92,246,0.5) 60%, rgba(236,72,153,0.45) 100%); border-color: #c084fc; box-shadow: 0 0 14px rgba(139,92,246,0.4); transform: scale(1.05); }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
     .card { background: linear-gradient(135deg, rgba(26,31,58,0.8), rgba(45,53,97,0.6)); border: 2px solid rgba(61,69,99,0.5); border-radius: 16px; padding: 2rem; cursor: pointer; transition: all 0.3s; backdrop-filter: blur(10px); }
     .card:hover { border-color: #60a5fa; transform: translateY(-4px); box-shadow: 0 8px 24px rgba(96,165,250,0.2); }
@@ -414,6 +416,9 @@
       transcript_file: e._transcriptFile || '', attachments: e._attachments || [],
       backend_file_name: e._backendFileName || '', is_video: e.isVideo || false,
       transcription: e.transcription || null,
+      ai_topics: e.aiTopics || [],
+      ai_people: e.aiPeople || [],
+      ai_orgs:   e.aiOrgs   || [],
     });
     const fromDbRow = (r) => ({
       id: r.id, title: r.title, description: r.description, date: r.date,
@@ -431,6 +436,9 @@
       _transcriptFile: r.transcript_file, _attachments: r.attachments || [],
       _backendFileName: r.backend_file_name, isVideo: r.is_video,
       transcription: r.transcription,
+      aiTopics: r.ai_topics || [],
+      aiPeople: r.ai_people || [],
+      aiOrgs:   r.ai_orgs   || [],
     });
     const generateEventId = () => 'EVT-' + crypto.randomUUID().substring(0, 8);
     const rebuildAggregates = (events) => {
@@ -1637,9 +1645,9 @@
                             </div>
                           </div>
                           <button onClick={e=>{e.stopPropagation(); rsSaveToDb(sess);}}
-                            style={{background:'linear-gradient(135deg,#3b82f6,#6366f1)', border:'none', borderRadius:'8px', color:'white',
+                            style={{background:'linear-gradient(135deg,#06b6d4,#8b5cf6,#ec4899)', border:'none', borderRadius:'8px', color:'white',
                               fontSize:'0.82rem', fontWeight:700, padding:'0.5rem 1.25rem', cursor:'pointer', flexShrink:0,
-                              boxShadow:'0 0 14px rgba(99,102,241,0.3)'}}>
+                              boxShadow:'0 0 14px rgba(139,92,246,0.3)'}}>
                             Analyze &amp; Save
                           </button>
                         </div>
@@ -1894,7 +1902,7 @@
                   )}
                   {rsCaptureModal.capture.url && !rsCaptureAiResult && (
                     <button onClick={()=>rsCaptureAnalyze(rsCaptureModal.capture)} disabled={rsCaptureAnalyzing}
-                      style={{background: rsCaptureAnalyzing ? 'rgba(99,102,241,0.15)' : 'linear-gradient(135deg,#3b82f6,#6366f1)', border:'1px solid rgba(99,102,241,0.4)', borderRadius:'7px', color:'white', fontSize:'0.8rem', fontWeight:700, padding:'0.45rem 1rem', cursor: rsCaptureAnalyzing ? 'wait' : 'pointer', display:'inline-flex', alignItems:'center', gap:'0.4rem'}}>
+                      style={{background: rsCaptureAnalyzing ? 'rgba(139,92,246,0.15)' : 'linear-gradient(135deg,#06b6d4,#8b5cf6,#ec4899)', border:'1px solid rgba(139,92,246,0.4)', borderRadius:'7px', color:'white', fontSize:'0.8rem', fontWeight:700, padding:'0.45rem 1rem', cursor: rsCaptureAnalyzing ? 'wait' : 'pointer', display:'inline-flex', alignItems:'center', gap:'0.4rem'}}>
                       {rsCaptureAnalyzing ? '\u23F3 Analyzing\u2026' : '\uD83E\uDD16 Analyze with AI'}
                     </button>
                   )}
@@ -5411,6 +5419,13 @@
         return { topics: topicCandidates, people: names, organizations: orgs, summary };
       };
 
+      // ── Batch runner helper ──
+      const runInBatches = async (items, batchSize, fn) => {
+        for (let i = 0; i < items.length; i += batchSize) {
+          await Promise.all(items.slice(i, i + batchSize).map(fn));
+        }
+      };
+
       // ── Bulk AI analysis (called by autoAnalysis path and suggestion popup) ──
       // Handles two paths:
       // 1. Events with _backendId → analyze via /api/analyze/{id} (uploaded files)
@@ -5423,36 +5438,69 @@
         setUploadMessage(`✓ Uploaded ${eventsToProcess.length} event(s) — analyzing ${totalToAnalyze} with AI...`);
         (async () => {
           let analyzedCount = 0;
+          const totalNewPeople = new Set();
+          const totalNewTopics = new Set();
+          const totalNewOrgs = new Set();
+
           // Path 1: Backend-uploaded files (PDFs, images, docs)
-          for (const evt of withBackend) {
+          await runInBatches(withBackend, 3, async (evt) => {
+            setUploadMessage(`Analyzing ${analyzedCount + 1} of ${totalToAnalyze} events...`);
             try {
               const resp = await fetch(`${API_BASE}/api/analyze/${evt._backendId}?mode=${analysisMode}${analysisSearch.trim()?'&search_focus='+encodeURIComponent(analysisSearch.trim()):''}`, { method: 'POST' });
               if (resp.ok) {
                 const result = await resp.json();
                 const rec = result.record;
                 if (rec) {
-                  // Use AI-extracted event_date if the current date is just today's date (auto-set)
                   const extractedDate = result.event_date || '';
                   const isAutoDate = evt.date === new Date().toISOString().split('T')[0];
                   const newDate = (extractedDate && isAutoDate) ? extractedDate : evt.date;
 
+                  const aiTopicsNew  = rec.topics || [];
+                  const aiPeopleNew  = rec.people || [];
+                  const aiOrgsNew    = rec.organizations || [];
+                  const mergedTopics = [...new Set([...(evt.topics||[]), ...aiTopicsNew])];
+                  const mergedPeople = [...new Set([...(evt.people||[]), ...aiPeopleNew])];
+                  const mergedOrgs   = [...new Set([...(evt.organizations||[]), ...aiOrgsNew])];
+
+                  // Enrich description: replace if empty/stub, otherwise use the richer of the two
+                  let newDesc = evt.description;
+                  if (!newDesc || newDesc.includes('Text extracted') || newDesc.includes('document uploaded')) {
+                    newDesc = rec.description || rec.summary || newDesc;
+                  } else if (rec.summary) {
+                    newDesc = `${newDesc} ${rec.summary}`;
+                  }
+
                   const updateFields = {
-                    ai_summary: rec.summary || '', description: rec.description || rec.summary || '',
-                    topics: rec.topics || [], people: rec.people || [], organizations: rec.organizations || [],
-                    source: rec.source || '', primary_source: rec.primary_source || '', main_link: rec.main_link || '',
-                    ai_analyzed: true, analysis_mode: rec.analysis_mode || '', has_frames: rec.has_frames || false,
+                    ai_summary: rec.summary || '',
+                    description: newDesc,
+                    topics: mergedTopics,
+                    people: mergedPeople,
+                    organizations: mergedOrgs,
+                    ai_topics: aiTopicsNew,
+                    ai_people: aiPeopleNew,
+                    ai_orgs: aiOrgsNew,
+                    source: rec.source || '',
+                    primary_source: rec.primary_source || '',
+                    main_link: rec.main_link || '',
+                    ai_analyzed: true,
+                    analysis_mode: rec.analysis_mode || '',
+                    has_frames: rec.has_frames || false,
                   };
                   if (newDate !== evt.date) updateFields.date = newDate;
                   await supabaseClient.from('events').update(updateFields).eq('id', evt.id);
+
                   setData(prev => ({
                     ...prev,
                     events: prev.events.map(e => e.id === evt.id ? {
                       ...e,
                       aiSummary: rec.summary || e.aiSummary,
-                      description: rec.description || rec.summary || e.description,
-                      topics: rec.topics && rec.topics.length > 0 ? rec.topics : e.topics,
-                      people: rec.people && rec.people.length > 0 ? rec.people : e.people,
-                      organizations: rec.organizations && rec.organizations.length > 0 ? rec.organizations : e.organizations,
+                      description: newDesc,
+                      topics: mergedTopics,
+                      people: mergedPeople,
+                      organizations: mergedOrgs,
+                      aiTopics: aiTopicsNew,
+                      aiPeople: aiPeopleNew,
+                      aiOrgs: aiOrgsNew,
                       source: rec.source || e.source || '',
                       primarySource: rec.primary_source || e.primarySource || '',
                       mainLink: rec.main_link || e.mainLink || '',
@@ -5461,25 +5509,33 @@
                       _analysisMode: rec.analysis_mode || '',
                       _hasFrames: rec.has_frames || false,
                     } : e),
-                    people: Array.from(new Set([...prev.people, ...(rec.people||[])])).sort(),
-                    organizations: Array.from(new Set([...prev.organizations, ...(rec.organizations||[])])).sort(),
-                    topics: Array.from(new Set([...prev.topics, ...(rec.topics||[])])).sort(),
+                    people: Array.from(new Set([...prev.people, ...aiPeopleNew])).sort(),
+                    organizations: Array.from(new Set([...prev.organizations, ...aiOrgsNew])).sort(),
+                    topics: Array.from(new Set([...prev.topics, ...aiTopicsNew])).sort(),
                   }));
+
+                  aiTopicsNew.forEach(t => totalNewTopics.add(t));
+                  aiPeopleNew.forEach(p => totalNewPeople.add(p));
+                  aiOrgsNew.forEach(o => totalNewOrgs.add(o));
                   analyzedCount++;
                 }
               }
             } catch(err) { console.error('Backend analysis error:', err); }
-          }
+            setUploadMessage(`Analyzing... ${analyzedCount} of ${totalToAnalyze} complete`);
+          });
+
           // Path 2: Spreadsheet events with links — scrape & analyze via backend
-          for (const evt of withLinks) {
+          await runInBatches(withLinks, 3, async (evt) => {
+            setUploadMessage(`Analyzing ${analyzedCount + 1} of ${totalToAnalyze} events...`);
             try {
-              setUploadMessage(`Analyzing "${(evt.title||'').substring(0,40)}..." — scraping ${evt.links.length} link(s)...`);
+              const linksToSend = (evt.links||[]).filter(l=>l&&l.trim()).slice(0, 5);
               const resp = await fetch(`${API_BASE}/api/analyze-event-links`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                  title: evt.title || '', description: evt.description || '',
-                  links: (evt.links||[]).filter(l=>l&&l.trim()),
+                  title: evt.title || '',
+                  description: evt.description || '',
+                  links: linksToSend,
                   mode: analysisMode,
                   ...(analysisSearch.trim() && { search_focus: analysisSearch.trim() }),
                 }),
@@ -5492,40 +5548,80 @@
                   const isAutoDate = !evt.date || evt.date === new Date().toISOString().split('T')[0];
                   const newDate = (extractedDate && isAutoDate) ? extractedDate : evt.date;
 
+                  const aiTopicsNew  = analysis.topics || [];
+                  const aiPeopleNew  = analysis.people || [];
+                  const aiOrgsNew    = analysis.organizations || [];
+                  const mergedTopics = [...new Set([...(evt.topics||[]), ...aiTopicsNew])];
+                  const mergedPeople = [...new Set([...(evt.people||[]), ...aiPeopleNew])];
+                  const mergedOrgs   = [...new Set([...(evt.organizations||[]), ...aiOrgsNew])];
+
+                  // Enrich description: replace if empty/stub, otherwise append
+                  let newDesc = evt.description;
+                  if (!newDesc || newDesc.includes('Text extracted') || newDesc.includes('document uploaded')) {
+                    newDesc = analysis.description || analysis.summary || newDesc;
+                  } else if (analysis.summary) {
+                    newDesc = `${newDesc} ${analysis.summary}`;
+                  }
+
                   const updateFields = {
-                    ai_summary: analysis.summary || '', description: analysis.description || analysis.summary || '',
-                    topics: analysis.topics || [], people: analysis.people || [], organizations: analysis.organizations || [],
-                    source: analysis.source || '', primary_source: analysis.primary_source || '', main_link: analysis.main_link || '',
+                    ai_summary: analysis.summary || '',
+                    description: newDesc,
+                    topics: mergedTopics,
+                    people: mergedPeople,
+                    organizations: mergedOrgs,
+                    ai_topics: aiTopicsNew,
+                    ai_people: aiPeopleNew,
+                    ai_orgs: aiOrgsNew,
+                    source: analysis.source || '',
+                    primary_source: analysis.primary_source || '',
+                    main_link: analysis.main_link || '',
                     ai_analyzed: true,
                   };
                   if (newDate !== evt.date) updateFields.date = newDate;
                   await supabaseClient.from('events').update(updateFields).eq('id', evt.id);
+
                   setData(prev => ({
                     ...prev,
                     events: prev.events.map(e => e.id === evt.id ? {
                       ...e,
                       aiSummary: analysis.summary || e.aiSummary,
-                      description: analysis.description || analysis.summary || e.description,
-                      topics: analysis.topics && analysis.topics.length > 0 ? analysis.topics : e.topics,
-                      people: analysis.people && analysis.people.length > 0 ? analysis.people : e.people,
-                      organizations: analysis.organizations && analysis.organizations.length > 0 ? analysis.organizations : e.organizations,
+                      description: newDesc,
+                      topics: mergedTopics,
+                      people: mergedPeople,
+                      organizations: mergedOrgs,
+                      aiTopics: aiTopicsNew,
+                      aiPeople: aiPeopleNew,
+                      aiOrgs: aiOrgsNew,
                       source: analysis.source || e.source || '',
                       primarySource: analysis.primary_source || e.primarySource || '',
                       mainLink: analysis.main_link || e.mainLink || '',
                       date: newDate || e.date,
                       _aiAnalyzed: true,
                     } : e),
-                    people: Array.from(new Set([...prev.people, ...(analysis.people||[])])).sort(),
-                    organizations: Array.from(new Set([...prev.organizations, ...(analysis.organizations||[])])).sort(),
-                    topics: Array.from(new Set([...prev.topics, ...(analysis.topics||[])])).sort(),
+                    people: Array.from(new Set([...prev.people, ...aiPeopleNew])).sort(),
+                    organizations: Array.from(new Set([...prev.organizations, ...aiOrgsNew])).sort(),
+                    topics: Array.from(new Set([...prev.topics, ...aiTopicsNew])).sort(),
                   }));
+
+                  aiTopicsNew.forEach(t => totalNewTopics.add(t));
+                  aiPeopleNew.forEach(p => totalNewPeople.add(p));
+                  aiOrgsNew.forEach(o => totalNewOrgs.add(o));
                   analyzedCount++;
                 }
               }
             } catch(err) { console.error('Link analysis error:', err); }
-          }
-          setUploadMessage(`✓ AI Analysis complete for ${analyzedCount} event(s).`);
-          createNotification('ai_analysis', 'AI Analysis Complete', `Analyzed ${analyzedCount} event(s) with AI.`);
+            setUploadMessage(`Analyzing... ${analyzedCount} of ${totalToAnalyze} complete`);
+          });
+
+          // Summary notification
+          const summaryParts = [];
+          if (totalNewPeople.size > 0) summaryParts.push(`${totalNewPeople.size} people`);
+          if (totalNewTopics.size > 0) summaryParts.push(`${totalNewTopics.size} topics`);
+          if (totalNewOrgs.size > 0) summaryParts.push(`${totalNewOrgs.size} organizations`);
+          const enrichmentSummary = summaryParts.length > 0 ? ` Added: ${summaryParts.join(', ')}.` : '';
+
+          setUploadMessage(`✓ AI Analysis complete for ${analyzedCount} event(s).${enrichmentSummary}`);
+          createNotification('ai_analysis', 'AI Analysis Complete', `Analyzed ${analyzedCount} of ${totalToAnalyze} event(s) with AI.${enrichmentSummary}`);
           setTimeout(()=>setUploadMessage(''),5000);
           setData(prev => {
             const updatedEvt = prev.events.find(e => e.id === eventsToProcess[0].id);
@@ -5533,6 +5629,14 @@
             return prev;
           });
         })();
+      };
+
+      // ── URL extraction — finds all http/https URLs in any text string ──
+      const URL_REGEX = /https?:\/\/[^\s"'<>,;)\]]+/g;
+      const extractUrlsFromText = (text) => {
+        if (!text || typeof text !== 'string') return [];
+        const found = text.match(URL_REGEX) || [];
+        return [...new Set(found.map(u => u.replace(/[.,;:!?]+$/, '')))];
       };
 
       // ── Hybrid spreadsheet field resolver (rigid first, flexible fallback) ──
@@ -5578,7 +5682,9 @@
                         const xlTopics= resolveField(row, ['topics','Topics'], ['topic','category','categories','tags','type','keywords']) || sheetName;
                         const xlPeople= resolveField(row, ['writer','inventor','people'], ['person','author','authors','names','individuals','who']) || '';
                         const xlOrgs  = resolveField(row, ['publisher','company','organization'], ['organizations','org','orgs','companies','institution']) || '';
-                        const xlLink  = resolveField(row, ['link main','link'], ['linkmain','url','source','reference','href','website']) || '';
+                        const xlLinkMain = resolveField(row, ['link main','link'], ['linkmain','url','source','reference','href','website']) || '';
+                        const xlAllText = Object.values(row).map(v => String(v||'')).join(' ');
+                        const xlLinks = [...new Set([xlLinkMain, ...extractUrlsFromText(xlAllText)].filter(l=>l))];
                         const xlLevel = resolveField(row, ['srch lvl','My search lvl'], ['level','researchlevel','priority','searchlevel','srchlvl']) || '1';
                         const xlUnformatted = !xlTitle && !xlDate;
                         newEvents.push({
@@ -5590,10 +5696,11 @@
                           topics: xlTopics.toString().split(/[,;/]/).map(t=>t.trim()).filter(t=>t),
                           people: xlPeople.toString().split(/[,;]/).map(p=>p.trim()).filter(p=>p),
                           organizations: xlOrgs.toString().split(/[,;/]/).map(o=>o.trim()).filter(o=>o),
-                          links: [xlLink].filter(l=>l),
+                          links: xlLinks,
                           researchLevel: parseInt(xlLevel)||1,
                           sourceType:'Uploaded Excel', sourceSheet:sheetName, connections:[], aiSummary:'', isMajorEvent:false,
                           uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified',
+                          aiTopics:[], aiPeople:[], aiOrgs:[],
                           _isUnformatted: xlUnformatted,
                         });
                       });
@@ -5619,9 +5726,11 @@
                   const csvTopics= resolveField(row, ['topics','Topics'], ['topic','category','categories','tags','type','keywords']) || 'CSV Import';
                   const csvPeople= resolveField(row, ['writer','inventor','people'], ['person','author','authors','names','individuals','who']) || '';
                   const csvOrgs  = resolveField(row, ['publisher','company','organization'], ['organizations','org','orgs','companies','institution']) || '';
-                  const csvLink  = resolveField(row, ['link main','link'], ['linkmain','url','source','reference','href','website']) || '';
+                  const csvLinkMain = resolveField(row, ['link main','link'], ['linkmain','url','source','reference','href','website']) || '';
+                  const csvAllText = Object.values(row).map(v => String(v||'')).join(' ');
+                  const csvLinks = [...new Set([csvLinkMain, ...extractUrlsFromText(csvAllText)].filter(l=>l))];
                   const csvLevel = resolveField(row, ['srch lvl','My search lvl'], ['level','researchlevel','priority','searchlevel','srchlvl']) || '1';
-                  newEvents.push({ id:generateEventId(), title:csvTitle||`CSV Entry ${i}`, description:csvDesc||'', date:csvDate||null, dateUploaded:new Date().toISOString(), topics:csvTopics.split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:csvPeople.split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:csvOrgs.split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:[csvLink].filter(l=>l), researchLevel:parseInt(csvLevel)||1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified', _isUnformatted: !csvTitle && !csvDate });
+                  newEvents.push({ id:generateEventId(), title:csvTitle||`CSV Entry ${i}`, description:csvDesc||'', date:csvDate||null, dateUploaded:new Date().toISOString(), topics:csvTopics.split(/[,;]/).map(t=>t.trim()).filter(t=>t), people:csvPeople.split(/[,;]/).map(p=>p.trim()).filter(p=>p), organizations:csvOrgs.split(/[,;]/).map(o=>o.trim()).filter(o=>o), links:csvLinks, researchLevel:parseInt(csvLevel)||1, sourceType:'Uploaded CSV', sourceSheet:file.name, connections:[], aiSummary:'', isMajorEvent:false, uploadedBy: currentUser ? currentUser.username : 'unknown', isPublic: false, eventStatus: 'unverified', aiTopics:[], aiPeople:[], aiOrgs:[], _isUnformatted: !csvTitle && !csvDate });
                 }
               }
             } else if (file.name.endsWith('.txt')) {
@@ -5645,6 +5754,7 @@
                       return t.length > 20 && !t.startsWith('http') && !/^(Share|Save|Click here|Recommended Stories|list of|list \d|end of list)/i.test(t);
                     });
                     const cleanDesc = cleanLines.slice(0, 3).join(' ').substring(0, 500);
+                    const textLinks = extractUrlsFromText(rawText);
                     newEvents.push({
                       id:generateEventId(),
                       title: file.name.replace(/\.[^.]+$/, ''),
@@ -5652,7 +5762,7 @@
                       date: new Date().toISOString().split('T')[0],
                       dateUploaded: new Date().toISOString(),
                       topics: [typeLabel + ' Document'],
-                      people: [], organizations: [], links: [],
+                      people: [], organizations: [], links: textLinks,
                       researchLevel: 1,
                       sourceType: 'Uploaded ' + typeLabel,
                       sourceSheet: file.name,
@@ -5661,6 +5771,7 @@
                       isMajorEvent: false,
                       uploadedBy: currentUser ? currentUser.username : 'unknown',
                       isPublic: false, eventStatus: 'unverified',
+                      aiTopics:[], aiPeople:[], aiOrgs:[],
                       _backendId: rec.id,
                       _backendFileName: rec.saved_filename || '',
                       _hasBackend: true,
@@ -6318,9 +6429,9 @@
                     </div>
                   )}
                 </div>
-                {(modalData.topics||[]).length > 0 && <div className="form-group"><label className="form-label">Topics</label><div className="tags">{modalData.topics.map((t,i)=><span key={i} className="tag" onClick={()=>{setShowModal(false);openEntityDetail('topic',t);}}>{t}</span>)}</div></div>}
-                {(modalData.people||[]).length > 0 && <div className="form-group"><label className="form-label">People</label><div className="tags">{modalData.people.map((p,i)=><span key={i} className="tag" onClick={()=>{setShowModal(false);openEntityDetail('person',p);}}>{p}</span>)}</div></div>}
-                {(modalData.organizations||[]).length > 0 && <div className="form-group"><label className="form-label">Organizations</label><div className="tags">{modalData.organizations.map((o,i)=><span key={i} className="tag" onClick={()=>{setShowModal(false);openEntityDetail('org',o);}}>{o}</span>)}</div></div>}
+                {(modalData.topics||[]).length > 0 && <div className="form-group"><label className="form-label">Topics</label><div className="tags">{modalData.topics.map((t,i)=>{const isAI=(modalData.aiTopics||[]).includes(t);return <span key={i} className={`tag${isAI?' ai-tag':''}`} onClick={()=>{setShowModal(false);openEntityDetail('topic',t);}}>{t}</span>;})}</div></div>}
+                {(modalData.people||[]).length > 0 && <div className="form-group"><label className="form-label">People</label><div className="tags">{modalData.people.map((p,i)=>{const isAI=(modalData.aiPeople||[]).includes(p);return <span key={i} className={`tag${isAI?' ai-tag':''}`} onClick={()=>{setShowModal(false);openEntityDetail('person',p);}}>{p}</span>;})}</div></div>}
+                {(modalData.organizations||[]).length > 0 && <div className="form-group"><label className="form-label">Organizations</label><div className="tags">{modalData.organizations.map((o,i)=>{const isAI=(modalData.aiOrgs||[]).includes(o);return <span key={i} className={`tag${isAI?' ai-tag':''}`} onClick={()=>{setShowModal(false);openEntityDetail('org',o);}}>{o}</span>;})}</div></div>}
                 {/* Links — main link first, then additional */}
                 {(modalData.mainLink || (modalData.links||[]).length > 0) && (
                   <div className="form-group"><label className="form-label">Links</label>
@@ -6389,7 +6500,7 @@
                             if (resp.ok) { const r = await resp.json(); setEditedEvent({...editedEvent, aiSummary: r.condensed}); }
                           } catch(e) {}
                           setIsCondensing(false);
-                        }} style={{padding:'0.3rem 0.7rem',fontSize:'0.75rem',fontWeight:600,color:'#fff',background:isCondensing?'#6b7394':'linear-gradient(135deg,#7c3aed,#6d28d9)',border:'none',borderRadius:'6px',cursor:isCondensing?'wait':'pointer',fontFamily:'inherit'}}>
+                        }} style={{padding:'0.3rem 0.7rem',fontSize:'0.75rem',fontWeight:600,color:'#fff',background:isCondensing?'#6b7394':'linear-gradient(135deg,#06b6d4,#8b5cf6,#ec4899)',border:'none',borderRadius:'6px',cursor:isCondensing?'wait':'pointer',fontFamily:'inherit'}}>
                           {isCondensing ? 'Condensing...' : 'Condense'}
                         </button>
                       </div>
@@ -7598,11 +7709,13 @@
                   <button onClick={()=>setShowAnalysisSuggestion(false)} style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.4)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'1rem',fontWeight:700,lineHeight:1,padding:'0.25rem 0.5rem',flexShrink:0}}>×</button>
                 </div>
                 <div style={{display:'flex',gap:'0.5rem'}}>
-                  <button className="btn btn-primary" style={{fontSize:'0.82rem',padding:'0.4rem 0.9rem'}}
+                  <button className="btn btn-primary" style={{fontSize:'0.82rem',padding:'0.4rem 0.9rem',background:'linear-gradient(135deg,#06b6d4,#8b5cf6,#ec4899)'}}
                     onClick={()=>{
                       setShowAnalysisSuggestion(false);
-                      const backendEvts = analysisSuggestionCtx.events.filter(e=>e._backendId);
-                      if (backendEvts.length > 0) {
+                      const analyzableEvts = analysisSuggestionCtx.events.filter(e =>
+                        e._backendId || (e.links||[]).some(l => l && l.trim())
+                      );
+                      if (analyzableEvts.length > 0) {
                         triggerBulkAnalysis(analysisSuggestionCtx.events);
                       } else if (analysisSuggestionCtx.events[0]) {
                         openEventModal(analysisSuggestionCtx.events[0], 'upload');
@@ -8341,7 +8454,7 @@
                         const selected = [...selectedForAnalysis].map(evtId => {
                           const evt = recentUploads.find(e => e.id === evtId);
                           return evt;
-                        }).filter(evt => evt && (evt._backendId || (evt.link && evt.link.trim())));
+                        }).filter(evt => evt && (evt._backendId || (evt.links||[]).some(l=>l&&l.trim())));
                         if (selected.length === 0) { alert('Select documents to analyze (spreadsheet events, PDF, Word, or Image uploads).'); return; }
                         const alreadyAnalyzed = selected.filter(evt => evt._aiAnalyzed);
                         if (alreadyAnalyzed.length > 0 && !window.confirm(`${alreadyAnalyzed.length} of ${selected.length} document(s) have already been analyzed. Re-analyze them?`)) return;
@@ -8350,7 +8463,7 @@
                         let successCount = 0;
                         // Separate into two types: backend uploads and spreadsheet links
                         const withBackend = selected.filter(e => e._backendId);
-                        const withLinks = selected.filter(e => !e._backendId && (e.link && e.link.trim()));
+                        const withLinks = selected.filter(e => !e._backendId && (e.links||[]).some(l=>l&&l.trim()));
                         for (const evt of withBackend) {
                           try {
                             successCount++;
@@ -8393,13 +8506,14 @@
                         for (const evt of withLinks) {
                           try {
                             successCount++;
-                            setUploadMessage(`Analyzing document ${successCount} of ${selected.length} — scraping ${(evt.link||'').length > 0 ? 'link' : 'links'}...`);
+                            const linkCount = (evt.links||[]).filter(l=>l&&l.trim()).length;
+                            setUploadMessage(`Analyzing document ${successCount} of ${selected.length} — scraping ${linkCount} link(s)...`);
                             const resp = await fetch(`${API_BASE}/api/analyze-event-links`, {
                               method: 'POST',
                               headers: {'Content-Type': 'application/json'},
                               body: JSON.stringify({
                                 title: evt.title || '', description: evt.description || '',
-                                links: evt.link ? [evt.link] : [],
+                                links: (evt.links||[]).filter(l=>l&&l.trim()).slice(0, 5),
                                 mode: analysisMode,
                                 ...(analysisSearch.trim() && { search_focus: analysisSearch.trim() }),
                               }),
@@ -8408,13 +8522,31 @@
                               const result = await resp.json();
                               const analysis = result.analysis;
                               if (analysis) {
+                                const aiTopicsNew  = analysis.topics || [];
+                                const aiPeopleNew  = analysis.people || [];
+                                const aiOrgsNew    = analysis.organizations || [];
+                                const origEvt = data.events.find(e => e.id === evt.id) || evt;
+                                const mergedTopics = [...new Set([...(origEvt.topics||[]), ...aiTopicsNew])];
+                                const mergedPeople = [...new Set([...(origEvt.people||[]), ...aiPeopleNew])];
+                                const mergedOrgs   = [...new Set([...(origEvt.organizations||[]), ...aiOrgsNew])];
+
+                                let newDesc = origEvt.description;
+                                if (!newDesc || newDesc.includes('Text extracted') || newDesc.includes('document uploaded')) {
+                                  newDesc = analysis.description || analysis.summary || newDesc;
+                                } else if (analysis.summary) {
+                                  newDesc = `${newDesc} ${analysis.summary}`;
+                                }
+
                                 const updatedEvent = {
                                   ...(data.events.find(e => e.id === evt.id) || {}),
                                   aiSummary: analysis.summary || '',
-                                  description: analysis.description || analysis.summary || '',
-                                  topics: analysis.topics && analysis.topics.length > 0 ? analysis.topics : [],
-                                  people: analysis.people && analysis.people.length > 0 ? analysis.people : [],
-                                  organizations: analysis.organizations && analysis.organizations.length > 0 ? analysis.organizations : [],
+                                  description: newDesc,
+                                  topics: mergedTopics,
+                                  people: mergedPeople,
+                                  organizations: mergedOrgs,
+                                  aiTopics: aiTopicsNew,
+                                  aiPeople: aiPeopleNew,
+                                  aiOrgs: aiOrgsNew,
                                   source: analysis.source || '',
                                   primarySource: analysis.primary_source || '',
                                   mainLink: analysis.main_link || '',
@@ -8423,9 +8555,9 @@
                                 setData(prev => ({
                                   ...prev,
                                   events: prev.events.map(e => e.id === evt.id ? {...e, ...updatedEvent} : e),
-                                  people: Array.from(new Set([...prev.people, ...(analysis.people||[])])).sort(),
-                                  organizations: Array.from(new Set([...prev.organizations, ...(analysis.organizations||[])])).sort(),
-                                  topics: Array.from(new Set([...prev.topics, ...(analysis.topics||[])])).sort(),
+                                  people: Array.from(new Set([...prev.people, ...aiPeopleNew])).sort(),
+                                  organizations: Array.from(new Set([...prev.organizations, ...aiOrgsNew])).sort(),
+                                  topics: Array.from(new Set([...prev.topics, ...aiTopicsNew])).sort(),
                                 }));
                                 lastAnalyzedEvent = updatedEvent;
                               }
@@ -8439,7 +8571,7 @@
                         if (lastAnalyzedEvent) {
                           openEventModal(lastAnalyzedEvent, 'upload');
                         }
-                      }} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:isProcessing?'#6b7394':'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'10px',cursor:isProcessing?'wait':'pointer',fontFamily:'inherit'}}>
+                      }} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:isProcessing?'#6b7394':'linear-gradient(135deg,#06b6d4,#8b5cf6,#ec4899)',border:'none',borderRadius:'10px',cursor:isProcessing?'wait':'pointer',fontFamily:'inherit'}}>
                         {isProcessing ? '⏳ Analyzing...' : `🧠 Analyze Selected (${selectedForAnalysis.size})`}
                       </button>
                       {selectedForAnalysis.size > 0 && <button onClick={()=>setShowDownloadPopup('recent')} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:'rgba(61,69,99,0.5)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit'}}>Download Selected ({selectedForAnalysis.size})</button>}
