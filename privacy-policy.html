@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Historical Events Research Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Karla:wght@400;500;600;700&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-base:    #0a0d1c;
+      --bg-card:    #0f1328;
+      --border:     rgba(96,165,250,0.14);
+      --border-mid: rgba(96,165,250,0.26);
+      --accent:     #60a5fa;
+      --text-hi:    #e2e8f8;
+      --text-mid:   #8b95b0;
+      --text-dim:   #4a5270;
+    }
+    html, body {
+      min-height: 100%;
+      background: var(--bg-base);
+      color: var(--text-hi);
+      font-family: 'Karla', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+
+    .container {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 2rem;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .back-link:hover { opacity: 1; }
+
+    h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text-hi);
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      color: var(--text-mid);
+      font-size: 0.88rem;
+      margin-bottom: 2.5rem;
+    }
+    h2 {
+      font-family: 'Space Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-top: 2.2rem;
+      margin-bottom: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    p { margin-bottom: 1rem; color: var(--text-hi); }
+    ul {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+    li {
+      margin-bottom: 0.5rem;
+      color: var(--text-hi);
+    }
+    li strong { color: var(--accent); font-weight: 600; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.2rem;
+    }
+    .card-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+    }
+
+    .footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      text-align: center;
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="https://historical-events-databse.netlify.app/" class="back-link">&larr; Back to Historical Events Database</a>
+
+    <h1>Privacy Policy</h1>
+    <p class="subtitle">Historical Events Research Assistant — Chrome Extension<br />Last updated: March 7, 2026</p>
+
+    <h2>1. Overview</h2>
+    <p>The Historical Events Research Assistant ("the Extension") is a browser extension that helps researchers capture URLs, highlighted text, and video timecodes from web pages and save them to the Historical Events Database. This privacy policy explains what data the Extension collects, how it is used, and how it is stored.</p>
+
+    <h2>2. Data We Collect</h2>
+    <p>The Extension collects data only when you actively use its features. We collect:</p>
+
+    <div class="card">
+      <div class="card-title">Account Credentials</div>
+      <p style="margin-bottom:0;">Your username and password are used to authenticate against our database. Passwords are stored in our Supabase database. We do not collect email addresses through the extension.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Research Session Data</div>
+      <ul style="margin-bottom:0;">
+        <li><strong>Browsing trail:</strong> When you start a research session, the Extension records the URLs and page titles of pages you visit. This tracking only occurs while a session is active and can be paused or stopped at any time.</li>
+        <li><strong>Captured items:</strong> When you highlight text and click "Save to DB", the Extension saves the selected text, the page URL, page title, and site favicon URL.</li>
+        <li><strong>Video data:</strong> On video pages (YouTube, Vimeo), the Extension may capture video timecodes and screenshot frames when you explicitly use the video capture feature.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Local Storage</div>
+      <p style="margin-bottom:0;">The Extension uses Chrome's local storage API (<code>chrome.storage.local</code>) to persist your login session, active research session state, trail data, captured items, and the capture toggle preference. This data is stored locally on your device.</p>
+    </div>
+
+    <h2>3. Data We Do NOT Collect</h2>
+    <ul>
+      <li>We do <strong>not</strong> collect browsing history outside of active research sessions</li>
+      <li>We do <strong>not</strong> collect personal information such as name, email, phone number, or physical address through the extension</li>
+      <li>We do <strong>not</strong> collect financial or payment information</li>
+      <li>We do <strong>not</strong> use cookies or tracking pixels</li>
+      <li>We do <strong>not</strong> collect health, authentication, or communication data</li>
+      <li>We do <strong>not</strong> sell, trade, or transfer your data to third parties</li>
+      <li>We do <strong>not</strong> use your data for advertising or marketing purposes</li>
+    </ul>
+
+    <h2>4. How We Use Your Data</h2>
+    <p>All collected data is used solely to provide the Extension's core functionality:</p>
+    <ul>
+      <li><strong>Authentication:</strong> To verify your identity and log you into the Historical Events Database</li>
+      <li><strong>Research tracking:</strong> To record your browsing trail during active research sessions so you can review your research path</li>
+      <li><strong>Content capture:</strong> To save text selections, URLs, and video frames to the Historical Events Database for your research</li>
+      <li><strong>Session history:</strong> To let you review and continue past research sessions</li>
+    </ul>
+
+    <h2>5. Data Storage and Security</h2>
+    <p>Data is stored in two locations:</p>
+    <ul>
+      <li><strong>Locally on your device:</strong> Active session data (trail, captured items, login state) is stored using Chrome's storage API and remains on your machine until you end the session or log out.</li>
+      <li><strong>Supabase cloud database:</strong> When you save items to the database or end a research session, the data is transmitted over HTTPS to our Supabase-hosted PostgreSQL database. Supabase provides encryption at rest and in transit.</li>
+    </ul>
+    <p>All data transmission between the Extension and our servers occurs over encrypted HTTPS connections.</p>
+
+    <h2>6. Data Retention and Deletion</h2>
+    <ul>
+      <li><strong>Local data:</strong> Cleared when you log out of the extension or uninstall it.</li>
+      <li><strong>Cloud data:</strong> Research sessions and saved events remain in the database until you delete them through the web application. You can delete your uploaded events from the Account page at any time.</li>
+      <li><strong>Account deletion:</strong> Contact us to request full account and data deletion.</li>
+    </ul>
+
+    <h2>7. Permissions Explained</h2>
+    <p>The Extension requests the following browser permissions:</p>
+    <ul>
+      <li><strong>storage:</strong> To save your login session, preferences, and active research data locally on your device.</li>
+      <li><strong>tabs:</strong> To read the current tab's URL and title for the research trail and page capture features.</li>
+      <li><strong>webNavigation:</strong> To detect page navigation events for research trail tracking during active sessions.</li>
+      <li><strong>activeTab:</strong> To interact with the current page when you use capture features.</li>
+      <li><strong>contextMenus:</strong> To add right-click menu options ("Save to Historical Events DB" and "Save Page to Historical Events DB").</li>
+      <li><strong>Host permissions (all URLs):</strong> The Extension needs access to all URLs because its core features — text selection capture, research trail tracking, and the "Save to DB" popup — must work on any website the researcher visits. Research is not limited to specific domains.</li>
+    </ul>
+
+    <h2>8. Third-Party Services</h2>
+    <p>The Extension communicates with the following services:</p>
+    <ul>
+      <li><strong>Supabase</strong> (database hosting) — stores user accounts, research sessions, and saved events. <a href="https://supabase.com/privacy" target="_blank">Supabase Privacy Policy</a></li>
+      <li><strong>Render</strong> (backend API hosting) — processes AI analysis requests when you choose to analyze saved content. <a href="https://render.com/privacy" target="_blank">Render Privacy Policy</a></li>
+    </ul>
+    <p>We do not share your data with any other third parties.</p>
+
+    <h2>9. Your Rights</h2>
+    <ul>
+      <li>You can <strong>stop trail tracking</strong> at any time by pausing or ending your research session.</li>
+      <li>You can <strong>disable the capture popup</strong> using the pause/play toggle in the extension header.</li>
+      <li>You can <strong>delete captured items</strong> from the extension popup or the web application.</li>
+      <li>You can <strong>delete your account and data</strong> by contacting us.</li>
+      <li>You can <strong>uninstall the extension</strong> at any time, which removes all locally stored data.</li>
+    </ul>
+
+    <h2>10. Children's Privacy</h2>
+    <p>The Extension is not intended for use by children under the age of 13. We do not knowingly collect personal information from children.</p>
+
+    <h2>11. Changes to This Policy</h2>
+    <p>We may update this privacy policy from time to time. Changes will be reflected on this page with an updated "Last updated" date. Continued use of the Extension after changes constitutes acceptance of the updated policy.</p>
+
+    <h2>12. Contact</h2>
+    <p>If you have questions about this privacy policy or your data, please contact us through the Historical Events Database web application or open an issue on our project repository.</p>
+
+    <div class="footer">
+      Historical Events Research Database &mdash; Privacy Policy<br />
+      <a href="https://historical-events-databse.netlify.app/">historical-events-databse.netlify.app</a>
+    </div>
+  </div>
+</body>
+</html>
