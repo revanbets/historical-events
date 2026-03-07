@@ -6,17 +6,34 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "histodb",
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#0F1223"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.historicaldatabase.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Used to photograph and scan documents for research.",
         "NSPhotoLibraryUsageDescription": "Used to select photos and documents to upload for research.",
         "NSFaceIDUsageDescription": "Used for quick biometric login.",
-        "NSMicrophoneUsageDescription": "Used for voice note capture during research sessions."
+        "NSMicrophoneUsageDescription": "Used for voice note capture during research sessions.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          }
+        ]
       }
     },
     "android": {
@@ -24,12 +41,14 @@
         "backgroundColor": "#0F1223"
       },
       "package": "com.historicaldatabase.app",
+      "versionCode": 1,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -60,6 +79,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1474b3f8-b710-4fd6-805e-fd632981f229"
+      }
+    },
+    "owner": "revanconsulting"
   }
 }

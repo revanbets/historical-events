@@ -34,6 +34,9 @@ old-versions/
 *.pdf
 *.webp
 
+# Exception: mobile app assets must be tracked for EAS builds
+!mobile-app/assets/*.png
+
 # Database backups
 db 1/
 
