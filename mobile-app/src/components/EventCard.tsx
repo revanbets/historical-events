@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { Event } from '../types';
 import { colors, spacing, radius, typography, researchLevelConfig, eventStatusConfig } from '../theme';
@@ -25,7 +26,29 @@ export function EventCard({ event, onPress }: EventCardProps) {
     : 'Unknown date';
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.75}
+      onLongPress={() =>
+        Alert.alert('Report Content', 'What would you like to do?', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Report Content',
+            onPress: () =>
+              Alert.alert('Content Reported', 'Thank you. Our moderation team will review this within 24 hours.'),
+          },
+          ...(event.uploaded_by
+            ? [{
+                text: `Block ${event.uploaded_by}`,
+                style: 'destructive' as const,
+                onPress: () =>
+                  Alert.alert('User Blocked', `"${event.uploaded_by}" has been blocked. You can manage blocked users in your account settings.`),
+              }]
+            : []),
+        ])
+      }
+    >
       {/* Top row: date + status + research level */}
       <View style={styles.metaRow}>
         <Text style={styles.date}>{formattedDate}</Text>

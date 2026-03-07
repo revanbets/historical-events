@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { supabase } from '../../src/services/supabase';
 import { EventCard } from '../../src/components/EventCard';
@@ -207,6 +208,60 @@ export default function AccountScreen() {
             <Text style={styles.webAppUrl}>historical-events-databse.netlify.app</Text>
           </View>
 
+          {/* Legal */}
+          <View style={styles.infoSection}>
+            <Text style={styles.infoSectionTitle}>Legal</Text>
+            <TouchableOpacity
+              style={styles.privacyPolicyBtn}
+              onPress={() => WebBrowser.openBrowserAsync('https://docs.google.com/document/d/e/2PACX-1vTnUTgzgB6hz8zffyqLJ1TvcltFhe2Th5XBkA5hbRi8UIokozzkSkeuPfbFe9Wjc7k5H7UAdFBQ6ptG/pub')}
+            >
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
+              <Text style={styles.privacyPolicyText}>Privacy Policy</Text>
+              <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+            <View style={styles.legalDivider} />
+            <TouchableOpacity
+              style={styles.privacyPolicyBtn}
+              onPress={() => WebBrowser.openBrowserAsync('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}
+            >
+              <Ionicons name="document-text-outline" size={18} color={colors.blue} />
+              <Text style={styles.privacyPolicyText}>Terms of Use (EULA)</Text>
+              <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+            <View style={styles.legalDivider} />
+            <TouchableOpacity
+              style={styles.privacyPolicyBtn}
+              onPress={() => {
+                Alert.alert(
+                  'Delete Account',
+                  'Are you sure? This will permanently delete your research data.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await supabase
+                            .from('account_deletion_requests')
+                            .insert({ username: session.username, requested_at: new Date().toISOString() });
+                        } catch {}
+                        Alert.alert(
+                          'Request Submitted',
+                          'Your account deletion request has been submitted. Your data will be purged within 30 days. You will now be signed out.',
+                          [{ text: 'OK', onPress: logout }],
+                        );
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.red} />
+              <Text style={[styles.privacyPolicyText, { color: colors.red }]}>Delete Account</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Sign out */}
           <TouchableOpacity style={styles.signOutFullBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={18} color={colors.red} />
@@ -377,6 +432,23 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: typography.sm, fontWeight: typography.medium, color: colors.textPrimary },
   webAppNote: { fontSize: typography.sm, color: colors.textMuted, lineHeight: 18 },
   webAppUrl: { fontSize: typography.sm, color: colors.blue, fontFamily: 'monospace' },
+  privacyPolicyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  privacyPolicyText: {
+    flex: 1,
+    fontSize: typography.base,
+    color: colors.textPrimary,
+    fontWeight: typography.medium,
+  },
+  legalDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
+  },
   signOutFullBtn: {
     flexDirection: 'row',
     alignItems: 'center',

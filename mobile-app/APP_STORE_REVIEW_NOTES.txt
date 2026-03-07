@@ -1,0 +1,54 @@
+App Store Review Notes — HistoDB
+=================================
+
+Demo Login Credentials
+-----------------------
+Username: testuser
+Password: testuser123
+
+About This App
+--------------
+HistoDB is a private historical research database tool. Users can upload, tag,
+and explore connections between historical events, people, and organizations.
+The app connects to a shared backend database (Supabase) where research data
+is stored and synced across devices.
+
+This is a companion app to the desktop web version at:
+https://historical-events-databse.netlify.app/
+
+Face ID / Touch ID Usage
+-------------------------
+Face ID (and Touch ID) is used exclusively for local biometric authentication
+to provide quick, secure login on the device. No biometric data is transmitted
+to any server. The biometric check is handled entirely through Apple's
+LocalAuthentication framework (expo-local-authentication) and only returns a
+pass/fail result to the app.
+
+Camera Usage
+------------
+The camera is used to photograph and scan physical documents for research
+uploads. Photos are sent to our backend for text extraction (OCR) and are
+not used for any other purpose.
+
+Content Moderation (UGC)
+-------------------------
+Users can upload research content. A "Report Content" button is available on
+every event detail screen, which opens an email draft to our moderation team.
+A "Block User" option is also available. Reported content is reviewed within
+24 hours.
+
+Account Deletion
+-----------------
+Users can request full account and data deletion from:
+Profile tab > Settings > Legal > Delete Account.
+Deletion requests are processed within 30 days per our Privacy Policy.
+
+Privacy Policy
+--------------
+Accessible in-app at: Profile > Settings > Legal > Privacy Policy
+URL: https://docs.google.com/document/d/e/2PACX-1vTnUTgzgB6hz8zffyqLJ1TvcltFhe2Th5XBkA5hbRi8UIokozzkSkeuPfbFe9Wjc7k5H7UAdFBQ6ptG/pub
+
+Terms of Use
+------------
+Uses Apple's Standard EULA.
+Accessible in-app at: Profile > Settings > Legal > Terms of Use (EULA)

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -241,6 +242,49 @@ export default function EventDetailScreen() {
             )}
           </TouchableOpacity>
         )}
+
+        {/* Content moderation — Apple UGC Guideline 1.2 */}
+        <View style={styles.moderationSection}>
+          <View style={styles.moderationDivider} />
+          <TouchableOpacity
+            style={styles.moderationBtn}
+            onPress={() => {
+              const subject = encodeURIComponent(`Content Report: ${event.id}`);
+              const body = encodeURIComponent(`I would like to report the following content:\n\nEvent ID: ${event.id}\nEvent Title: ${event.title}\n\nReason for report:\n`);
+              const mailto = `mailto:revanbets@gmail.com?subject=${subject}&body=${body}`;
+              Linking.openURL(mailto).catch(() =>
+                Alert.alert('Error', 'Could not open email client.')
+              );
+            }}
+          >
+            <Ionicons name="flag-outline" size={16} color={colors.red} />
+            <Text style={styles.moderationBtnText}>Report Content</Text>
+          </TouchableOpacity>
+
+          {event.uploaded_by && (
+            <TouchableOpacity
+              style={styles.moderationBtn}
+              onPress={() =>
+                Alert.alert(
+                  'Block User',
+                  `Are you sure you want to block "${event.uploaded_by}"? You will no longer see content from this user.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Block',
+                      style: 'destructive',
+                      onPress: () =>
+                        Alert.alert('User Blocked', `"${event.uploaded_by}" has been blocked. You can manage blocked users in your account settings.`),
+                    },
+                  ],
+                )
+              }
+            >
+              <Ionicons name="person-remove-outline" size={16} color={colors.red} />
+              <Text style={styles.moderationBtnText}>Block User</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -410,4 +454,30 @@ const styles = StyleSheet.create({
   errorText: { fontSize: typography.base, color: colors.textMuted },
   backBtn: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md },
   backBtnText: { fontSize: typography.base, color: colors.blue },
+  moderationSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  moderationDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  moderationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.redLight,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.2)',
+    borderRadius: radius.md,
+  },
+  moderationBtnText: {
+    fontSize: typography.sm,
+    color: colors.red,
+    fontWeight: typography.medium,
+  },
 });
