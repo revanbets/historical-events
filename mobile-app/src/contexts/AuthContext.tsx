@@ -10,11 +10,13 @@ const HARDCODED_USERS: User[] = [
   { username: 'owner', role: 'owner', karma: 0, created_at: '' },
   { username: 'admin', role: 'admin', karma: 0, created_at: '' },
   { username: 'testuser', role: 'user', karma: 0, created_at: '' },
+  { username: 'apple-reviewer@histodb.app', role: 'user', karma: 0, created_at: '' },
 ];
 const HARDCODED_PASSWORDS: Record<string, string> = {
   owner: 'owner123',
   admin: 'admin123',
   testuser: 'test123',
+  'apple-reviewer@histodb.app': 'Reviewer123!',
 };
 
 interface AuthContextValue {

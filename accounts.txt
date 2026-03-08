@@ -16,6 +16,10 @@ Username : testuser
 Password : test123
 Role     : User — for testing the basic user experience
 
+Username : apple-reviewer@histodb.app
+Password : Reviewer123!
+Role     : User — Apple App Store reviewer account (mobile app only)
+
 USER ACCOUNTS (self-registered via signup form)
 ------------------------------------------------
 None yet — users register themselves from the login screen.

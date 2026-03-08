@@ -1,10 +1,34 @@
 App Store Review Notes — HistoDB
 =================================
 
-Demo Login Credentials
------------------------
-Username: testuser
-Password: testuser123
+Demo Login Credentials (for Apple Reviewer)
+---------------------------------------------
+Username: apple-reviewer@histodb.app
+Password: Reviewer123!
+
+How to Test
+-----------
+1. Launch the app and sign in with the credentials above. You will land on
+   the Home dashboard showing database stats and recent events.
+2. Tap the "Events" tab to browse the historical event database — use the
+   search bar or tap the filter icon to filter by topic, person, or
+   organization. Tap any event card to view its full details, sources,
+   and AI-generated analysis.
+3. Tap the "Add" tab to test uploading: paste any public URL (e.g. a
+   Wikipedia article) and tap Submit. The app will send it to our analysis
+   backend and create a structured event entry.
+
+Additional Notes
+-----------------
+- The backend API runs on a free-tier server that sleeps after 15 minutes
+  of inactivity. The first upload or analysis request may take ~30 seconds
+  to wake the server — the app displays a "Waking up analysis server"
+  message during this time. This is expected behavior.
+- Face ID / Touch ID can be enabled under Profile > Settings.
+- Account deletion is available at Profile > Settings > Legal > Delete Account.
+- Privacy Policy is accessible at Profile > Settings > Legal > Privacy Policy.
+- This app is a companion to the desktop web version at
+  https://historical-events-databse.netlify.app/
 
 About This App
 --------------
@@ -12,9 +36,6 @@ HistoDB is a private historical research database tool. Users can upload, tag,
 and explore connections between historical events, people, and organizations.
 The app connects to a shared backend database (Supabase) where research data
 is stored and synced across devices.
-
-This is a companion app to the desktop web version at:
-https://historical-events-databse.netlify.app/
 
 Face ID / Touch ID Usage
 -------------------------
