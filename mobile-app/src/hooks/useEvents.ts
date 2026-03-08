@@ -1,6 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { Event, FilterState } from '../types';
+
+const BLOCKED_USERS_KEY = 'hdb_blocked_users';
 
 const PAGE_SIZE = 30;
 
@@ -38,16 +41,29 @@ export function useEvents() {
     return query;
   };
 
+  const getBlockedUsers = async (): Promise<string[]> => {
+    try {
+      const raw = await AsyncStorage.getItem(BLOCKED_USERS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  };
+
   const loadEvents = useCallback(async (filters: FilterState) => {
     setIsLoading(true);
     pageRef.current = 0;
     try {
-      const { data, error } = await buildQuery(filters, 0);
+      const [{ data, error }, blocked] = await Promise.all([
+        buildQuery(filters, 0),
+        getBlockedUsers(),
+      ]);
       if (error) throw error;
       const loaded = (data ?? []) as Event[];
 
       // Client-side filter for topics/people/orgs (arrays need contains check)
-      const filtered = applyArrayFilters(loaded, filters);
+      let filtered = applyArrayFilters(loaded, filters);
+      if (blocked.length > 0) {
+        filtered = filtered.filter(e => !e.uploaded_by || !blocked.includes(e.uploaded_by));
+      }
       setEvents(filtered);
       setHasMore(loaded.length === PAGE_SIZE);
     } catch (err) {
@@ -63,9 +79,15 @@ export function useEvents() {
     const nextPage = pageRef.current + 1;
     pageRef.current = nextPage;
     try {
-      const { data } = await buildQuery(filters, nextPage * PAGE_SIZE);
+      const [{ data }, blocked] = await Promise.all([
+        buildQuery(filters, nextPage * PAGE_SIZE),
+        getBlockedUsers(),
+      ]);
       const loaded = (data ?? []) as Event[];
-      const filtered = applyArrayFilters(loaded, filters);
+      let filtered = applyArrayFilters(loaded, filters);
+      if (blocked.length > 0) {
+        filtered = filtered.filter(e => !e.uploaded_by || !blocked.includes(e.uploaded_by));
+      }
       setEvents(prev => [...prev, ...filtered]);
       setHasMore(loaded.length === PAGE_SIZE);
     } finally {

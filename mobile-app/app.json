@@ -15,12 +15,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.historicaldatabase.app",
-      "buildNumber": "1",
+      "buildNumber": "5",
       "infoPlist": {
         "NSCameraUsageDescription": "Used to photograph and scan documents for research.",
         "NSPhotoLibraryUsageDescription": "Used to select photos and documents to upload for research.",
         "NSFaceIDUsageDescription": "Used for quick biometric login.",
         "NSMicrophoneUsageDescription": "Used for voice note capture during research sessions.",
+        "NSClipboardUsageDescription": "Used to detect URLs you copy while browsing, so they can be quickly captured during research sessions.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
@@ -32,6 +33,14 @@
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
             "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
           }
         ]
       }

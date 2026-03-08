@@ -13,10 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../src/services/supabase';
 import { analyzeEvent } from '../../src/services/api';
 import { Event } from '../../src/types';
 import { colors, spacing, radius, typography, researchLevelConfig, eventStatusConfig } from '../../src/theme';
+
+const BLOCKED_USERS_KEY = 'hdb_blocked_users';
 
 export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
@@ -273,8 +276,18 @@ export default function EventDetailScreen() {
                     {
                       text: 'Block',
                       style: 'destructive',
-                      onPress: () =>
-                        Alert.alert('User Blocked', `"${event.uploaded_by}" has been blocked. You can manage blocked users in your account settings.`),
+                      onPress: async () => {
+                        try {
+                          const raw = await AsyncStorage.getItem(BLOCKED_USERS_KEY);
+                          const blocked: string[] = raw ? JSON.parse(raw) : [];
+                          if (!blocked.includes(event.uploaded_by!)) {
+                            blocked.push(event.uploaded_by!);
+                            await AsyncStorage.setItem(BLOCKED_USERS_KEY, JSON.stringify(blocked));
+                          }
+                        } catch {}
+                        Alert.alert('User Blocked', `"${event.uploaded_by}" has been blocked. You can manage blocked users in your account settings.`);
+                        router.back();
+                      },
                     },
                   ],
                 )

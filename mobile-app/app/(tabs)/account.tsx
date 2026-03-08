@@ -14,11 +14,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { supabase } from '../../src/services/supabase';
 import { EventCard } from '../../src/components/EventCard';
 import { Event, Notification } from '../../src/types';
 import { colors, spacing, radius, typography } from '../../src/theme';
+
+const BLOCKED_USERS_KEY = 'hdb_blocked_users';
 
 type AccountTab = 'uploads' | 'notifications' | 'settings';
 
@@ -31,8 +35,9 @@ export default function AccountScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
 
-  useEffect(() => { loadData(); }, [session]);
+  useEffect(() => { loadData(); loadBlockedUsers(); }, [session]);
 
   const loadData = async () => {
     if (!session) return;
@@ -63,6 +68,19 @@ export default function AccountScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const loadBlockedUsers = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(BLOCKED_USERS_KEY);
+      if (raw) setBlockedUsers(JSON.parse(raw));
+    } catch {}
+  };
+
+  const unblockUser = async (username: string) => {
+    const updated = blockedUsers.filter(u => u !== username);
+    setBlockedUsers(updated);
+    await AsyncStorage.setItem(BLOCKED_USERS_KEY, JSON.stringify(updated));
   };
 
   const markAllRead = async () => {
@@ -260,6 +278,35 @@ export default function AccountScreen() {
               <Ionicons name="trash-outline" size={18} color={colors.red} />
               <Text style={[styles.privacyPolicyText, { color: colors.red }]}>Delete Account</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Blocked Users */}
+          {blockedUsers.length > 0 && (
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>Blocked Users</Text>
+              {blockedUsers.map(u => (
+                <View key={u} style={styles.blockedRow}>
+                  <Text style={styles.blockedName}>{u}</Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      Alert.alert('Unblock User', `Unblock "${u}"?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Unblock', onPress: () => unblockUser(u) },
+                      ])
+                    }
+                  >
+                    <Text style={styles.unblockText}>Unblock</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* App Info */}
+          <View style={styles.infoSection}>
+            <Text style={styles.infoSectionTitle}>App Info</Text>
+            <InfoRow label="Version" value={Constants.expoConfig?.version ?? '1.0.0'} />
+            <InfoRow label="Build" value={Constants.expoConfig?.ios?.buildNumber ?? '1'} />
           </View>
 
           {/* Sign out */}
@@ -462,4 +509,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   signOutFullText: { fontSize: typography.base, fontWeight: typography.bold, color: colors.red },
+  blockedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  blockedName: { fontSize: typography.sm, color: colors.textSecondary },
+  unblockText: { fontSize: typography.sm, color: colors.blue, fontWeight: typography.medium },
 });
