@@ -31,6 +31,19 @@ export default function UploadScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'analyzing' | 'done' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+
+  // Track elapsed seconds during analysis to show wake-up message
+  React.useEffect(() => {
+    if (uploadStatus !== 'analyzing') {
+      setElapsed(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setElapsed(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [uploadStatus]);
 
   // ── URL Submit ────────────────────────────────────────────────────────────
 
@@ -131,7 +144,7 @@ export default function UploadScreen() {
       if (!uploadResult.backend_id) throw new Error(uploadResult.error ?? 'Upload failed');
 
       setUploadStatus('analyzing');
-      setStatusMessage('Extracting text and analyzing…');
+      setStatusMessage('Extracting text and analyzing…\nServer may need to wake up first.');
 
       const analyzeResult = await analyzeUrl({
         url: `${uploadResult.filename}`,
@@ -175,8 +188,19 @@ export default function UploadScreen() {
         {/* Status Banner */}
         {uploadStatus !== 'idle' && (
           <View style={[styles.statusBanner, { borderColor: statusColors[uploadStatus] + '40', backgroundColor: statusColors[uploadStatus] + '15' }]}>
-            <Ionicons name={statusIcons[uploadStatus] as never} size={16} color={statusColors[uploadStatus]} />
-            <Text style={[styles.statusText, { color: statusColors[uploadStatus] }]}>{statusMessage}</Text>
+            {uploadStatus === 'analyzing' ? (
+              <ActivityIndicator size="small" color={statusColors[uploadStatus]} />
+            ) : (
+              <Ionicons name={statusIcons[uploadStatus] as never} size={16} color={statusColors[uploadStatus]} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.statusText, { color: statusColors[uploadStatus] }]}>{statusMessage}</Text>
+              {uploadStatus === 'analyzing' && elapsed >= 3 && (
+                <Text style={[styles.statusSubText, { color: statusColors[uploadStatus] }]}>
+                  Waking up analysis server… this may take up to 30 seconds ({elapsed}s)
+                </Text>
+              )}
+            </View>
             {(uploadStatus === 'done' || uploadStatus === 'error') && (
               <TouchableOpacity onPress={() => setUploadStatus('idle')}>
                 <Ionicons name="close" size={16} color={statusColors[uploadStatus]} />
@@ -332,7 +356,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  statusText: { flex: 1, fontSize: typography.sm, fontWeight: typography.medium },
+  statusText: { fontSize: typography.sm, fontWeight: typography.medium },
+  statusSubText: { fontSize: 11, marginTop: 4, opacity: 0.85 },
   section: {
     backgroundColor: colors.surface,
     borderWidth: 1,

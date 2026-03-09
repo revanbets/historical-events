@@ -231,7 +231,7 @@ export default function AccountScreen() {
             <Text style={styles.infoSectionTitle}>Legal</Text>
             <TouchableOpacity
               style={styles.privacyPolicyBtn}
-              onPress={() => WebBrowser.openBrowserAsync('https://docs.google.com/document/d/e/2PACX-1vTnUTgzgB6hz8zffyqLJ1TvcltFhe2Th5XBkA5hbRi8UIokozzkSkeuPfbFe9Wjc7k5H7UAdFBQ6ptG/pub')}
+              onPress={() => WebBrowser.openBrowserAsync('https://historical-events-databse.netlify.app/privacy')}
             >
               <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
               <Text style={styles.privacyPolicyText}>Privacy Policy</Text>
@@ -252,7 +252,7 @@ export default function AccountScreen() {
               onPress={() => {
                 Alert.alert(
                   'Delete Account',
-                  'Are you sure? This will permanently delete your research data.',
+                  'Are you sure? This will permanently delete your research data. You will be signed out immediately.',
                   [
                     { text: 'Cancel', style: 'cancel' },
                     {
@@ -264,10 +264,12 @@ export default function AccountScreen() {
                             .from('account_deletion_requests')
                             .insert({ username: session.username, requested_at: new Date().toISOString() });
                         } catch {}
+                        // Immediately sign out and clear all local data (Apple compliance)
+                        try { await supabase.auth.signOut(); } catch {}
+                        await logout();
                         Alert.alert(
-                          'Request Submitted',
-                          'Your account deletion request has been submitted. Your data will be purged within 30 days. You will now be signed out.',
-                          [{ text: 'OK', onPress: logout }],
+                          'Account Deleted',
+                          'Your account deletion request has been submitted. Your data will be purged within 30 days.',
                         );
                       },
                     },

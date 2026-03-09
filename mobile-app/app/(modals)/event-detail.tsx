@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../src/services/supabase';
 import { analyzeEvent } from '../../src/services/api';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { Event } from '../../src/types';
 import { colors, spacing, radius, typography, researchLevelConfig, eventStatusConfig } from '../../src/theme';
 
@@ -24,9 +25,11 @@ const BLOCKED_USERS_KEY = 'hdb_blocked_users';
 export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const router = useRouter();
+  const { session } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
 
   useEffect(() => {
     if (eventId) loadEvent(eventId);
@@ -251,17 +254,45 @@ export default function EventDetailScreen() {
           <View style={styles.moderationDivider} />
           <TouchableOpacity
             style={styles.moderationBtn}
+            disabled={isReporting}
             onPress={() => {
-              const subject = encodeURIComponent(`Content Report: ${event.id}`);
-              const body = encodeURIComponent(`I would like to report the following content:\n\nEvent ID: ${event.id}\nEvent Title: ${event.title}\n\nReason for report:\n`);
-              const mailto = `mailto:revanbets@gmail.com?subject=${subject}&body=${body}`;
-              Linking.openURL(mailto).catch(() =>
-                Alert.alert('Error', 'Could not open email client.')
+              Alert.alert(
+                'Report Content',
+                'Are you sure you want to report this content to our moderation team?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Report',
+                    style: 'destructive',
+                    onPress: async () => {
+                      setIsReporting(true);
+                      try {
+                        await supabase.from('reports').insert({
+                          event_id: event.id,
+                          reporter_id: session?.username ?? 'anonymous',
+                          created_at: new Date().toISOString(),
+                        });
+                        Alert.alert(
+                          'Content Reported',
+                          'Thank you. This content has been reported to our moderation team and will be reviewed within 24 hours.',
+                        );
+                      } catch {
+                        Alert.alert('Error', 'Could not submit report. Please try again.');
+                      } finally {
+                        setIsReporting(false);
+                      }
+                    },
+                  },
+                ],
               );
             }}
           >
-            <Ionicons name="flag-outline" size={16} color={colors.red} />
-            <Text style={styles.moderationBtnText}>Report Content</Text>
+            {isReporting ? (
+              <ActivityIndicator size="small" color={colors.red} />
+            ) : (
+              <Ionicons name="flag-outline" size={16} color={colors.red} />
+            )}
+            <Text style={styles.moderationBtnText}>{isReporting ? 'Reporting…' : 'Report Content'}</Text>
           </TouchableOpacity>
 
           {event.uploaded_by && (

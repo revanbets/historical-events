@@ -54,7 +54,8 @@ not used for any other purpose.
 Content Moderation (UGC)
 -------------------------
 Users can upload research content. A "Report Content" button is available on
-every event detail screen, which opens an email draft to our moderation team.
+every event detail screen, which submits a report directly to our database
+(Supabase `reports` table) and shows an in-app confirmation alert.
 A "Block User" option is also available. Reported content is reviewed within
 24 hours.
 
@@ -67,7 +68,7 @@ Deletion requests are processed within 30 days per our Privacy Policy.
 Privacy Policy
 --------------
 Accessible in-app at: Profile > Settings > Legal > Privacy Policy
-URL: https://docs.google.com/document/d/e/2PACX-1vTnUTgzgB6hz8zffyqLJ1TvcltFhe2Th5XBkA5hbRi8UIokozzkSkeuPfbFe9Wjc7k5H7UAdFBQ6ptG/pub
+URL: https://historical-events-databse.netlify.app/privacy
 
 Terms of Use
 ------------
