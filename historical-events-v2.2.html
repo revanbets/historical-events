@@ -290,6 +290,52 @@
     .folder-inline-create input:focus { border-color: #60a5fa; }
     .folder-inline-create button { padding: 0.4rem 0.7rem; border-radius: 6px; border: none; font-size: 0.8rem; cursor: pointer; font-family: inherit; font-weight: 600; }
 
+    /* ── Folder Browser ── */
+    .fb-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .fb-breadcrumbs { display: flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; flex-wrap: wrap; }
+    .fb-bc-item { color: #60a5fa; cursor: pointer; padding: 0.2rem 0.45rem; border-radius: 5px; transition: all 0.15s; }
+    .fb-bc-item:hover { background: rgba(96,165,250,0.12); text-decoration: underline; }
+    .fb-bc-sep { color: #3d4563; font-size: 0.75rem; }
+    .fb-bc-current { color: #e0e6ed; font-weight: 600; padding: 0.2rem 0.45rem; }
+    .fb-toolbar { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+    .fb-search { padding: 0.5rem 0.85rem; background: rgba(10,14,39,0.8); border: 1px solid rgba(61,69,99,0.5); border-radius: 8px; color: #e0e6ed; font-size: 0.82rem; font-family: inherit; outline: none; width: 200px; transition: border-color 0.2s; }
+    .fb-search:focus { border-color: #60a5fa; }
+    .fb-view-toggle { display: flex; border: 1px solid rgba(61,69,99,0.5); border-radius: 8px; overflow: hidden; }
+    .fb-view-btn { padding: 0.4rem 0.65rem; background: rgba(26,31,58,0.6); border: none; color: #8b92b0; cursor: pointer; font-size: 0.82rem; transition: all 0.15s; }
+    .fb-view-btn:hover { background: rgba(96,165,250,0.1); }
+    .fb-view-btn.active { background: rgba(96,165,250,0.2); color: #60a5fa; }
+    .fb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .fb-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .fb-folder-card { background: rgba(26,31,58,0.7); border: 1px solid rgba(61,69,99,0.5); border-radius: 12px; padding: 1.1rem; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 0.5rem; position: relative; }
+    .fb-folder-card:hover { border-color: rgba(96,165,250,0.4); background: rgba(37,43,74,0.8); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    .fb-folder-icon { font-size: 2rem; line-height: 1; }
+    .fb-folder-name { font-weight: 700; font-size: 0.92rem; color: #e0e6ed; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fb-folder-meta { font-size: 0.75rem; color: #6b7280; }
+    .fb-folder-color-bar { position: absolute; top: 0; left: 12px; right: 12px; height: 3px; border-radius: 0 0 3px 3px; }
+    .fb-item-card { background: rgba(26,31,58,0.6); border: 1px solid rgba(61,69,99,0.4); border-radius: 10px; padding: 0.9rem 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.85rem; position: relative; }
+    .fb-item-card:hover { border-color: rgba(96,165,250,0.35); background: rgba(37,43,74,0.7); }
+    .fb-item-type-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+    .fb-item-info { flex: 1; min-width: 0; }
+    .fb-item-title { font-weight: 600; font-size: 0.88rem; color: #e0e6ed; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fb-item-desc { font-size: 0.78rem; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.15rem; }
+    .fb-item-badge { font-size: 0.68rem; padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+    .fb-item-remove { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #6b7280; font-size: 0.85rem; cursor: pointer; padding: 0.2rem; border-radius: 4px; opacity: 0; transition: opacity 0.15s; }
+    .fb-item-card:hover .fb-item-remove, .fb-folder-card:hover .fb-folder-actions { opacity: 1; }
+    .fb-item-remove:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+    .fb-folder-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 0.3rem; opacity: 0; transition: opacity 0.15s; }
+    .fb-folder-act-btn { background: rgba(10,14,39,0.7); border: 1px solid rgba(61,69,99,0.5); border-radius: 5px; color: #8b92b0; font-size: 0.72rem; cursor: pointer; padding: 0.2rem 0.4rem; transition: all 0.15s; }
+    .fb-folder-act-btn:hover { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
+    .fb-folder-act-btn.danger:hover { color: #ef4444; border-color: rgba(239,68,68,0.4); }
+    .fb-empty { text-align: center; padding: 3rem 1.5rem; color: #6b7280; }
+    .fb-empty-icon { font-size: 3rem; margin-bottom: 0.75rem; opacity: 0.5; }
+    .fb-empty p { font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .fb-list .fb-folder-card { flex-direction: row; align-items: center; padding: 0.7rem 1rem; gap: 0.75rem; }
+    .fb-list .fb-folder-icon { font-size: 1.4rem; }
+    .fb-list .fb-folder-card .fb-folder-color-bar { display: none; }
+    .fb-list .fb-item-card { border-radius: 8px; padding: 0.65rem 0.9rem; }
+    .fb-section-label { font-size: 0.72rem; color: #8b92b0; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin: 1.25rem 0 0.6rem 0; }
+    .fb-section-label:first-child { margin-top: 0; }
+
     /* ── Hamburger button (hidden on desktop) ── */
     .hamburger-btn { display: none; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 44px; height: 44px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
     .hamburger-btn:hover { background: rgba(96,165,250,0.22); }
@@ -3557,7 +3603,7 @@
       const [myPageTab, _setMyPageTab] = useState(() => sessionStorage.getItem('hdb_myPageTab') || 'timeline');
       const setMyPageTab = (t) => { sessionStorage.setItem('hdb_myPageTab', t); _setMyPageTab(t); };
 
-      const TABS = ['dashboard','timeline','network','spreadsheet','presentations','topics','people','organizations','upload','sessions','companion','notifications','feedback','chat'];
+      const TABS = ['dashboard','timeline','network','spreadsheet','presentations','folders','topics','people','organizations','upload','sessions','companion','notifications','feedback','chat'];
 
       const [mobileNavOpen, setMobileNavOpen] = useState(false);
       const [activeTab, _setActiveTab] = useState(() => sessionStorage.getItem('hdb_activeTab') || 'dashboard');
@@ -3671,6 +3717,13 @@
       const [createFolderParentId, setCreateFolderParentId] = useState(null); // pre-set parent when creating from inside a folder
       const [showSaveToFolderModal, setShowSaveToFolderModal] = useState(false);
       const [saveToFolderPayload, setSaveToFolderPayload] = useState(null); // {item_type, item_id, title, url, description}
+
+      // ── Folder browser state ──
+      const [currentFolderId, setCurrentFolderId] = useState(null); // null = root view (show all top-level folders)
+      const [currentFolderItems, setCurrentFolderItems] = useState([]); // items inside currently viewed folder
+      const [folderItemsLoading, setFolderItemsLoading] = useState(false);
+      const [folderViewMode, setFolderViewMode] = useState('grid'); // 'grid' or 'list'
+      const [folderSearchQuery, setFolderSearchQuery] = useState('');
 
       // ── Folders CRUD ──
       const fetchFolders = useCallback(async () => {
@@ -3809,6 +3862,73 @@
         setSaveToFolderPayload(payload);
         setShowSaveToFolderModal(true);
       }, []);
+
+      // ── Folder browser navigation ──
+      const navigateToFolder = useCallback(async (folderId) => {
+        setCurrentFolderId(folderId);
+        setFolderSearchQuery('');
+        if (folderId) {
+          setFolderItemsLoading(true);
+          const items = await fetchFolderItems(folderId);
+          setCurrentFolderItems(items);
+          setFolderItemsLoading(false);
+        } else {
+          setCurrentFolderItems([]);
+        }
+      }, [fetchFolderItems]);
+
+      // Build breadcrumb path from root to current folder
+      const folderBreadcrumbs = useMemo(() => {
+        if (!currentFolderId) return [];
+        const crumbs = [];
+        let fId = currentFolderId;
+        const folderMap = {};
+        folders.forEach(f => { folderMap[f.id] = f; });
+        while (fId && folderMap[fId]) {
+          crumbs.unshift(folderMap[fId]);
+          fId = folderMap[fId].parent_id;
+        }
+        return crumbs;
+      }, [currentFolderId, folders]);
+
+      // Get current folder object
+      const currentFolder = useMemo(() => {
+        return currentFolderId ? folders.find(f => f.id === currentFolderId) : null;
+      }, [currentFolderId, folders]);
+
+      // Get child folders of current view
+      const currentChildFolders = useMemo(() => {
+        return folders.filter(f => f.parent_id === currentFolderId);
+      }, [folders, currentFolderId]);
+
+      // My folders (owned by current user)
+      const myFolders = useMemo(() => {
+        if (!currentUser) return [];
+        return folders.filter(f => f.owner === currentUser.username);
+      }, [folders, currentUser]);
+
+      // Shared with me folders
+      const sharedWithMeFolders = useMemo(() => {
+        if (!currentUser) return [];
+        return folders.filter(f => f.owner !== currentUser.username);
+      }, [folders, currentUser]);
+
+      // Filtered folder items for search
+      const filteredFolderItems = useMemo(() => {
+        if (!folderSearchQuery.trim()) return currentFolderItems;
+        const q = folderSearchQuery.toLowerCase();
+        return currentFolderItems.filter(item =>
+          (item.title || '').toLowerCase().includes(q) ||
+          (item.description || '').toLowerCase().includes(q) ||
+          (item.item_type || '').toLowerCase().includes(q)
+        );
+      }, [currentFolderItems, folderSearchQuery]);
+
+      // Remove item from folder and refresh
+      const handleRemoveFolderItem = useCallback(async (itemId) => {
+        const ok = await removeItemFromFolder(itemId);
+        if (ok) setCurrentFolderItems(prev => prev.filter(i => i.id !== itemId));
+      }, [removeItemFromFolder]);
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -4029,6 +4149,10 @@
         setSelectedEntity(null);
         setMobileNavOpen(false);
         setBreadcrumbs([{ label: tab.charAt(0).toUpperCase() + tab.slice(1), action: () => { setActiveTab(tab); setSelectedEntity(null); } }]);
+        // Reset folder browser to root when switching tabs
+        setCurrentFolderId(null);
+        setCurrentFolderItems([]);
+        setFolderSearchQuery('');
       };
 
       // ── Presentation Supabase helpers ──
@@ -6430,6 +6554,25 @@
         }
       };
 
+      // Handle folder item click — navigate to entity
+      const handleFolderItemClick = (item) => {
+        if (item.item_type === 'event') {
+          const event = data.events.find(e => e.id === item.item_id);
+          if (event) openEventModal(event, 'folders');
+        } else if (item.item_type === 'topic') {
+          openEntityDetail('topic', item.item_id || item.title);
+        } else if (item.item_type === 'person') {
+          openEntityDetail('person', item.item_id || item.title);
+        } else if (item.item_type === 'organization') {
+          openEntityDetail('org', item.item_id || item.title);
+        } else if (item.item_type === 'presentation') {
+          setActivePresentationId(item.item_id);
+          setActiveTab('presentations');
+        } else if (item.item_type === 'url' && item.url) {
+          window.open(item.url, '_blank', 'noopener,noreferrer');
+        }
+      };
+
       const saveEntityProfile = async () => {
         if (!entityModalData) return;
         const {type, name} = entityModalData;
@@ -7217,6 +7360,7 @@
             {/* Sub-tabs */}
             <div className="account-tabs">
               <button className={`account-tab ${accountTab==='uploads'?'active':''}`} onClick={()=>setAccountTab('uploads')}>📂 My Uploads</button>
+              <button className={`account-tab ${accountTab==='myfolders'?'active':''}`} onClick={()=>setAccountTab('myfolders')}>📁 My Folders {myFolders.length > 0 ? `(${myFolders.length})` : ''}</button>
               <button className={`account-tab ${accountTab==='trash'?'active':''}`} onClick={()=>setAccountTab('trash')}>🗑 Trash {getTrashEvents.length > 0 ? `(${getTrashEvents.length})` : ''}</button>
               <button className={`account-tab ${accountTab==='sessions'?'active':''}`} onClick={()=>setAccountTab('sessions')}>🗺 Research Sessions</button>
               <button className={`account-tab ${accountTab==='settings'?'active':''}`} onClick={()=>setAccountTab('settings')}>⚙️ Settings</button>
@@ -7601,6 +7745,146 @@
                         }}>
                         🗑 Delete My Account
                       </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* My Folders Tab */}
+            {accountTab === 'myfolders' && (() => {
+              const ITEM_TYPE_CONFIG_ACC = {
+                event:        { icon: '📄', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', label: 'Event' },
+                topic:        { icon: '🏷️', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Topic' },
+                person:       { icon: '👤', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', label: 'Person' },
+                organization: { icon: '🏛️', color: '#10b981', bg: 'rgba(16,185,129,0.12)', label: 'Org' },
+                presentation: { icon: '🎞️', color: '#ec4899', bg: 'rgba(236,72,153,0.12)', label: 'Pres' },
+                url:          { icon: '🔗', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)', label: 'URL' },
+              };
+              const accRootFolders = myFolders.filter(f => !f.parent_id);
+              const accChildFolders = currentFolderId ? folders.filter(f => f.parent_id === currentFolderId) : [];
+              const accCountItems = (fId) => {
+                const subCount = folders.filter(f => f.parent_id === fId).length;
+                return subCount > 0 ? `${subCount} sub-folder${subCount!==1?'s':''}` : '';
+              };
+
+              return (
+                <div style={{padding:'1rem 0'}}>
+                  {/* Header */}
+                  <div className="fb-header">
+                    <div className="fb-breadcrumbs">
+                      <span className="fb-bc-item" onClick={() => navigateToFolder(null)}>📁 My Folders</span>
+                      {folderBreadcrumbs.map((bc) => (
+                        <React.Fragment key={bc.id}>
+                          <span className="fb-bc-sep">›</span>
+                          {bc.id === currentFolderId
+                            ? <span className="fb-bc-current">{bc.icon} {bc.name}</span>
+                            : <span className="fb-bc-item" onClick={() => navigateToFolder(bc.id)}>{bc.icon} {bc.name}</span>
+                          }
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div className="fb-toolbar">
+                      {currentFolderId && (
+                        <input className="fb-search" placeholder="Search…" value={folderSearchQuery} onChange={e => setFolderSearchQuery(e.target.value)} />
+                      )}
+                      <div className="fb-view-toggle">
+                        <button className={`fb-view-btn ${folderViewMode==='grid'?'active':''}`} onClick={() => setFolderViewMode('grid')}>▦</button>
+                        <button className={`fb-view-btn ${folderViewMode==='list'?'active':''}`} onClick={() => setFolderViewMode('list')}>☰</button>
+                      </div>
+                      <button onClick={() => { setCreateFolderParentId(currentFolderId); setShowCreateFolderModal(true); }}
+                        style={{padding:'0.4rem 0.8rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit'}}>
+                        + New Folder
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Root view */}
+                  {!currentFolderId && (
+                    <div>
+                      {accRootFolders.length === 0 ? (
+                        <div className="fb-empty">
+                          <div className="fb-empty-icon">📁</div>
+                          <p>You haven't created any folders yet</p>
+                          <p style={{fontSize:'0.8rem'}}>Click "+ New Folder" to get started.</p>
+                        </div>
+                      ) : (
+                        <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                          {accRootFolders.map(folder => (
+                            <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                              <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                              <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                              <div className="fb-folder-name">{folder.name}</div>
+                              <div className="fb-folder-meta">{accCountItems(folder.id) || 'Empty'}</div>
+                              <div className="fb-folder-actions">
+                                <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inside a folder */}
+                  {currentFolderId && (
+                    <div>
+                      {folderItemsLoading ? (
+                        <div className="fb-empty">
+                          <div className="processing-spinner" style={{width:'28px',height:'28px',margin:'0 auto 0.75rem',borderTopColor:'#60a5fa',borderColor:'rgba(96,165,250,0.2)'}}></div>
+                          <p>Loading…</p>
+                        </div>
+                      ) : (
+                        <div>
+                          {accChildFolders.length > 0 && (
+                            <div>
+                              <div className="fb-section-label">Sub-folders</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {accChildFolders.map(folder => (
+                                  <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                                    <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                                    <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                                    <div className="fb-folder-name">{folder.name}</div>
+                                    <div className="fb-folder-meta">{accCountItems(folder.id) || 'Empty'}</div>
+                                    <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {filteredFolderItems.length > 0 && (
+                            <div>
+                              <div className="fb-section-label">Items ({filteredFolderItems.length})</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {filteredFolderItems.map(item => {
+                                  const cfg = ITEM_TYPE_CONFIG_ACC[item.item_type] || ITEM_TYPE_CONFIG_ACC.event;
+                                  return (
+                                    <div key={item.id} className="fb-item-card" onClick={() => handleFolderItemClick(item)}>
+                                      <div className="fb-item-type-icon" style={{background:cfg.bg,color:cfg.color}}>{cfg.icon}</div>
+                                      <div className="fb-item-info">
+                                        <div className="fb-item-title">{item.title || item.item_id || 'Untitled'}</div>
+                                        {item.description && <div className="fb-item-desc">{item.description.substring(0, 80)}</div>}
+                                        {item.item_type === 'url' && item.url && <div className="fb-item-desc">{item.url}</div>}
+                                      </div>
+                                      <span className="fb-item-badge" style={{background:cfg.bg,color:cfg.color}}>{cfg.label}</span>
+                                      <button className="fb-item-remove" onClick={(e) => { e.stopPropagation(); handleRemoveFolderItem(item.id); }} title="Remove">×</button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {accChildFolders.length === 0 && filteredFolderItems.length === 0 && (
+                            <div className="fb-empty">
+                              <div className="fb-empty-icon">{currentFolder?.icon || '📁'}</div>
+                              <p>This folder is empty</p>
+                              <p style={{fontSize:'0.8rem'}}>Save items here from any event, topic, or entity page.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -8313,6 +8597,7 @@
               <div className="stat"><span className="stat-label">People</span><span className="stat-value">{data.people.length}</span></div>
               <div className="stat"><span className="stat-label">Organizations</span><span className="stat-value">{data.organizations.length}</span></div>
               <div className="stat"><span className="stat-label">Topics</span><span className="stat-value">{data.topics.length}</span></div>
+              <div className="stat"><span className="stat-label">Folders</span><span className="stat-value">{folders.length}</span></div>
             </div>
           </header>
 
@@ -8340,6 +8625,7 @@
                 <button key={tab} className={`nav-btn ${activeTab===tab?'active':''}`} onClick={()=>navigateToTab(tab)}
                   style={tab==='notifications'&&notifUnreadCount>0&&activeTab!==tab?{background:'rgba(96,165,250,0.08)',borderColor:'rgba(96,165,250,0.35)'}:{}}>
                   {tab==='dashboard' ? '🏠 Dashboard'
+                   : tab==='folders' ? `📁 Folders${folders.length>0?' ('+folders.length+')':''}`
                    : tab==='companion' ? '🔬 Research Companion'
                    : tab==='sessions' ? '🗺 Research Sessions'
                    : tab==='notifications' ? `🔔 Notifications${notifUnreadCount>0?' ('+notifUnreadCount+')':''}`
@@ -8399,7 +8685,7 @@
             )}
 
             {/* Show filters on all tabs except upload, account, presentations, companion, and notifications */}
-            {activeTab !== 'dashboard' && activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && activeTab !== 'chat' && <FiltersComponent {...filterProps} />}
+            {activeTab !== 'dashboard' && activeTab !== 'upload' && activeTab !== 'account' && activeTab !== 'presentations' && activeTab !== 'folders' && activeTab !== 'companion' && activeTab !== 'notifications' && activeTab !== 'feedback' && activeTab !== 'chat' && <FiltersComponent {...filterProps} />}
 
             {/* DASHBOARD */}
             {activeTab === 'dashboard' && <DashboardPage
@@ -8563,6 +8849,183 @@
                 })}
               </div>
             )}
+
+            {/* FOLDERS */}
+            {activeTab === 'folders' && (() => {
+              const ITEM_TYPE_CONFIG = {
+                event:        { icon: '📄', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', label: 'Event' },
+                topic:        { icon: '🏷️', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Topic' },
+                person:       { icon: '👤', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', label: 'Person' },
+                organization: { icon: '🏛️', color: '#10b981', bg: 'rgba(16,185,129,0.12)', label: 'Org' },
+                presentation: { icon: '🎞️', color: '#ec4899', bg: 'rgba(236,72,153,0.12)', label: 'Pres' },
+                url:          { icon: '🔗', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)', label: 'URL' },
+              };
+              const rootFolders = folders.filter(f => !f.parent_id);
+              const childFolders = currentFolderId ? folders.filter(f => f.parent_id === currentFolderId) : [];
+              const countItems = (fId) => {
+                // count is lazy — just show sub-folder count + stored item count (items only loaded when navigated into)
+                const subCount = folders.filter(f => f.parent_id === fId).length;
+                return subCount > 0 ? `${subCount} sub-folder${subCount!==1?'s':''}` : '';
+              };
+              const displayFolders = currentFolderId ? childFolders : rootFolders;
+              const displayItems = filteredFolderItems;
+
+              return (
+                <div>
+                  {/* Header: breadcrumbs + toolbar */}
+                  <div className="fb-header">
+                    <div className="fb-breadcrumbs">
+                      <span className="fb-bc-item" onClick={() => navigateToFolder(null)}>📁 All Folders</span>
+                      {folderBreadcrumbs.map((bc) => (
+                        <React.Fragment key={bc.id}>
+                          <span className="fb-bc-sep">›</span>
+                          {bc.id === currentFolderId
+                            ? <span className="fb-bc-current">{bc.icon} {bc.name}</span>
+                            : <span className="fb-bc-item" onClick={() => navigateToFolder(bc.id)}>{bc.icon} {bc.name}</span>
+                          }
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div className="fb-toolbar">
+                      {currentFolderId && (
+                        <input className="fb-search" placeholder="Search in folder…" value={folderSearchQuery} onChange={e => setFolderSearchQuery(e.target.value)} />
+                      )}
+                      <div className="fb-view-toggle">
+                        <button className={`fb-view-btn ${folderViewMode==='grid'?'active':''}`} onClick={() => setFolderViewMode('grid')} title="Grid view">▦</button>
+                        <button className={`fb-view-btn ${folderViewMode==='list'?'active':''}`} onClick={() => setFolderViewMode('list')} title="List view">☰</button>
+                      </div>
+                      <button onClick={() => { setCreateFolderParentId(currentFolderId); setShowCreateFolderModal(true); }}
+                        style={{padding:'0.45rem 0.9rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+                        + New Folder
+                      </button>
+                      <div className="tooltip-wrapper" style={{marginLeft:'-0.2rem'}}>
+                        <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
+                        <div className="tooltip-content" style={{bottom:'100%',right:0,width:'270px'}}>
+                          Create folders to organize events, topics, people, organizations, presentations, and external URLs. Nest folders like Finder. Use the Save button on any item to add it to a folder.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Root view: show My Folders + Shared sections */}
+                  {!currentFolderId && (
+                    <div>
+                      {folders.length === 0 ? (
+                        <div className="fb-empty">
+                          <div className="fb-empty-icon">📁</div>
+                          <p>No folders yet</p>
+                          <p style={{fontSize:'0.8rem'}}>Create your first folder to start organizing your research.</p>
+                        </div>
+                      ) : (
+                        <div>
+                          {myFolders.filter(f => !f.parent_id).length > 0 && (
+                            <div>
+                              <div className="fb-section-label">My Folders</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {myFolders.filter(f => !f.parent_id).map(folder => (
+                                  <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                                    <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                                    <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                                    <div className="fb-folder-name">{folder.name}</div>
+                                    <div className="fb-folder-meta">{countItems(folder.id) || 'Empty'}</div>
+                                    <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {sharedWithMeFolders.filter(f => !f.parent_id).length > 0 && (
+                            <div>
+                              <div className="fb-section-label">Shared With Me</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {sharedWithMeFolders.filter(f => !f.parent_id).map(folder => (
+                                  <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                                    <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                                    <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                                    <div className="fb-folder-name">{folder.name}</div>
+                                    <div className="fb-folder-meta">by {folder.owner}</div>
+                                    <div className="fb-folder-actions"></div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inside a folder: show sub-folders + items */}
+                  {currentFolderId && (
+                    <div>
+                      {folderItemsLoading ? (
+                        <div className="fb-empty">
+                          <div className="processing-spinner" style={{width:'28px',height:'28px',margin:'0 auto 0.75rem',borderTopColor:'#60a5fa',borderColor:'rgba(96,165,250,0.2)'}}></div>
+                          <p>Loading folder contents…</p>
+                        </div>
+                      ) : (
+                        <div>
+                          {/* Sub-folders */}
+                          {childFolders.length > 0 && (
+                            <div>
+                              <div className="fb-section-label">Sub-folders</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {childFolders.map(folder => (
+                                  <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                                    <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                                    <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                                    <div className="fb-folder-name">{folder.name}</div>
+                                    <div className="fb-folder-meta">{countItems(folder.id) || 'Empty'}</div>
+                                    <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete sub-folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Items */}
+                          {displayItems.length > 0 && (
+                            <div>
+                              <div className="fb-section-label">Items ({displayItems.length})</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {displayItems.map(item => {
+                                  const cfg = ITEM_TYPE_CONFIG[item.item_type] || ITEM_TYPE_CONFIG.event;
+                                  return (
+                                    <div key={item.id} className="fb-item-card" onClick={() => handleFolderItemClick(item)}>
+                                      <div className="fb-item-type-icon" style={{background:cfg.bg,color:cfg.color}}>{cfg.icon}</div>
+                                      <div className="fb-item-info">
+                                        <div className="fb-item-title">{item.title || item.item_id || 'Untitled'}</div>
+                                        {item.description && <div className="fb-item-desc">{item.description.substring(0, 80)}</div>}
+                                        {item.item_type === 'url' && item.url && <div className="fb-item-desc">{item.url}</div>}
+                                      </div>
+                                      <span className="fb-item-badge" style={{background:cfg.bg,color:cfg.color}}>{cfg.label}</span>
+                                      <button className="fb-item-remove" onClick={(e) => { e.stopPropagation(); handleRemoveFolderItem(item.id); }} title="Remove from folder">×</button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Empty state inside folder */}
+                          {childFolders.length === 0 && displayItems.length === 0 && (
+                            <div className="fb-empty">
+                              <div className="fb-empty-icon">{currentFolder?.icon || '📁'}</div>
+                              <p>This folder is empty</p>
+                              <p style={{fontSize:'0.8rem'}}>Use the Save button on any event, topic, person, or organization to add it here.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* PRESENTATIONS */}
             {activeTab === 'presentations' && (() => {
