@@ -265,6 +265,31 @@
     .user-chip-btn:hover { background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.4); }
     .user-chip-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #60a5fa, #a78bfa); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: white; font-family: 'Space Mono', monospace; flex-shrink: 0; }
 
+    /* ── Folders ── */
+    .folder-modal-sm .modal-content { max-width: 480px; padding: 2rem; }
+    .folder-modal-save .modal-content { max-width: 440px; padding: 1.5rem; max-height: 80vh; display: flex; flex-direction: column; }
+    .folder-color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+    .folder-color-swatch { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; }
+    .folder-color-swatch:hover { transform: scale(1.2); }
+    .folder-color-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px rgba(96,165,250,0.6); }
+    .folder-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-height: 180px; overflow-y: auto; }
+    .folder-emoji-btn { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background: none; border: 2px solid transparent; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+    .folder-emoji-btn:hover { background: rgba(96,165,250,0.15); }
+    .folder-emoji-btn.active { border-color: #60a5fa; background: rgba(96,165,250,0.2); }
+    .folder-tree { flex: 1; overflow-y: auto; margin-bottom: 0.75rem; }
+    .folder-tree-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; font-size: 0.88rem; color: #c0c7d8; }
+    .folder-tree-item:hover { background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.2); }
+    .folder-tree-item.selected { background: rgba(96,165,250,0.15); border-color: rgba(96,165,250,0.4); color: #fff; }
+    .folder-tree-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .folder-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .folder-tree-arrow { font-size: 0.7rem; color: #5a6080; flex-shrink: 0; transition: transform 0.15s; }
+    .folder-tree-arrow.open { transform: rotate(90deg); }
+    .folder-tree-children { padding-left: 1.25rem; }
+    .folder-inline-create { display: flex; gap: 0.5rem; align-items: center; padding: 0.4rem 0; }
+    .folder-inline-create input { flex: 1; padding: 0.45rem 0.65rem; background: rgba(10,14,39,0.8); border: 1px solid rgba(61,69,99,0.5); border-radius: 6px; color: #e0e6ed; font-size: 0.85rem; font-family: inherit; outline: none; }
+    .folder-inline-create input:focus { border-color: #60a5fa; }
+    .folder-inline-create button { padding: 0.4rem 0.7rem; border-radius: 6px; border: none; font-size: 0.8rem; cursor: pointer; font-family: inherit; font-weight: 600; }
+
     /* ── Hamburger button (hidden on desktop) ── */
     .hamburger-btn { display: none; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 44px; height: 44px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
     .hamburger-btn:hover { background: rgba(96,165,250,0.22); }
@@ -3638,6 +3663,153 @@
       const [exportProgress, setExportProgress] = useState(0);
       const [exportTotal, setExportTotal] = useState(0);
 
+      // ── Folders state ──
+      const [folders, setFolders] = useState([]);
+      const [folderItems, setFolderItems] = useState([]); // items for currently viewed folder
+      const [foldersLoaded, setFoldersLoaded] = useState(false);
+      const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+      const [createFolderParentId, setCreateFolderParentId] = useState(null); // pre-set parent when creating from inside a folder
+      const [showSaveToFolderModal, setShowSaveToFolderModal] = useState(false);
+      const [saveToFolderPayload, setSaveToFolderPayload] = useState(null); // {item_type, item_id, title, url, description}
+
+      // ── Folders CRUD ──
+      const fetchFolders = useCallback(async () => {
+        if (!supabaseClient || !currentUser) return;
+        try {
+          const { data: rows, error } = await supabaseClient
+            .from('folders').select('*')
+            .or(`owner.eq.${currentUser.username},shared_with.cs.[{"username":"${currentUser.username}"}]`)
+            .order('created_at', { ascending: true });
+          if (error) throw error;
+          setFolders(rows || []);
+          setFoldersLoaded(true);
+        } catch (err) {
+          console.error('Failed to fetch folders:', err);
+        }
+      }, [currentUser]);
+
+      const createFolder = useCallback(async (name, color, icon, parentId) => {
+        if (!supabaseClient || !currentUser) return null;
+        try {
+          const newFolder = {
+            name: name.trim(),
+            color: color || '#60a5fa',
+            icon: icon || '\ud83d\udcc1',
+            parent_id: parentId || null,
+            owner: currentUser.username,
+            is_public: false,
+            shared_with: [],
+          };
+          const { data: row, error } = await supabaseClient
+            .from('folders').insert(newFolder).select().single();
+          if (error) throw error;
+          setFolders(prev => [...prev, row]);
+          return row;
+        } catch (err) {
+          console.error('Failed to create folder:', err);
+          return null;
+        }
+      }, [currentUser]);
+
+      const updateFolder = useCallback(async (folderId, updates) => {
+        if (!supabaseClient) return false;
+        try {
+          const { error } = await supabaseClient
+            .from('folders').update(updates).eq('id', folderId);
+          if (error) throw error;
+          setFolders(prev => prev.map(f => f.id === folderId ? { ...f, ...updates } : f));
+          return true;
+        } catch (err) {
+          console.error('Failed to update folder:', err);
+          return false;
+        }
+      }, []);
+
+      const deleteFolder = useCallback(async (folderId) => {
+        if (!supabaseClient) return false;
+        try {
+          const { error } = await supabaseClient
+            .from('folders').delete().eq('id', folderId);
+          if (error) throw error;
+          setFolders(prev => prev.filter(f => f.id !== folderId));
+          return true;
+        } catch (err) {
+          console.error('Failed to delete folder:', err);
+          return false;
+        }
+      }, []);
+
+      const addItemToFolder = useCallback(async (folderId, item) => {
+        if (!supabaseClient || !currentUser) return null;
+        try {
+          const newItem = {
+            folder_id: folderId,
+            item_type: item.item_type,
+            item_id: item.item_id || null,
+            url: item.url || null,
+            title: item.title || null,
+            description: item.description || null,
+            thumbnail: item.thumbnail || null,
+            added_by: currentUser.username,
+            sort_order: item.sort_order || 0,
+          };
+          const { data: row, error } = await supabaseClient
+            .from('folder_items').insert(newItem).select().single();
+          if (error) throw error;
+          return row;
+        } catch (err) {
+          console.error('Failed to add item to folder:', err);
+          return null;
+        }
+      }, [currentUser]);
+
+      const removeItemFromFolder = useCallback(async (itemId) => {
+        if (!supabaseClient) return false;
+        try {
+          const { error } = await supabaseClient
+            .from('folder_items').delete().eq('id', itemId);
+          if (error) throw error;
+          return true;
+        } catch (err) {
+          console.error('Failed to remove item from folder:', err);
+          return false;
+        }
+      }, []);
+
+      const fetchFolderItems = useCallback(async (folderId) => {
+        if (!supabaseClient) return [];
+        try {
+          const { data: rows, error } = await supabaseClient
+            .from('folder_items').select('*').eq('folder_id', folderId).order('sort_order', { ascending: true });
+          if (error) throw error;
+          return rows || [];
+        } catch (err) {
+          console.error('Failed to fetch folder items:', err);
+          return [];
+        }
+      }, []);
+
+      // Build folder tree structure (nested)
+      const folderTree = useMemo(() => {
+        const map = {};
+        const roots = [];
+        folders.forEach(f => { map[f.id] = { ...f, children: [] }; });
+        folders.forEach(f => {
+          if (f.parent_id && map[f.parent_id]) {
+            map[f.parent_id].children.push(map[f.id]);
+          } else {
+            roots.push(map[f.id]);
+          }
+        });
+        return roots;
+      }, [folders]);
+
+      // Helper: open "Save to Folder" modal
+      const openSaveToFolder = useCallback((payload) => {
+        setSaveToFolderPayload(payload);
+        setShowSaveToFolderModal(true);
+      }, []);
+
       // ── Load from Supabase on mount ──
       useEffect(() => {
         const loadEvents = async () => {
@@ -3677,6 +3849,11 @@
           try { localStorage.setItem('historicalEventsDB', JSON.stringify(data)); } catch(e) {}
         }
       }, [data, dbReady]);
+
+      // ── Load folders when user is logged in ──
+      useEffect(() => {
+        if (currentUser && dbReady) fetchFolders();
+      }, [currentUser, dbReady, fetchFolders]);
 
       // ── Owner health check — runs on login and every 6 hours ──
       const runHealthCheck = React.useCallback(async () => {
@@ -7873,6 +8050,203 @@
         );
       };
 
+      // ── Folder Modals JSX (shared between Account + Main layouts) ──
+      const createFolderModalJSX = !showCreateFolderModal ? null : (() => {
+        const FOLDER_COLORS = ['#60a5fa','#3b82f6','#a78bfa','#8b5cf6','#10b981','#14b8a6','#f59e0b','#f97316','#ef4444','#ec4899','#6366f1','#06b6d4','#84cc16','#78716c','#e879f7','#fb923c'];
+        const FOLDER_EMOJIS = ['\ud83d\udcc1','\ud83d\udcc2','\ud83d\udcda','\ud83d\udcd6','\ud83d\udd0d','\ud83c\udf10','\u2b50','\ud83d\udca1','\ud83d\udd12','\ud83c\udff7\ufe0f','\ud83d\udccc','\ud83d\udcca','\ud83d\udce6','\ud83d\udce5','\ud83d\udcc8','\ud83c\udfaf','\ud83d\udee1\ufe0f','\u26a0\ufe0f','\ud83d\udd25','\ud83d\udca3','\ud83c\udfad','\ud83d\udcf0','\ud83c\udfa5','\ud83d\udcf7','\ud83d\udd17','\ud83e\udde9','\ud83e\uddea','\ud83d\udcdd','\ud83d\udd73\ufe0f','\ud83c\udf0d','\ud83c\udfe6','\u2694\ufe0f'];
+        const [cfName, setCfName] = React.useState('');
+        const [cfColor, setCfColor] = React.useState('#60a5fa');
+        const [cfIcon, setCfIcon] = React.useState('\ud83d\udcc1');
+        const [cfParent, setCfParent] = React.useState(createFolderParentId || null);
+        const [cfSaving, setCfSaving] = React.useState(false);
+        const [cfShowEmojis, setCfShowEmojis] = React.useState(false);
+        const handleCreate = async () => {
+          if (!cfName.trim() || cfSaving) return;
+          setCfSaving(true);
+          const result = await createFolder(cfName, cfColor, cfIcon, cfParent);
+          setCfSaving(false);
+          if (result) { setShowCreateFolderModal(false); setCreateFolderParentId(null); }
+        };
+        const ownFolders = folders.filter(f => f.owner === currentUser?.username);
+        return (
+          <div className="modal" onClick={() => { setShowCreateFolderModal(false); setCreateFolderParentId(null); }}>
+            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '480px', padding: '2rem' }}>
+              <h3 style={{ marginBottom: '0.3rem', color: '#e0e6ed', fontFamily: "'Space Mono',monospace", fontSize: '1.15rem' }}>Create Folder</h3>
+              <p style={{ color: '#8b92b0', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Organize your saved events, topics, people, and links.</p>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="filter-label">Name</label>
+                <input type="text" value={cfName} onChange={e => setCfName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleCreate(); else if (e.key === 'Escape') { setShowCreateFolderModal(false); setCreateFolderParentId(null); } }}
+                  placeholder="e.g. JFK Research" autoFocus
+                  style={{ width: '100%', padding: '0.65rem 0.9rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }} />
+              </div>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="filter-label">Color</label>
+                <div className="folder-color-grid">
+                  {FOLDER_COLORS.map(c => (
+                    <div key={c} className={`folder-color-swatch${cfColor === c ? ' active' : ''}`}
+                      style={{ background: c }} onClick={() => setCfColor(c)} />
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="filter-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  Icon
+                  <span onClick={() => setCfShowEmojis(p => !p)}
+                    style={{ fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, background: 'rgba(45,53,97,0.6)', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(61,69,99,0.5)' }}>
+                    {cfIcon}
+                  </span>
+                </label>
+                {cfShowEmojis && (
+                  <div className="folder-emoji-grid" style={{ marginTop: '0.5rem' }}>
+                    {FOLDER_EMOJIS.map(em => (
+                      <button key={em} className={`folder-emoji-btn${cfIcon === em ? ' active' : ''}`}
+                        onClick={() => { setCfIcon(em); setCfShowEmojis(false); }}>
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {ownFolders.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label className="filter-label">Parent Folder (optional)</label>
+                  <select value={cfParent || ''} onChange={e => setCfParent(e.target.value || null)}
+                    style={{ width: '100%', padding: '0.6rem 0.8rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.88rem', outline: 'none' }}>
+                    <option value="">None (root level)</option>
+                    {ownFolders.map(f => (
+                      <option key={f.id} value={f.id}>{f.icon} {f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(10,14,39,0.5)', borderRadius: '10px', border: `2px solid ${cfColor}40`, marginBottom: '1.5rem' }}>
+                <span style={{ fontSize: '1.5rem' }}>{cfIcon}</span>
+                <span style={{ color: cfColor, fontWeight: 700, fontSize: '0.95rem' }}>{cfName || 'Folder Name'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button onClick={() => { setShowCreateFolderModal(false); setCreateFolderParentId(null); }}
+                  style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
+                <button onClick={handleCreate} disabled={!cfName.trim() || cfSaving}
+                  style={{ padding: '0.5rem 1.2rem', background: cfName.trim() ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: cfName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: cfName.trim() ? 1 : 0.5 }}>
+                  {cfSaving ? 'Creating...' : 'Create Folder'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })();
+
+      const saveToFolderModalJSX = (!showSaveToFolderModal || !saveToFolderPayload) ? null : (() => {
+        const [stfSelected, setStfSelected] = React.useState(null);
+        const [stfExpanded, setStfExpanded] = React.useState(new Set());
+        const [stfSaving, setStfSaving] = React.useState(false);
+        const [stfSaved, setStfSaved] = React.useState(false);
+        const [stfInlineCreate, setStfInlineCreate] = React.useState(false);
+        const [stfNewName, setStfNewName] = React.useState('');
+        const [stfCreating, setStfCreating] = React.useState(false);
+        const toggleExpand = (fId) => {
+          setStfExpanded(prev => { const next = new Set(prev); if (next.has(fId)) next.delete(fId); else next.add(fId); return next; });
+        };
+        const handleSave = async () => {
+          if (!stfSelected || stfSaving) return;
+          setStfSaving(true);
+          const result = await addItemToFolder(stfSelected, saveToFolderPayload);
+          setStfSaving(false);
+          if (result) { setStfSaved(true); setTimeout(() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }, 800); }
+        };
+        const handleInlineCreate = async () => {
+          if (!stfNewName.trim() || stfCreating) return;
+          setStfCreating(true);
+          const folder = await createFolder(stfNewName, '#60a5fa', '\ud83d\udcc1', null);
+          setStfCreating(false);
+          if (folder) { setStfNewName(''); setStfInlineCreate(false); setStfSelected(folder.id); }
+        };
+        const renderNode = (node, depth = 0) => {
+          const hasChildren = node.children && node.children.length > 0;
+          const isExpanded = stfExpanded.has(node.id);
+          return (
+            <div key={node.id}>
+              <div className={`folder-tree-item${stfSelected === node.id ? ' selected' : ''}`}
+                style={{ paddingLeft: `${0.75 + depth * 1.25}rem` }}
+                onClick={() => setStfSelected(node.id)}>
+                {hasChildren ? (
+                  <span className={`folder-tree-arrow${isExpanded ? ' open' : ''}`}
+                    onClick={ev => { ev.stopPropagation(); toggleExpand(node.id); }}>&#9654;</span>
+                ) : <span style={{ width: '0.7rem' }} />}
+                <span className="folder-tree-icon" style={{ color: node.color }}>{node.icon}</span>
+                <span className="folder-tree-name">{node.name}</span>
+              </div>
+              {hasChildren && isExpanded && (
+                <div className="folder-tree-children">
+                  {node.children.map(child => renderNode(child, depth + 1))}
+                </div>
+              )}
+            </div>
+          );
+        };
+        const userTree = folderTree.filter(f => f.owner === currentUser?.username);
+        return (
+          <div className="modal" onClick={() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }}>
+            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '440px', padding: '1.5rem', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexShrink: 0 }}>
+                <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.05rem' }}>Save to Folder</h3>
+                <button onClick={() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }}
+                  style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1, padding: '0 0.25rem' }}>&times;</button>
+              </div>
+              <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(96,165,250,0.08)', borderRadius: '8px', border: '1px solid rgba(96,165,250,0.15)', marginBottom: '0.75rem', flexShrink: 0 }}>
+                <div style={{ fontSize: '0.78rem', color: '#8b92b0', marginBottom: '0.15rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                  {saveToFolderPayload.item_type}
+                </div>
+                <div style={{ fontSize: '0.9rem', color: '#c0c7d8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {saveToFolderPayload.title || saveToFolderPayload.item_id || 'Untitled'}
+                </div>
+              </div>
+              <div className="folder-tree" style={{ flex: 1, overflowY: 'auto', marginBottom: '0.75rem' }}>
+                {userTree.length === 0 && !stfInlineCreate ? (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#5a6080' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{'\ud83d\udcc1'}</div>
+                    <p style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>No folders yet</p>
+                    <button onClick={() => setStfInlineCreate(true)}
+                      style={{ padding: '0.45rem 1rem', background: 'linear-gradient(135deg,#60a5fa,#3b82f6)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.83rem' }}>
+                      Create Your First Folder
+                    </button>
+                  </div>
+                ) : userTree.map(node => renderNode(node, 0))}
+              </div>
+              {stfInlineCreate ? (
+                <div className="folder-inline-create" style={{ flexShrink: 0 }}>
+                  <input type="text" value={stfNewName} onChange={e => setStfNewName(e.target.value)}
+                    placeholder="New folder name" autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') handleInlineCreate(); else if (e.key === 'Escape') { setStfInlineCreate(false); setStfNewName(''); } }} />
+                  <button onClick={handleInlineCreate} disabled={!stfNewName.trim() || stfCreating}
+                    style={{ background: stfNewName.trim() ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', color: '#fff', opacity: stfNewName.trim() ? 1 : 0.5 }}>
+                    {stfCreating ? '...' : '+'}
+                  </button>
+                  <button onClick={() => { setStfInlineCreate(false); setStfNewName(''); }}
+                    style={{ background: 'none', color: '#8b92b0', border: '1px solid rgba(61,69,99,0.5)' }}>&times;</button>
+                </div>
+              ) : userTree.length > 0 && (
+                <button onClick={() => setStfInlineCreate(true)}
+                  style={{ width: '100%', padding: '0.45rem', background: 'none', border: '1px dashed rgba(96,165,250,0.3)', borderRadius: '8px', color: '#60a5fa', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.75rem', flexShrink: 0, transition: 'all 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(96,165,250,0.06)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  + New Folder
+                </button>
+              )}
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexShrink: 0, paddingTop: '0.5rem', borderTop: '1px solid rgba(61,69,99,0.3)' }}>
+                <button onClick={() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }}
+                  style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
+                <button onClick={handleSave} disabled={!stfSelected || stfSaving}
+                  style={{ padding: '0.5rem 1.2rem', background: stfSelected ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: stfSelected ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: stfSelected ? 1 : 0.5, minWidth: '100px', textAlign: 'center' }}>
+                  {stfSaved ? '\u2713 Saved!' : stfSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })();
+
       // ── Account page — own layout (no nav bar) ──
       if (activeTab === 'account') {
         return (
@@ -7906,6 +8280,8 @@
             </main>
             {showModal && modalData && modalViewJSX}
             {entityProfileModalJSX}
+            {createFolderModalJSX}
+            {saveToFolderModalJSX}
           </div>
         );
       }
@@ -9527,6 +9903,11 @@
               </div>
             </div>
           )}
+
+          {/* ═══ FOLDER MODALS ═══ */}
+          {createFolderModalJSX}
+          {saveToFolderModalJSX}
+
 
           {/* Undo Delete Toast */}
           {lastDeleted && (
