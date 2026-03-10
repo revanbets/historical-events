@@ -359,6 +359,41 @@
     .fb-sort-select { padding: 0.35rem 0.6rem; background: rgba(10,14,39,0.8); border: 1px solid rgba(61,69,99,0.5); border-radius: 8px; color: #c0c7d8; font-size: 0.78rem; font-family: inherit; outline: none; cursor: pointer; }
     .fb-sort-select:focus { border-color: #60a5fa; }
     .fb-folder-act-btn.edit:hover { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
+    /* Stage 5: Sharing */
+    .fb-share-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; padding: 0.12rem 0.4rem; border-radius: 4px; font-weight: 600; flex-shrink: 0; }
+    .fb-share-badge.public { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+    .fb-share-badge.shared { background: rgba(167,139,250,0.12); color: #a78bfa; border: 1px solid rgba(167,139,250,0.25); }
+    .fb-share-btn { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.25); border-radius: 6px; color: #a78bfa; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 0.78rem; padding: 0.3rem 0.7rem; display: inline-flex; align-items: center; gap: 0.3rem; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+    .fb-share-btn:hover { background: rgba(167,139,250,0.2); border-color: rgba(167,139,250,0.5); }
+    .share-modal-section { margin-bottom: 1.25rem; }
+    .share-modal-section-label { font-size: 0.72rem; color: #8b92b0; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 0.5rem; }
+    .share-user-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0.75rem; border-radius: 8px; border: 1px solid rgba(61,69,99,0.4); background: rgba(26,31,58,0.5); margin-bottom: 0.35rem; }
+    .share-user-row:hover { border-color: rgba(96,165,250,0.3); background: rgba(37,43,74,0.6); }
+    .share-user-avatar { width: 30px; height: 30px; border-radius: 50%; background: rgba(167,139,250,0.15); color: #a78bfa; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; flex-shrink: 0; text-transform: uppercase; }
+    .share-user-name { flex: 1; font-size: 0.88rem; color: #e0e6ed; font-weight: 600; }
+    .share-user-perm { padding: 0.25rem 0.5rem; background: rgba(10,14,39,0.6); border: 1px solid rgba(61,69,99,0.5); border-radius: 6px; color: #c0c7d8; font-size: 0.75rem; font-family: inherit; outline: none; cursor: pointer; }
+    .share-user-perm:focus { border-color: #60a5fa; }
+    .share-user-remove { background: none; border: none; color: #5a6080; cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85rem; transition: all 0.15s; }
+    .share-user-remove:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+    .share-invite-row { display: flex; gap: 0.5rem; align-items: center; }
+    .share-invite-input { flex: 1; padding: 0.5rem 0.75rem; background: rgba(10,14,39,0.8); border: 1px solid rgba(61,69,99,0.5); border-radius: 8px; color: #e0e6ed; font-family: inherit; font-size: 0.85rem; outline: none; }
+    .share-invite-input:focus { border-color: #a78bfa; }
+    .share-invite-input::placeholder { color: #4a5270; }
+    .share-invite-btn { padding: 0.5rem 0.9rem; background: linear-gradient(135deg,#a78bfa,#8b5cf6); border: none; border-radius: 8px; color: #fff; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 0.82rem; white-space: nowrap; transition: opacity 0.15s; }
+    .share-invite-btn:hover { opacity: 0.9; }
+    .share-invite-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .share-public-toggle { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem; background: rgba(26,31,58,0.6); border: 1px solid rgba(61,69,99,0.5); border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+    .share-public-toggle:hover { border-color: rgba(16,185,129,0.4); }
+    .share-public-toggle.active { border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.06); }
+    .share-toggle-switch { width: 38px; height: 20px; border-radius: 10px; background: rgba(61,69,99,0.6); position: relative; transition: background 0.2s; flex-shrink: 0; }
+    .share-toggle-switch.on { background: #10b981; }
+    .share-toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+    .share-toggle-switch.on::after { transform: translateX(18px); }
+    .share-link-box { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding: 0.4rem 0.65rem; background: rgba(10,14,39,0.6); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; }
+    .share-link-url { flex: 1; font-size: 0.78rem; color: #10b981; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Space Mono', monospace; }
+    .share-link-copy { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 6px; color: #10b981; cursor: pointer; font-family: inherit; font-size: 0.72rem; font-weight: 600; padding: 0.25rem 0.55rem; transition: all 0.15s; }
+    .share-link-copy:hover { background: rgba(16,185,129,0.2); }
+    .fb-owner-label { font-size: 0.72rem; color: #8b92b0; font-style: italic; }
 
     /* ── Hamburger button (hidden on desktop) ── */
     .hamburger-btn { display: none; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 44px; height: 44px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
@@ -3999,6 +4034,74 @@
         setEditFolderTarget(folder);
         setShowEditFolderModal(true);
       }, []);
+
+      // ── Sharing state ──
+      const [showShareFolderModal, setShowShareFolderModal] = useState(false);
+      const [shareFolderTarget, setShareFolderTarget] = useState(null);
+
+      const openShareFolder = useCallback((folder) => {
+        setShareFolderTarget(folder);
+        setShowShareFolderModal(true);
+      }, []);
+
+      // Toggle folder public/private
+      const toggleFolderPublic = useCallback(async (folderId, currentVal) => {
+        const newVal = !currentVal;
+        const ok = await updateFolder(folderId, { is_public: newVal });
+        if (ok && shareFolderTarget && shareFolderTarget.id === folderId) {
+          setShareFolderTarget(prev => ({ ...prev, is_public: newVal }));
+        }
+        return ok;
+      }, [updateFolder, shareFolderTarget]);
+
+      // Add user to shared_with
+      const shareFolderWithUser = useCallback(async (folderId, username, permission = 'view') => {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return false;
+        const existing = Array.isArray(folder.shared_with) ? folder.shared_with : [];
+        if (existing.some(s => s.username === username)) return false; // already shared
+        const updated = [...existing, { username, permission }];
+        const ok = await updateFolder(folderId, { shared_with: updated });
+        if (ok && shareFolderTarget && shareFolderTarget.id === folderId) {
+          setShareFolderTarget(prev => ({ ...prev, shared_with: updated }));
+        }
+        return ok;
+      }, [folders, updateFolder, shareFolderTarget]);
+
+      // Update user permission
+      const updateSharePermission = useCallback(async (folderId, username, newPermission) => {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return false;
+        const existing = Array.isArray(folder.shared_with) ? folder.shared_with : [];
+        const updated = existing.map(s => s.username === username ? { ...s, permission: newPermission } : s);
+        const ok = await updateFolder(folderId, { shared_with: updated });
+        if (ok && shareFolderTarget && shareFolderTarget.id === folderId) {
+          setShareFolderTarget(prev => ({ ...prev, shared_with: updated }));
+        }
+        return ok;
+      }, [folders, updateFolder, shareFolderTarget]);
+
+      // Remove user from shared_with
+      const unshareFolderWithUser = useCallback(async (folderId, username) => {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return false;
+        const existing = Array.isArray(folder.shared_with) ? folder.shared_with : [];
+        const updated = existing.filter(s => s.username !== username);
+        const ok = await updateFolder(folderId, { shared_with: updated });
+        if (ok && shareFolderTarget && shareFolderTarget.id === folderId) {
+          setShareFolderTarget(prev => ({ ...prev, shared_with: updated }));
+        }
+        return ok;
+      }, [folders, updateFolder, shareFolderTarget]);
+
+      // Check if current user can edit a folder (owner or edit permission)
+      const canEditFolder = useCallback((folder) => {
+        if (!folder || !currentUser) return false;
+        if (folder.owner === currentUser.username) return true;
+        const shared = Array.isArray(folder.shared_with) ? folder.shared_with : [];
+        const entry = shared.find(s => s.username === currentUser.username);
+        return entry && entry.permission === 'edit';
+      }, [currentUser]);
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -7854,12 +7957,18 @@
                 { key: 'url', label: '🔗 URLs' },
               ];
               const accRootFolders = myFolders.filter(f => !f.parent_id);
+              const accSharedWithMe = sharedWithMeFolders.filter(f => !f.parent_id);
               const accChildFolders = currentFolderId ? folders.filter(f => f.parent_id === currentFolderId) : [];
               const accCountItems = (fId) => {
                 const subCount = folders.filter(f => f.parent_id === fId).length;
                 return subCount > 0 ? `${subCount} sub-folder${subCount!==1?'s':''}` : '';
               };
               const accDisplayItems = filteredFolderItems;
+              const accShareInfo = (f) => {
+                const shared = Array.isArray(f.shared_with) ? f.shared_with : [];
+                return { isPublic: !!f.is_public, sharedCount: shared.length };
+              };
+              const accUserCanEdit = currentFolder ? canEditFolder(currentFolder) : false;
 
               return (
                 <div style={{padding:'1rem 0'}}>
@@ -7892,7 +8001,10 @@
                         <button className={`fb-view-btn ${folderViewMode==='grid'?'active':''}`} onClick={() => setFolderViewMode('grid')}>▦</button>
                         <button className={`fb-view-btn ${folderViewMode==='list'?'active':''}`} onClick={() => setFolderViewMode('list')}>☰</button>
                       </div>
-                      {currentFolderId && currentFolder && (
+                      {currentFolderId && currentFolder && currentFolder.owner === currentUser?.username && (
+                        <button className="fb-share-btn" onClick={() => openShareFolder(currentFolder)}>🔗 Share</button>
+                      )}
+                      {currentFolderId && currentFolder && currentFolder.owner === currentUser?.username && (
                         <button onClick={() => openEditFolder(currentFolder)}
                           style={{padding:'0.4rem 0.8rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'8px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',whiteSpace:'nowrap'}}>
                           ✏️ Edit
@@ -7915,29 +8027,74 @@
                     </div>
                   )}
 
+                  {/* View-only banner for shared folders */}
+                  {currentFolderId && currentFolder && currentFolder.owner !== currentUser?.username && (
+                    <div style={{display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.5rem 0.85rem',background:'rgba(167,139,250,0.06)',border:'1px solid rgba(167,139,250,0.15)',borderRadius:'8px',marginBottom:'0.75rem',fontSize:'0.82rem',color:'#a78bfa'}}>
+                      <span>{accUserCanEdit ? '✏️' : '👁'}</span>
+                      <span>Shared by <strong>{currentFolder.owner}</strong> — {accUserCanEdit ? 'you can add and remove items' : 'view only'}</span>
+                    </div>
+                  )}
+
                   {/* Root view */}
                   {!currentFolderId && (
                     <div>
-                      {accRootFolders.length === 0 ? (
+                      {accRootFolders.length === 0 && accSharedWithMe.length === 0 ? (
                         <div className="fb-empty">
                           <div className="fb-empty-icon">📁</div>
                           <p>You haven't created any folders yet</p>
                           <p style={{fontSize:'0.8rem'}}>Click "+ New Folder" to get started.</p>
                         </div>
                       ) : (
-                        <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
-                          {accRootFolders.map(folder => (
-                            <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
-                              <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
-                              <div className="fb-folder-icon">{folder.icon || '📁'}</div>
-                              <div className="fb-folder-name">{folder.name}</div>
-                              <div className="fb-folder-meta">{accCountItems(folder.id) || 'Empty'}</div>
-                              <div className="fb-folder-actions">
-                                <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
-                                <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                        <div>
+                          {accRootFolders.length > 0 && (
+                            <div>
+                              <div className="fb-section-label">My Folders</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {accRootFolders.map(folder => {
+                                  const si = accShareInfo(folder);
+                                  return (
+                                  <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                                    <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                                    <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                                    <div className="fb-folder-name">{folder.name}</div>
+                                    <div className="fb-folder-meta" style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+                                      <span>{accCountItems(folder.id) || 'Empty'}</span>
+                                      {si.isPublic && <span className="fb-share-badge public">🌐 Public</span>}
+                                      {si.sharedCount > 0 && <span className="fb-share-badge shared">👥 {si.sharedCount}</span>}
+                                    </div>
+                                    <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn" onClick={(e) => { e.stopPropagation(); openShareFolder(folder); }} title="Share">🔗</button>
+                                      <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
+                                      <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                                    </div>
+                                  </div>
+                                  );
+                                })}
                               </div>
                             </div>
-                          ))}
+                          )}
+                          {accSharedWithMe.length > 0 && (
+                            <div>
+                              <div className="fb-section-label">Shared With Me</div>
+                              <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
+                                {accSharedWithMe.map(folder => {
+                                  const myPerm = (Array.isArray(folder.shared_with) ? folder.shared_with : []).find(s => s.username === currentUser?.username);
+                                  return (
+                                  <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
+                                    <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
+                                    <div className="fb-folder-icon">{folder.icon || '📁'}</div>
+                                    <div className="fb-folder-name">{folder.name}</div>
+                                    <div className="fb-folder-meta" style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+                                      <span className="fb-owner-label">by {folder.owner}</span>
+                                      {myPerm && <span className="fb-share-badge shared">{myPerm.permission === 'edit' ? '✏️ Can Edit' : '👁 View Only'}</span>}
+                                    </div>
+                                    <div className="fb-folder-actions"></div>
+                                  </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -7957,18 +8114,27 @@
                             <div>
                               <div className="fb-section-label">Sub-folders</div>
                               <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
-                                {accChildFolders.map(folder => (
+                                {accChildFolders.map(folder => {
+                                  const isOwn = folder.owner === currentUser?.username;
+                                  const si = accShareInfo(folder);
+                                  return (
                                   <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
                                     <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
                                     <div className="fb-folder-icon">{folder.icon || '📁'}</div>
                                     <div className="fb-folder-name">{folder.name}</div>
-                                    <div className="fb-folder-meta">{accCountItems(folder.id) || 'Empty'}</div>
+                                    <div className="fb-folder-meta" style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+                                      <span>{accCountItems(folder.id) || 'Empty'}</span>
+                                      {si.isPublic && <span className="fb-share-badge public">🌐</span>}
+                                      {si.sharedCount > 0 && <span className="fb-share-badge shared">👥 {si.sharedCount}</span>}
+                                    </div>
                                     <div className="fb-folder-actions">
-                                      <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
-                                      <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                                      {isOwn && <button className="fb-folder-act-btn" onClick={(e) => { e.stopPropagation(); openShareFolder(folder); }} title="Share">🔗</button>}
+                                      {isOwn && <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>}
+                                      {isOwn && <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>}
                                     </div>
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -7987,7 +8153,7 @@
                                         {item.item_type === 'url' && item.url && <div className="fb-item-desc">{item.url}</div>}
                                       </div>
                                       <span className="fb-item-badge" style={{background:cfg.bg,color:cfg.color}}>{cfg.label}</span>
-                                      <button className="fb-item-remove" onClick={(e) => { e.stopPropagation(); handleRemoveFolderItem(item.id); }} title="Remove">×</button>
+                                      {accUserCanEdit && <button className="fb-item-remove" onClick={(e) => { e.stopPropagation(); handleRemoveFolderItem(item.id); }} title="Remove">×</button>}
                                     </div>
                                   );
                                 })}
@@ -8003,15 +8169,15 @@
                             </div>
                           )}
 
-                          {/* Add External URL form */}
-                          <div className="fb-add-url-form">
+                          {/* Add External URL form — only for owner or edit-permission users */}
+                          {accUserCanEdit && <div className="fb-add-url-form">
                             <span style={{fontSize:'1rem',flexShrink:0}}>🔗</span>
                             <input className="fb-add-url-input" placeholder="Paste a URL…" value={folderAddUrlInput} onChange={e=>setFolderAddUrlInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
                             <input className="fb-add-url-input" style={{maxWidth:'160px'}} placeholder="Title (optional)" value={folderAddUrlTitle} onChange={e=>setFolderAddUrlTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
                             <button className="save-to-folder-btn" disabled={!folderAddUrlInput.trim()||folderAddUrlSaving} onClick={addUrlToCurrentFolder} style={{opacity:folderAddUrlInput.trim()?1:0.5}}>
                               {folderAddUrlSaving ? '…' : '+ Add'}
                             </button>
-                          </div>
+                          </div>}
 
                           {accChildFolders.length === 0 && currentFolderItems.length === 0 && !folderAddUrlInput && (
                             <div className="fb-empty">
@@ -8678,6 +8844,137 @@
         );
       })();
 
+      // ── Share Folder Modal ──
+      const shareFolderModalJSX = (!showShareFolderModal || !shareFolderTarget) ? null : (() => {
+        const [sfInviteUsername, setSfInviteUsername] = React.useState('');
+        const [sfInvitePerm, setSfInvitePerm] = React.useState('view');
+        const [sfInviting, setSfInviting] = React.useState(false);
+        const [sfError, setSfError] = React.useState('');
+        const [sfCopied, setSfCopied] = React.useState(false);
+        const [sfAllUsers, setSfAllUsers] = React.useState([]);
+        React.useEffect(() => { getAllUsers().then(u => setSfAllUsers(u || [])); }, []);
+        const sharedList = Array.isArray(shareFolderTarget.shared_with) ? shareFolderTarget.shared_with : [];
+        const isPublic = !!shareFolderTarget.is_public;
+        const publicLink = `${window.location.origin}${window.location.pathname}?folder=${shareFolderTarget.id}`;
+        const handleTogglePublic = async () => {
+          await toggleFolderPublic(shareFolderTarget.id, isPublic);
+        };
+        const handleCopyLink = () => {
+          navigator.clipboard.writeText(publicLink).then(() => { setSfCopied(true); setTimeout(() => setSfCopied(false), 2000); });
+        };
+        const handleInvite = async () => {
+          const uname = sfInviteUsername.trim().toLowerCase();
+          if (!uname) return;
+          setSfError('');
+          if (uname === currentUser.username) { setSfError('You can\'t share with yourself.'); return; }
+          if (uname === shareFolderTarget.owner) { setSfError('That user already owns this folder.'); return; }
+          if (sharedList.some(s => s.username === uname)) { setSfError('Already shared with this user.'); return; }
+          const userExists = sfAllUsers.some(u => u.username === uname);
+          if (!userExists) { setSfError(`User "${uname}" not found.`); return; }
+          setSfInviting(true);
+          const ok = await shareFolderWithUser(shareFolderTarget.id, uname, sfInvitePerm);
+          if (ok) {
+            setSfInviteUsername('');
+            // Send notification
+            const notifMsg = `${currentUser.username} shared the folder "${shareFolderTarget.name}" with you (${sfInvitePerm === 'edit' ? 'can edit' : 'view only'}).`;
+            await supabaseClient.from('notifications').insert([{
+              type: 'folder_shared', title: 'Folder Shared With You', message: notifMsg,
+              created_by: currentUser.username, created_by_role: currentUser.role,
+              metadata: { folder_id: shareFolderTarget.id, folder_name: shareFolderTarget.name, permission: sfInvitePerm, target_user: uname },
+              read_by: [], dismissed_by: [],
+            }]);
+          } else { setSfError('Failed to share. Please try again.'); }
+          setSfInviting(false);
+        };
+        const handlePermChange = async (username, newPerm) => {
+          await updateSharePermission(shareFolderTarget.id, username, newPerm);
+        };
+        const handleRemoveUser = async (username) => {
+          await unshareFolderWithUser(shareFolderTarget.id, username);
+        };
+        return (
+          <div className="modal" onClick={() => { setShowShareFolderModal(false); setShareFolderTarget(null); }}>
+            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '500px', padding: '1.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.1rem' }}>Share Folder</h3>
+                <button onClick={() => { setShowShareFolderModal(false); setShareFolderTarget(null); }}
+                  style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', background: 'rgba(167,139,250,0.06)', borderRadius: '8px', border: '1px solid rgba(167,139,250,0.15)', marginBottom: '1.25rem' }}>
+                <span style={{ fontSize: '1.2rem' }}>{shareFolderTarget.icon || '\ud83d\udcc1'}</span>
+                <span style={{ color: shareFolderTarget.color || '#60a5fa', fontWeight: 700, fontSize: '0.92rem' }}>{shareFolderTarget.name}</span>
+              </div>
+
+              {/* Public Link Section */}
+              <div className="share-modal-section">
+                <div className="share-modal-section-label">Public Access</div>
+                <div className={`share-public-toggle${isPublic ? ' active' : ''}`} onClick={handleTogglePublic}>
+                  <div className={`share-toggle-switch${isPublic ? ' on' : ''}`}></div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.88rem', color: '#e0e6ed', fontWeight: 600 }}>{isPublic ? '🌐 Public — anyone with the link can view' : '🔒 Private — only invited users'}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.15rem' }}>Toggle to make this folder publicly viewable</div>
+                  </div>
+                </div>
+                {isPublic && (
+                  <div className="share-link-box">
+                    <span className="share-link-url">{publicLink}</span>
+                    <button className="share-link-copy" onClick={handleCopyLink}>{sfCopied ? '\u2713 Copied' : 'Copy'}</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Invite Users Section */}
+              <div className="share-modal-section">
+                <div className="share-modal-section-label">Invite People</div>
+                <div className="share-invite-row">
+                  <input className="share-invite-input" placeholder="Enter username…" value={sfInviteUsername}
+                    onChange={e => { setSfInviteUsername(e.target.value); setSfError(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleInvite(); }} />
+                  <select value={sfInvitePerm} onChange={e => setSfInvitePerm(e.target.value)} className="share-user-perm">
+                    <option value="view">View</option>
+                    <option value="edit">Edit</option>
+                  </select>
+                  <button className="share-invite-btn" disabled={!sfInviteUsername.trim() || sfInviting} onClick={handleInvite}>
+                    {sfInviting ? '...' : 'Invite'}
+                  </button>
+                </div>
+                {sfError && <div style={{ fontSize: '0.78rem', color: '#ef4444', marginTop: '0.35rem', paddingLeft: '0.1rem' }}>{sfError}</div>}
+                <div className="tooltip-wrapper" style={{ marginTop: '0.25rem' }}>
+                  <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
+                  <div className="tooltip-content" style={{bottom:'100%',left:0,width:'270px'}}>
+                    <strong>View</strong> — can browse folder contents but cannot add or remove items.<br/>
+                    <strong>Edit</strong> — can add items, remove items, and add URLs to the folder.
+                  </div>
+                </div>
+              </div>
+
+              {/* Shared Users List */}
+              {sharedList.length > 0 && (
+                <div className="share-modal-section">
+                  <div className="share-modal-section-label">Shared With ({sharedList.length})</div>
+                  {sharedList.map(s => (
+                    <div key={s.username} className="share-user-row">
+                      <div className="share-user-avatar">{s.username.charAt(0)}</div>
+                      <span className="share-user-name">{s.username}</span>
+                      <select className="share-user-perm" value={s.permission} onChange={e => handlePermChange(s.username, e.target.value)}>
+                        <option value="view">View</option>
+                        <option value="edit">Edit</option>
+                      </select>
+                      <button className="share-user-remove" onClick={() => handleRemoveUser(s.username)} title="Revoke access">&times;</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Owner info */}
+              <div style={{ fontSize: '0.75rem', color: '#5a6080', borderTop: '1px solid rgba(61,69,99,0.3)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+                Owner: <strong style={{ color: '#8b92b0' }}>{shareFolderTarget.owner}</strong>
+              </div>
+            </div>
+          </div>
+        );
+      })();
+
       const saveToFolderModalJSX = (!showSaveToFolderModal || !saveToFolderPayload) ? null : (() => {
         const [stfSelected, setStfSelected] = React.useState(null);
         const [stfExpanded, setStfExpanded] = React.useState(new Set());
@@ -8824,6 +9121,7 @@
             {createFolderModalJSX}
             {editFolderModalJSX}
             {saveToFolderModalJSX}
+            {shareFolderModalJSX}
           </div>
         );
       }
@@ -9142,6 +9440,11 @@
               };
               const displayItems = filteredFolderItems;
               const isOwnFolder = (f) => f.owner === currentUser?.username;
+              const folderShareInfo = (f) => {
+                const shared = Array.isArray(f.shared_with) ? f.shared_with : [];
+                return { isPublic: !!f.is_public, sharedCount: shared.length };
+              };
+              const userCanEdit = currentFolder ? canEditFolder(currentFolder) : false;
 
               return (
                 <div>
@@ -9175,6 +9478,9 @@
                         <button className={`fb-view-btn ${folderViewMode==='list'?'active':''}`} onClick={() => setFolderViewMode('list')} title="List view">☰</button>
                       </div>
                       {currentFolderId && currentFolder && isOwnFolder(currentFolder) && (
+                        <button className="fb-share-btn" onClick={() => openShareFolder(currentFolder)}>🔗 Share</button>
+                      )}
+                      {currentFolderId && currentFolder && isOwnFolder(currentFolder) && (
                         <button onClick={() => openEditFolder(currentFolder)}
                           style={{padding:'0.4rem 0.8rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'8px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',whiteSpace:'nowrap'}}>
                           ✏️ Edit
@@ -9203,6 +9509,14 @@
                     </div>
                   )}
 
+                  {/* View-only banner for shared folders */}
+                  {currentFolderId && currentFolder && !isOwnFolder(currentFolder) && (
+                    <div style={{display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.5rem 0.85rem',background:'rgba(167,139,250,0.06)',border:'1px solid rgba(167,139,250,0.15)',borderRadius:'8px',marginBottom:'0.75rem',fontSize:'0.82rem',color:'#a78bfa'}}>
+                      <span>{userCanEdit ? '✏️' : '👁'}</span>
+                      <span>Shared by <strong>{currentFolder.owner}</strong> — {userCanEdit ? 'you can add and remove items' : 'view only'}</span>
+                    </div>
+                  )}
+
                   {/* Root view: show My Folders + Shared sections */}
                   {!currentFolderId && (
                     <div>
@@ -9218,18 +9532,26 @@
                             <div>
                               <div className="fb-section-label">My Folders</div>
                               <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
-                                {myFolders.filter(f => !f.parent_id).map(folder => (
+                                {myFolders.filter(f => !f.parent_id).map(folder => {
+                                  const si = folderShareInfo(folder);
+                                  return (
                                   <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
                                     <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
                                     <div className="fb-folder-icon">{folder.icon || '📁'}</div>
                                     <div className="fb-folder-name">{folder.name}</div>
-                                    <div className="fb-folder-meta">{countItems(folder.id) || 'Empty'}</div>
+                                    <div className="fb-folder-meta" style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+                                      <span>{countItems(folder.id) || 'Empty'}</span>
+                                      {si.isPublic && <span className="fb-share-badge public">🌐 Public</span>}
+                                      {si.sharedCount > 0 && <span className="fb-share-badge shared">👥 {si.sharedCount}</span>}
+                                    </div>
                                     <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn" onClick={(e) => { e.stopPropagation(); openShareFolder(folder); }} title="Share">🔗</button>
                                       <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
                                       <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
                                     </div>
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -9237,15 +9559,21 @@
                             <div>
                               <div className="fb-section-label">Shared With Me</div>
                               <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
-                                {sharedWithMeFolders.filter(f => !f.parent_id).map(folder => (
+                                {sharedWithMeFolders.filter(f => !f.parent_id).map(folder => {
+                                  const myPerm = (Array.isArray(folder.shared_with) ? folder.shared_with : []).find(s => s.username === currentUser?.username);
+                                  return (
                                   <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
                                     <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
                                     <div className="fb-folder-icon">{folder.icon || '📁'}</div>
                                     <div className="fb-folder-name">{folder.name}</div>
-                                    <div className="fb-folder-meta">by {folder.owner}</div>
+                                    <div className="fb-folder-meta" style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+                                      <span className="fb-owner-label">by {folder.owner}</span>
+                                      {myPerm && <span className="fb-share-badge shared">{myPerm.permission === 'edit' ? '✏️ Can Edit' : '👁 View Only'}</span>}
+                                    </div>
                                     <div className="fb-folder-actions"></div>
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -9269,18 +9597,26 @@
                             <div>
                               <div className="fb-section-label">Sub-folders</div>
                               <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
-                                {childFolders.map(folder => (
+                                {childFolders.map(folder => {
+                                  const si = folderShareInfo(folder);
+                                  return (
                                   <div key={folder.id} className="fb-folder-card" onClick={() => navigateToFolder(folder.id)}>
                                     <div className="fb-folder-color-bar" style={{background:folder.color||'#60a5fa'}}></div>
                                     <div className="fb-folder-icon">{folder.icon || '📁'}</div>
                                     <div className="fb-folder-name">{folder.name}</div>
-                                    <div className="fb-folder-meta">{countItems(folder.id) || 'Empty'}</div>
+                                    <div className="fb-folder-meta" style={{display:'flex',alignItems:'center',gap:'0.4rem',flexWrap:'wrap'}}>
+                                      <span>{countItems(folder.id) || 'Empty'}</span>
+                                      {si.isPublic && <span className="fb-share-badge public">🌐</span>}
+                                      {si.sharedCount > 0 && <span className="fb-share-badge shared">👥 {si.sharedCount}</span>}
+                                    </div>
                                     <div className="fb-folder-actions">
+                                      {isOwnFolder(folder) && <button className="fb-folder-act-btn" onClick={(e) => { e.stopPropagation(); openShareFolder(folder); }} title="Share">🔗</button>}
                                       {isOwnFolder(folder) && <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>}
                                       {isOwnFolder(folder) && <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete sub-folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>}
                                     </div>
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -9301,7 +9637,7 @@
                                         {item.item_type === 'url' && item.url && <div className="fb-item-desc">{item.url}</div>}
                                       </div>
                                       <span className="fb-item-badge" style={{background:cfg.bg,color:cfg.color}}>{cfg.label}</span>
-                                      <button className="fb-item-remove" onClick={(e) => { e.stopPropagation(); handleRemoveFolderItem(item.id); }} title="Remove from folder">×</button>
+                                      {userCanEdit && <button className="fb-item-remove" onClick={(e) => { e.stopPropagation(); handleRemoveFolderItem(item.id); }} title="Remove from folder">×</button>}
                                     </div>
                                   );
                                 })}
@@ -9317,8 +9653,8 @@
                             </div>
                           )}
 
-                          {/* Add External URL form */}
-                          <div className="fb-add-url-form">
+                          {/* Add External URL form — only for owner or edit-permission users */}
+                          {userCanEdit && <div className="fb-add-url-form">
                             <span style={{fontSize:'1rem',flexShrink:0}}>🔗</span>
                             <input className="fb-add-url-input" placeholder="Paste a URL…" value={folderAddUrlInput} onChange={e=>setFolderAddUrlInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
                             <input className="fb-add-url-input" style={{maxWidth:'160px'}} placeholder="Title (optional)" value={folderAddUrlTitle} onChange={e=>setFolderAddUrlTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
@@ -9331,7 +9667,7 @@
                                 Quick-save any external URL (articles, videos, resources) to this folder. Just paste the link and optionally add a title.
                               </div>
                             </div>
-                          </div>
+                          </div>}
 
                           {/* Empty state inside folder */}
                           {childFolders.length === 0 && currentFolderItems.length === 0 && !folderAddUrlInput && (
@@ -10695,6 +11031,7 @@
           {createFolderModalJSX}
           {editFolderModalJSX}
           {saveToFolderModalJSX}
+          {shareFolderModalJSX}
 
 
           {/* Undo Delete Toast */}
