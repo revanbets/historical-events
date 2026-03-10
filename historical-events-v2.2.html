@@ -3647,6 +3647,450 @@
       );
     };
 
+    // ─── Folder Modal Components (defined outside App to use hooks safely) ───
+    const CreateFolderModal = ({ createFolderParentId, folders, currentUser, createFolder, onClose }) => {
+      const FOLDER_COLORS = ['#60a5fa','#3b82f6','#a78bfa','#8b5cf6','#10b981','#14b8a6','#f59e0b','#f97316','#ef4444','#ec4899','#6366f1','#06b6d4','#84cc16','#78716c','#e879f7','#fb923c'];
+      const FOLDER_EMOJIS = ['\ud83d\udcc1','\ud83d\udcc2','\ud83d\udcda','\ud83d\udcd6','\ud83d\udd0d','\ud83c\udf10','\u2b50','\ud83d\udca1','\ud83d\udd12','\ud83c\udff7\ufe0f','\ud83d\udccc','\ud83d\udcca','\ud83d\udce6','\ud83d\udce5','\ud83d\udcc8','\ud83c\udfaf','\ud83d\udee1\ufe0f','\u26a0\ufe0f','\ud83d\udd25','\ud83d\udca3','\ud83c\udfad','\ud83d\udcf0','\ud83c\udfa5','\ud83d\udcf7','\ud83d\udd17','\ud83e\udde9','\ud83e\uddea','\ud83d\udcdd','\ud83d\udd73\ufe0f','\ud83c\udf0d','\ud83c\udfe6','\u2694\ufe0f'];
+      const [cfName, setCfName] = React.useState('');
+      const [cfColor, setCfColor] = React.useState('#60a5fa');
+      const [cfIcon, setCfIcon] = React.useState('\ud83d\udcc1');
+      const [cfParent, setCfParent] = React.useState(createFolderParentId || null);
+      const [cfSaving, setCfSaving] = React.useState(false);
+      const [cfShowEmojis, setCfShowEmojis] = React.useState(false);
+      const handleCreate = async () => {
+        if (!cfName.trim() || cfSaving) return;
+        setCfSaving(true);
+        const result = await createFolder(cfName, cfColor, cfIcon, cfParent);
+        setCfSaving(false);
+        if (result) onClose();
+      };
+      const ownFolders = folders.filter(f => f.owner === currentUser?.username);
+      return (
+        <div className="modal" onClick={onClose}>
+          <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '480px', padding: '2rem' }}>
+            <h3 style={{ marginBottom: '0.3rem', color: '#e0e6ed', fontFamily: "'Space Mono',monospace", fontSize: '1.15rem' }}>Create Folder</h3>
+            <p style={{ color: '#8b92b0', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Organize your saved events, topics, people, and links.</p>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="filter-label">Name</label>
+              <input type="text" value={cfName} onChange={e => setCfName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); else if (e.key === 'Escape') onClose(); }}
+                placeholder="e.g. JFK Research" autoFocus
+                style={{ width: '100%', padding: '0.65rem 0.9rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }} />
+            </div>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="filter-label">Color</label>
+              <div className="folder-color-grid">
+                {FOLDER_COLORS.map(c => (
+                  <div key={c} className={`folder-color-swatch${cfColor === c ? ' active' : ''}`}
+                    style={{ background: c }} onClick={() => setCfColor(c)} />
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="filter-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                Icon
+                <span onClick={() => setCfShowEmojis(p => !p)}
+                  style={{ fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, background: 'rgba(45,53,97,0.6)', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(61,69,99,0.5)' }}>
+                  {cfIcon}
+                </span>
+              </label>
+              {cfShowEmojis && (
+                <div className="folder-emoji-grid" style={{ marginTop: '0.5rem' }}>
+                  {FOLDER_EMOJIS.map(em => (
+                    <button key={em} className={`folder-emoji-btn${cfIcon === em ? ' active' : ''}`}
+                      onClick={() => { setCfIcon(em); setCfShowEmojis(false); }}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {ownFolders.length > 0 && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="filter-label">Parent Folder (optional)</label>
+                <select value={cfParent || ''} onChange={e => setCfParent(e.target.value || null)}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.88rem', outline: 'none' }}>
+                  <option value="">None (root level)</option>
+                  {ownFolders.map(f => (
+                    <option key={f.id} value={f.id}>{f.icon} {f.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(10,14,39,0.5)', borderRadius: '10px', border: `2px solid ${cfColor}40`, marginBottom: '1.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>{cfIcon}</span>
+              <span style={{ color: cfColor, fontWeight: 700, fontSize: '0.95rem' }}>{cfName || 'Folder Name'}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={onClose}
+                style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
+              <button onClick={handleCreate} disabled={!cfName.trim() || cfSaving}
+                style={{ padding: '0.5rem 1.2rem', background: cfName.trim() ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: cfName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: cfName.trim() ? 1 : 0.5 }}>
+                {cfSaving ? 'Creating...' : 'Create Folder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const EditFolderModal = ({ editFolderTarget, folders, currentUser, updateFolder, deleteFolder, currentFolderId, navigateToFolder, onClose }) => {
+      const FOLDER_COLORS = ['#60a5fa','#3b82f6','#a78bfa','#8b5cf6','#10b981','#14b8a6','#f59e0b','#f97316','#ef4444','#ec4899','#6366f1','#06b6d4','#84cc16','#78716c','#e879f7','#fb923c'];
+      const FOLDER_EMOJIS = ['\ud83d\udcc1','\ud83d\udcc2','\ud83d\udcda','\ud83d\udcd6','\ud83d\udd0d','\ud83c\udf10','\u2b50','\ud83d\udca1','\ud83d\udd12','\ud83c\udff7\ufe0f','\ud83d\udccc','\ud83d\udcca','\ud83d\udce6','\ud83d\udce5','\ud83d\udcc8','\ud83c\udfaf','\ud83d\udee1\ufe0f','\u26a0\ufe0f','\ud83d\udd25','\ud83d\udca3','\ud83c\udfad','\ud83d\udcf0','\ud83c\udfa5','\ud83d\udcf7','\ud83d\udd17','\ud83e\udde9','\ud83e\uddea','\ud83d\udcdd','\ud83d\udd73\ufe0f','\ud83c\udf0d','\ud83c\udfe6','\u2694\ufe0f'];
+      const [efName, setEfName] = React.useState(editFolderTarget.name || '');
+      const [efColor, setEfColor] = React.useState(editFolderTarget.color || '#60a5fa');
+      const [efIcon, setEfIcon] = React.useState(editFolderTarget.icon || '\ud83d\udcc1');
+      const [efParent, setEfParent] = React.useState(editFolderTarget.parent_id || null);
+      const [efSaving, setEfSaving] = React.useState(false);
+      const [efShowEmojis, setEfShowEmojis] = React.useState(false);
+      const [efDeleting, setEfDeleting] = React.useState(false);
+      const handleSave = async () => {
+        if (!efName.trim() || efSaving) return;
+        setEfSaving(true);
+        const updates = { name: efName.trim(), color: efColor, icon: efIcon, parent_id: efParent };
+        const ok = await updateFolder(editFolderTarget.id, updates);
+        setEfSaving(false);
+        if (ok) onClose();
+      };
+      const handleDelete = async () => {
+        if (!window.confirm(`Delete folder "${editFolderTarget.name}"? Items inside won't be deleted from the database, but they'll be removed from this folder.`)) return;
+        setEfDeleting(true);
+        const ok = await deleteFolder(editFolderTarget.id);
+        setEfDeleting(false);
+        if (ok) {
+          onClose();
+          if (currentFolderId === editFolderTarget.id) navigateToFolder(editFolderTarget.parent_id || null);
+        }
+      };
+      const getDescendantIds = (fId) => {
+        const ids = new Set([fId]);
+        const queue = [fId];
+        while (queue.length) {
+          const pid = queue.shift();
+          folders.filter(f => f.parent_id === pid).forEach(f => { ids.add(f.id); queue.push(f.id); });
+        }
+        return ids;
+      };
+      const excludeIds = getDescendantIds(editFolderTarget.id);
+      const parentOptions = folders.filter(f => f.owner === currentUser?.username && !excludeIds.has(f.id));
+      return (
+        <div className="modal" onClick={onClose}>
+          <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '480px', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+              <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.15rem' }}>Edit Folder</h3>
+              <button onClick={onClose}
+                style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+            </div>
+            <p style={{ color: '#8b92b0', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Rename, restyle, or move this folder.</p>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="filter-label">Name</label>
+              <input type="text" value={efName} onChange={e => setEfName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSave(); else if (e.key === 'Escape') onClose(); }}
+                autoFocus
+                style={{ width: '100%', padding: '0.65rem 0.9rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }} />
+            </div>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="filter-label">Color</label>
+              <div className="folder-color-grid">
+                {FOLDER_COLORS.map(c => (
+                  <div key={c} className={`folder-color-swatch${efColor === c ? ' active' : ''}`}
+                    style={{ background: c }} onClick={() => setEfColor(c)} />
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="filter-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                Icon
+                <span onClick={() => setEfShowEmojis(p => !p)}
+                  style={{ fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, background: 'rgba(45,53,97,0.6)', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(61,69,99,0.5)' }}>
+                  {efIcon}
+                </span>
+              </label>
+              {efShowEmojis && (
+                <div className="folder-emoji-grid" style={{ marginTop: '0.5rem' }}>
+                  {FOLDER_EMOJIS.map(em => (
+                    <button key={em} className={`folder-emoji-btn${efIcon === em ? ' active' : ''}`}
+                      onClick={() => { setEfIcon(em); setEfShowEmojis(false); }}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label className="filter-label">Parent Folder</label>
+              <select value={efParent || ''} onChange={e => setEfParent(e.target.value || null)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.88rem', outline: 'none' }}>
+                <option value="">None (root level)</option>
+                {parentOptions.map(f => (
+                  <option key={f.id} value={f.id}>{f.icon} {f.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(10,14,39,0.5)', borderRadius: '10px', border: `2px solid ${efColor}40`, marginBottom: '1.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>{efIcon}</span>
+              <span style={{ color: efColor, fontWeight: 700, fontSize: '0.95rem' }}>{efName || 'Folder Name'}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'space-between' }}>
+              <button onClick={handleDelete} disabled={efDeleting}
+                style={{ padding: '0.5rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.83rem', fontWeight: 600, transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}>
+                {efDeleting ? 'Deleting...' : '🗑 Delete Folder'}
+              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button onClick={onClose}
+                  style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
+                <button onClick={handleSave} disabled={!efName.trim() || efSaving}
+                  style={{ padding: '0.5rem 1.2rem', background: efName.trim() ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: efName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: efName.trim() ? 1 : 0.5 }}>
+                  {efSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ShareFolderModal = ({ shareFolderTarget, currentUser, supabaseClient, toggleFolderPublic, shareFolderWithUser, updateSharePermission, unshareFolderWithUser, getAllUsers, onClose }) => {
+      const [sfInviteUsername, setSfInviteUsername] = React.useState('');
+      const [sfInvitePerm, setSfInvitePerm] = React.useState('view');
+      const [sfInviting, setSfInviting] = React.useState(false);
+      const [sfError, setSfError] = React.useState('');
+      const [sfCopied, setSfCopied] = React.useState(false);
+      const [sfAllUsers, setSfAllUsers] = React.useState([]);
+      React.useEffect(() => { getAllUsers().then(u => setSfAllUsers(u || [])); }, []);
+      const sharedList = Array.isArray(shareFolderTarget.shared_with) ? shareFolderTarget.shared_with : [];
+      const isPublic = !!shareFolderTarget.is_public;
+      const publicLink = `${window.location.origin}${window.location.pathname}?folder=${shareFolderTarget.id}`;
+      const handleTogglePublic = async () => {
+        await toggleFolderPublic(shareFolderTarget.id, isPublic);
+      };
+      const handleCopyLink = () => {
+        navigator.clipboard.writeText(publicLink).then(() => { setSfCopied(true); setTimeout(() => setSfCopied(false), 2000); });
+      };
+      const handleInvite = async () => {
+        const uname = sfInviteUsername.trim().toLowerCase();
+        if (!uname) return;
+        setSfError('');
+        if (uname === currentUser.username) { setSfError('You can\'t share with yourself.'); return; }
+        if (uname === shareFolderTarget.owner) { setSfError('That user already owns this folder.'); return; }
+        if (sharedList.some(s => s.username === uname)) { setSfError('Already shared with this user.'); return; }
+        const userExists = sfAllUsers.some(u => u.username === uname);
+        if (!userExists) { setSfError(`User "${uname}" not found.`); return; }
+        setSfInviting(true);
+        const ok = await shareFolderWithUser(shareFolderTarget.id, uname, sfInvitePerm);
+        if (ok) {
+          setSfInviteUsername('');
+          const notifMsg = `${currentUser.username} shared the folder "${shareFolderTarget.name}" with you (${sfInvitePerm === 'edit' ? 'can edit' : 'view only'}).`;
+          await supabaseClient.from('notifications').insert([{
+            type: 'folder_shared', title: 'Folder Shared With You', message: notifMsg,
+            created_by: currentUser.username, created_by_role: currentUser.role,
+            metadata: { folder_id: shareFolderTarget.id, folder_name: shareFolderTarget.name, permission: sfInvitePerm, target_user: uname },
+            read_by: [], dismissed_by: [],
+          }]);
+        } else { setSfError('Failed to share. Please try again.'); }
+        setSfInviting(false);
+      };
+      const handlePermChange = async (username, newPerm) => {
+        await updateSharePermission(shareFolderTarget.id, username, newPerm);
+      };
+      const handleRemoveUser = async (username) => {
+        await unshareFolderWithUser(shareFolderTarget.id, username);
+      };
+      return (
+        <div className="modal" onClick={onClose}>
+          <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '500px', padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.1rem' }}>Share Folder</h3>
+              <button onClick={onClose}
+                style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', background: 'rgba(167,139,250,0.06)', borderRadius: '8px', border: '1px solid rgba(167,139,250,0.15)', marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '1.2rem' }}>{shareFolderTarget.icon || '\ud83d\udcc1'}</span>
+              <span style={{ color: shareFolderTarget.color || '#60a5fa', fontWeight: 700, fontSize: '0.92rem' }}>{shareFolderTarget.name}</span>
+            </div>
+
+            {/* Public Link Section */}
+            <div className="share-modal-section">
+              <div className="share-modal-section-label">Public Access</div>
+              <div className={`share-public-toggle${isPublic ? ' active' : ''}`} onClick={handleTogglePublic}>
+                <div className={`share-toggle-switch${isPublic ? ' on' : ''}`}></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.88rem', color: '#e0e6ed', fontWeight: 600 }}>{isPublic ? '🌐 Public — anyone with the link can view' : '🔒 Private — only invited users'}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.15rem' }}>Toggle to make this folder publicly viewable</div>
+                </div>
+              </div>
+              {isPublic && (
+                <div className="share-link-box">
+                  <span className="share-link-url">{publicLink}</span>
+                  <button className="share-link-copy" onClick={handleCopyLink}>{sfCopied ? '\u2713 Copied' : 'Copy'}</button>
+                </div>
+              )}
+            </div>
+
+            {/* Invite Users Section */}
+            <div className="share-modal-section">
+              <div className="share-modal-section-label">Invite People</div>
+              <div className="share-invite-row">
+                <input className="share-invite-input" placeholder="Enter username…" value={sfInviteUsername}
+                  onChange={e => { setSfInviteUsername(e.target.value); setSfError(''); }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleInvite(); }} />
+                <select value={sfInvitePerm} onChange={e => setSfInvitePerm(e.target.value)} className="share-user-perm">
+                  <option value="view">View</option>
+                  <option value="edit">Edit</option>
+                </select>
+                <button className="share-invite-btn" disabled={!sfInviteUsername.trim() || sfInviting} onClick={handleInvite}>
+                  {sfInviting ? '...' : 'Invite'}
+                </button>
+              </div>
+              {sfError && <div style={{ fontSize: '0.78rem', color: '#ef4444', marginTop: '0.35rem', paddingLeft: '0.1rem' }}>{sfError}</div>}
+              <div className="tooltip-wrapper" style={{ marginTop: '0.25rem' }}>
+                <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
+                <div className="tooltip-content" style={{bottom:'100%',left:0,width:'270px'}}>
+                  <strong>View</strong> — can browse folder contents but cannot add or remove items.<br/>
+                  <strong>Edit</strong> — can add items, remove items, and add URLs to the folder.
+                </div>
+              </div>
+            </div>
+
+            {/* Shared Users List */}
+            {sharedList.length > 0 && (
+              <div className="share-modal-section">
+                <div className="share-modal-section-label">Shared With ({sharedList.length})</div>
+                {sharedList.map(s => (
+                  <div key={s.username} className="share-user-row">
+                    <div className="share-user-avatar">{s.username.charAt(0)}</div>
+                    <span className="share-user-name">{s.username}</span>
+                    <select className="share-user-perm" value={s.permission} onChange={e => handlePermChange(s.username, e.target.value)}>
+                      <option value="view">View</option>
+                      <option value="edit">Edit</option>
+                    </select>
+                    <button className="share-user-remove" onClick={() => handleRemoveUser(s.username)} title="Revoke access">&times;</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Owner info */}
+            <div style={{ fontSize: '0.75rem', color: '#5a6080', borderTop: '1px solid rgba(61,69,99,0.3)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+              Owner: <strong style={{ color: '#8b92b0' }}>{shareFolderTarget.owner}</strong>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const SaveToFolderModal = ({ saveToFolderPayload, folderTree, currentUser, createFolder, addItemToFolder, onClose }) => {
+      const [stfSelected, setStfSelected] = React.useState(null);
+      const [stfExpanded, setStfExpanded] = React.useState(new Set());
+      const [stfSaving, setStfSaving] = React.useState(false);
+      const [stfSaved, setStfSaved] = React.useState(false);
+      const [stfInlineCreate, setStfInlineCreate] = React.useState(false);
+      const [stfNewName, setStfNewName] = React.useState('');
+      const [stfCreating, setStfCreating] = React.useState(false);
+      const toggleExpand = (fId) => {
+        setStfExpanded(prev => { const next = new Set(prev); if (next.has(fId)) next.delete(fId); else next.add(fId); return next; });
+      };
+      const handleSave = async () => {
+        if (!stfSelected || stfSaving) return;
+        setStfSaving(true);
+        const result = await addItemToFolder(stfSelected, saveToFolderPayload);
+        setStfSaving(false);
+        if (result) { setStfSaved(true); setTimeout(() => onClose(), 800); }
+      };
+      const handleInlineCreate = async () => {
+        if (!stfNewName.trim() || stfCreating) return;
+        setStfCreating(true);
+        const folder = await createFolder(stfNewName, '#60a5fa', '\ud83d\udcc1', null);
+        setStfCreating(false);
+        if (folder) { setStfNewName(''); setStfInlineCreate(false); setStfSelected(folder.id); }
+      };
+      const renderNode = (node, depth = 0) => {
+        const hasChildren = node.children && node.children.length > 0;
+        const isExpanded = stfExpanded.has(node.id);
+        return (
+          <div key={node.id}>
+            <div className={`folder-tree-item${stfSelected === node.id ? ' selected' : ''}`}
+              style={{ paddingLeft: `${0.75 + depth * 1.25}rem` }}
+              onClick={() => setStfSelected(node.id)}>
+              {hasChildren ? (
+                <span className={`folder-tree-arrow${isExpanded ? ' open' : ''}`}
+                  onClick={ev => { ev.stopPropagation(); toggleExpand(node.id); }}>&#9654;</span>
+              ) : <span style={{ width: '0.7rem' }} />}
+              <span className="folder-tree-icon" style={{ color: node.color }}>{node.icon}</span>
+              <span className="folder-tree-name">{node.name}</span>
+            </div>
+            {hasChildren && isExpanded && (
+              <div className="folder-tree-children">
+                {node.children.map(child => renderNode(child, depth + 1))}
+              </div>
+            )}
+          </div>
+        );
+      };
+      const userTree = folderTree.filter(f => f.owner === currentUser?.username);
+      return (
+        <div className="modal" onClick={onClose}>
+          <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '440px', padding: '1.5rem', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexShrink: 0 }}>
+              <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.05rem' }}>Save to Folder</h3>
+              <button onClick={onClose}
+                style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1, padding: '0 0.25rem' }}>&times;</button>
+            </div>
+            <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(96,165,250,0.08)', borderRadius: '8px', border: '1px solid rgba(96,165,250,0.15)', marginBottom: '0.75rem', flexShrink: 0 }}>
+              <div style={{ fontSize: '0.78rem', color: '#8b92b0', marginBottom: '0.15rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                {saveToFolderPayload.item_type}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: '#c0c7d8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {saveToFolderPayload.title || saveToFolderPayload.item_id || 'Untitled'}
+              </div>
+            </div>
+            <div className="folder-tree" style={{ flex: 1, overflowY: 'auto', marginBottom: '0.75rem' }}>
+              {userTree.length === 0 && !stfInlineCreate ? (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#5a6080' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{'\ud83d\udcc1'}</div>
+                  <p style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>No folders yet</p>
+                  <button onClick={() => setStfInlineCreate(true)}
+                    style={{ padding: '0.45rem 1rem', background: 'linear-gradient(135deg,#60a5fa,#3b82f6)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.83rem' }}>
+                    Create Your First Folder
+                  </button>
+                </div>
+              ) : userTree.map(node => renderNode(node, 0))}
+            </div>
+            {stfInlineCreate ? (
+              <div className="folder-inline-create" style={{ flexShrink: 0 }}>
+                <input type="text" value={stfNewName} onChange={e => setStfNewName(e.target.value)}
+                  placeholder="New folder name" autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') handleInlineCreate(); else if (e.key === 'Escape') { setStfInlineCreate(false); setStfNewName(''); } }} />
+                <button onClick={handleInlineCreate} disabled={!stfNewName.trim() || stfCreating}
+                  style={{ background: stfNewName.trim() ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', color: '#fff', opacity: stfNewName.trim() ? 1 : 0.5 }}>
+                  {stfCreating ? '...' : '+'}
+                </button>
+                <button onClick={() => { setStfInlineCreate(false); setStfNewName(''); }}
+                  style={{ background: 'none', color: '#8b92b0', border: '1px solid rgba(61,69,99,0.5)' }}>&times;</button>
+              </div>
+            ) : userTree.length > 0 && (
+              <button onClick={() => setStfInlineCreate(true)}
+                style={{ width: '100%', padding: '0.45rem', background: 'none', border: '1px dashed rgba(96,165,250,0.3)', borderRadius: '8px', color: '#60a5fa', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.75rem', flexShrink: 0, transition: 'all 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(96,165,250,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                + New Folder
+              </button>
+            )}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexShrink: 0, paddingTop: '0.5rem', borderTop: '1px solid rgba(61,69,99,0.3)' }}>
+              <button onClick={onClose}
+                style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
+              <button onClick={handleSave} disabled={!stfSelected || stfSaving}
+                style={{ padding: '0.5rem 1.2rem', background: stfSelected ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: stfSelected ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: stfSelected ? 1 : 0.5, minWidth: '100px', textAlign: 'center' }}>
+                {stfSaved ? '\u2713 Saved!' : stfSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     // ─── MAIN APP ───
     function App() {
       const [data, setData] = useState(() => normalizeData(EMBEDDED_DATA));
@@ -8637,453 +9081,24 @@
         );
       };
 
-      // ── Folder Modals JSX (shared between Account + Main layouts) ──
-      const createFolderModalJSX = !showCreateFolderModal ? null : (() => {
-        const FOLDER_COLORS = ['#60a5fa','#3b82f6','#a78bfa','#8b5cf6','#10b981','#14b8a6','#f59e0b','#f97316','#ef4444','#ec4899','#6366f1','#06b6d4','#84cc16','#78716c','#e879f7','#fb923c'];
-        const FOLDER_EMOJIS = ['\ud83d\udcc1','\ud83d\udcc2','\ud83d\udcda','\ud83d\udcd6','\ud83d\udd0d','\ud83c\udf10','\u2b50','\ud83d\udca1','\ud83d\udd12','\ud83c\udff7\ufe0f','\ud83d\udccc','\ud83d\udcca','\ud83d\udce6','\ud83d\udce5','\ud83d\udcc8','\ud83c\udfaf','\ud83d\udee1\ufe0f','\u26a0\ufe0f','\ud83d\udd25','\ud83d\udca3','\ud83c\udfad','\ud83d\udcf0','\ud83c\udfa5','\ud83d\udcf7','\ud83d\udd17','\ud83e\udde9','\ud83e\uddea','\ud83d\udcdd','\ud83d\udd73\ufe0f','\ud83c\udf0d','\ud83c\udfe6','\u2694\ufe0f'];
-        const [cfName, setCfName] = React.useState('');
-        const [cfColor, setCfColor] = React.useState('#60a5fa');
-        const [cfIcon, setCfIcon] = React.useState('\ud83d\udcc1');
-        const [cfParent, setCfParent] = React.useState(createFolderParentId || null);
-        const [cfSaving, setCfSaving] = React.useState(false);
-        const [cfShowEmojis, setCfShowEmojis] = React.useState(false);
-        const handleCreate = async () => {
-          if (!cfName.trim() || cfSaving) return;
-          setCfSaving(true);
-          const result = await createFolder(cfName, cfColor, cfIcon, cfParent);
-          setCfSaving(false);
-          if (result) { setShowCreateFolderModal(false); setCreateFolderParentId(null); }
-        };
-        const ownFolders = folders.filter(f => f.owner === currentUser?.username);
-        return (
-          <div className="modal" onClick={() => { setShowCreateFolderModal(false); setCreateFolderParentId(null); }}>
-            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '480px', padding: '2rem' }}>
-              <h3 style={{ marginBottom: '0.3rem', color: '#e0e6ed', fontFamily: "'Space Mono',monospace", fontSize: '1.15rem' }}>Create Folder</h3>
-              <p style={{ color: '#8b92b0', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Organize your saved events, topics, people, and links.</p>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label className="filter-label">Name</label>
-                <input type="text" value={cfName} onChange={e => setCfName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleCreate(); else if (e.key === 'Escape') { setShowCreateFolderModal(false); setCreateFolderParentId(null); } }}
-                  placeholder="e.g. JFK Research" autoFocus
-                  style={{ width: '100%', padding: '0.65rem 0.9rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }} />
-              </div>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label className="filter-label">Color</label>
-                <div className="folder-color-grid">
-                  {FOLDER_COLORS.map(c => (
-                    <div key={c} className={`folder-color-swatch${cfColor === c ? ' active' : ''}`}
-                      style={{ background: c }} onClick={() => setCfColor(c)} />
-                  ))}
-                </div>
-              </div>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label className="filter-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  Icon
-                  <span onClick={() => setCfShowEmojis(p => !p)}
-                    style={{ fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, background: 'rgba(45,53,97,0.6)', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(61,69,99,0.5)' }}>
-                    {cfIcon}
-                  </span>
-                </label>
-                {cfShowEmojis && (
-                  <div className="folder-emoji-grid" style={{ marginTop: '0.5rem' }}>
-                    {FOLDER_EMOJIS.map(em => (
-                      <button key={em} className={`folder-emoji-btn${cfIcon === em ? ' active' : ''}`}
-                        onClick={() => { setCfIcon(em); setCfShowEmojis(false); }}>
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {ownFolders.length > 0 && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label className="filter-label">Parent Folder (optional)</label>
-                  <select value={cfParent || ''} onChange={e => setCfParent(e.target.value || null)}
-                    style={{ width: '100%', padding: '0.6rem 0.8rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.88rem', outline: 'none' }}>
-                    <option value="">None (root level)</option>
-                    {ownFolders.map(f => (
-                      <option key={f.id} value={f.id}>{f.icon} {f.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(10,14,39,0.5)', borderRadius: '10px', border: `2px solid ${cfColor}40`, marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>{cfIcon}</span>
-                <span style={{ color: cfColor, fontWeight: 700, fontSize: '0.95rem' }}>{cfName || 'Folder Name'}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button onClick={() => { setShowCreateFolderModal(false); setCreateFolderParentId(null); }}
-                  style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
-                <button onClick={handleCreate} disabled={!cfName.trim() || cfSaving}
-                  style={{ padding: '0.5rem 1.2rem', background: cfName.trim() ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: cfName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: cfName.trim() ? 1 : 0.5 }}>
-                  {cfSaving ? 'Creating...' : 'Create Folder'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })();
+      // ── Folder Modals JSX (using proper components defined outside App) ──
+      const closeCreateFolder = () => { setShowCreateFolderModal(false); setCreateFolderParentId(null); };
+      const closeEditFolder = () => { setShowEditFolderModal(false); setEditFolderTarget(null); };
+      const closeShareFolder = () => { setShowShareFolderModal(false); setShareFolderTarget(null); };
+      const closeSaveToFolder = () => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); };
 
-      const editFolderModalJSX = !showEditFolderModal || !editFolderTarget ? null : (() => {
-        const FOLDER_COLORS = ['#60a5fa','#3b82f6','#a78bfa','#8b5cf6','#10b981','#14b8a6','#f59e0b','#f97316','#ef4444','#ec4899','#6366f1','#06b6d4','#84cc16','#78716c','#e879f7','#fb923c'];
-        const FOLDER_EMOJIS = ['\ud83d\udcc1','\ud83d\udcc2','\ud83d\udcda','\ud83d\udcd6','\ud83d\udd0d','\ud83c\udf10','\u2b50','\ud83d\udca1','\ud83d\udd12','\ud83c\udff7\ufe0f','\ud83d\udccc','\ud83d\udcca','\ud83d\udce6','\ud83d\udce5','\ud83d\udcc8','\ud83c\udfaf','\ud83d\udee1\ufe0f','\u26a0\ufe0f','\ud83d\udd25','\ud83d\udca3','\ud83c\udfad','\ud83d\udcf0','\ud83c\udfa5','\ud83d\udcf7','\ud83d\udd17','\ud83e\udde9','\ud83e\uddea','\ud83d\udcdd','\ud83d\udd73\ufe0f','\ud83c\udf0d','\ud83c\udfe6','\u2694\ufe0f'];
-        const [efName, setEfName] = React.useState(editFolderTarget.name || '');
-        const [efColor, setEfColor] = React.useState(editFolderTarget.color || '#60a5fa');
-        const [efIcon, setEfIcon] = React.useState(editFolderTarget.icon || '\ud83d\udcc1');
-        const [efParent, setEfParent] = React.useState(editFolderTarget.parent_id || null);
-        const [efSaving, setEfSaving] = React.useState(false);
-        const [efShowEmojis, setEfShowEmojis] = React.useState(false);
-        const [efDeleting, setEfDeleting] = React.useState(false);
-        const handleSave = async () => {
-          if (!efName.trim() || efSaving) return;
-          setEfSaving(true);
-          const updates = { name: efName.trim(), color: efColor, icon: efIcon, parent_id: efParent };
-          const ok = await updateFolder(editFolderTarget.id, updates);
-          setEfSaving(false);
-          if (ok) { setShowEditFolderModal(false); setEditFolderTarget(null); }
-        };
-        const handleDelete = async () => {
-          if (!window.confirm(`Delete folder "${editFolderTarget.name}"? Items inside won't be deleted from the database, but they'll be removed from this folder.`)) return;
-          setEfDeleting(true);
-          const ok = await deleteFolder(editFolderTarget.id);
-          setEfDeleting(false);
-          if (ok) {
-            setShowEditFolderModal(false);
-            setEditFolderTarget(null);
-            if (currentFolderId === editFolderTarget.id) navigateToFolder(editFolderTarget.parent_id || null);
-          }
-        };
-        // Exclude self and descendants from parent options to prevent circular nesting
-        const getDescendantIds = (fId) => {
-          const ids = new Set([fId]);
-          const queue = [fId];
-          while (queue.length) {
-            const pid = queue.shift();
-            folders.filter(f => f.parent_id === pid).forEach(f => { ids.add(f.id); queue.push(f.id); });
-          }
-          return ids;
-        };
-        const excludeIds = getDescendantIds(editFolderTarget.id);
-        const parentOptions = folders.filter(f => f.owner === currentUser?.username && !excludeIds.has(f.id));
-        return (
-          <div className="modal" onClick={() => { setShowEditFolderModal(false); setEditFolderTarget(null); }}>
-            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '480px', padding: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-                <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.15rem' }}>Edit Folder</h3>
-                <button onClick={() => { setShowEditFolderModal(false); setEditFolderTarget(null); }}
-                  style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
-              </div>
-              <p style={{ color: '#8b92b0', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Rename, restyle, or move this folder.</p>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label className="filter-label">Name</label>
-                <input type="text" value={efName} onChange={e => setEfName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSave(); else if (e.key === 'Escape') { setShowEditFolderModal(false); setEditFolderTarget(null); } }}
-                  autoFocus
-                  style={{ width: '100%', padding: '0.65rem 0.9rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }} />
-              </div>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label className="filter-label">Color</label>
-                <div className="folder-color-grid">
-                  {FOLDER_COLORS.map(c => (
-                    <div key={c} className={`folder-color-swatch${efColor === c ? ' active' : ''}`}
-                      style={{ background: c }} onClick={() => setEfColor(c)} />
-                  ))}
-                </div>
-              </div>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label className="filter-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  Icon
-                  <span onClick={() => setEfShowEmojis(p => !p)}
-                    style={{ fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, background: 'rgba(45,53,97,0.6)', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(61,69,99,0.5)' }}>
-                    {efIcon}
-                  </span>
-                </label>
-                {efShowEmojis && (
-                  <div className="folder-emoji-grid" style={{ marginTop: '0.5rem' }}>
-                    {FOLDER_EMOJIS.map(em => (
-                      <button key={em} className={`folder-emoji-btn${efIcon === em ? ' active' : ''}`}
-                        onClick={() => { setEfIcon(em); setEfShowEmojis(false); }}>
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label className="filter-label">Parent Folder</label>
-                <select value={efParent || ''} onChange={e => setEfParent(e.target.value || null)}
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.88rem', outline: 'none' }}>
-                  <option value="">None (root level)</option>
-                  {parentOptions.map(f => (
-                    <option key={f.id} value={f.id}>{f.icon} {f.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(10,14,39,0.5)', borderRadius: '10px', border: `2px solid ${efColor}40`, marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>{efIcon}</span>
-                <span style={{ color: efColor, fontWeight: 700, fontSize: '0.95rem' }}>{efName || 'Folder Name'}</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'space-between' }}>
-                <button onClick={handleDelete} disabled={efDeleting}
-                  style={{ padding: '0.5rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.83rem', fontWeight: 600, transition: 'all 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}>
-                  {efDeleting ? 'Deleting...' : '🗑 Delete Folder'}
-                </button>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button onClick={() => { setShowEditFolderModal(false); setEditFolderTarget(null); }}
-                    style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
-                  <button onClick={handleSave} disabled={!efName.trim() || efSaving}
-                    style={{ padding: '0.5rem 1.2rem', background: efName.trim() ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: efName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: efName.trim() ? 1 : 0.5 }}>
-                    {efSaving ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })();
-
-      // ── Share Folder Modal ──
-      const shareFolderModalJSX = (!showShareFolderModal || !shareFolderTarget) ? null : (() => {
-        const [sfInviteUsername, setSfInviteUsername] = React.useState('');
-        const [sfInvitePerm, setSfInvitePerm] = React.useState('view');
-        const [sfInviting, setSfInviting] = React.useState(false);
-        const [sfError, setSfError] = React.useState('');
-        const [sfCopied, setSfCopied] = React.useState(false);
-        const [sfAllUsers, setSfAllUsers] = React.useState([]);
-        React.useEffect(() => { getAllUsers().then(u => setSfAllUsers(u || [])); }, []);
-        const sharedList = Array.isArray(shareFolderTarget.shared_with) ? shareFolderTarget.shared_with : [];
-        const isPublic = !!shareFolderTarget.is_public;
-        const publicLink = `${window.location.origin}${window.location.pathname}?folder=${shareFolderTarget.id}`;
-        const handleTogglePublic = async () => {
-          await toggleFolderPublic(shareFolderTarget.id, isPublic);
-        };
-        const handleCopyLink = () => {
-          navigator.clipboard.writeText(publicLink).then(() => { setSfCopied(true); setTimeout(() => setSfCopied(false), 2000); });
-        };
-        const handleInvite = async () => {
-          const uname = sfInviteUsername.trim().toLowerCase();
-          if (!uname) return;
-          setSfError('');
-          if (uname === currentUser.username) { setSfError('You can\'t share with yourself.'); return; }
-          if (uname === shareFolderTarget.owner) { setSfError('That user already owns this folder.'); return; }
-          if (sharedList.some(s => s.username === uname)) { setSfError('Already shared with this user.'); return; }
-          const userExists = sfAllUsers.some(u => u.username === uname);
-          if (!userExists) { setSfError(`User "${uname}" not found.`); return; }
-          setSfInviting(true);
-          const ok = await shareFolderWithUser(shareFolderTarget.id, uname, sfInvitePerm);
-          if (ok) {
-            setSfInviteUsername('');
-            // Send notification
-            const notifMsg = `${currentUser.username} shared the folder "${shareFolderTarget.name}" with you (${sfInvitePerm === 'edit' ? 'can edit' : 'view only'}).`;
-            await supabaseClient.from('notifications').insert([{
-              type: 'folder_shared', title: 'Folder Shared With You', message: notifMsg,
-              created_by: currentUser.username, created_by_role: currentUser.role,
-              metadata: { folder_id: shareFolderTarget.id, folder_name: shareFolderTarget.name, permission: sfInvitePerm, target_user: uname },
-              read_by: [], dismissed_by: [],
-            }]);
-          } else { setSfError('Failed to share. Please try again.'); }
-          setSfInviting(false);
-        };
-        const handlePermChange = async (username, newPerm) => {
-          await updateSharePermission(shareFolderTarget.id, username, newPerm);
-        };
-        const handleRemoveUser = async (username) => {
-          await unshareFolderWithUser(shareFolderTarget.id, username);
-        };
-        return (
-          <div className="modal" onClick={() => { setShowShareFolderModal(false); setShareFolderTarget(null); }}>
-            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '500px', padding: '1.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.1rem' }}>Share Folder</h3>
-                <button onClick={() => { setShowShareFolderModal(false); setShareFolderTarget(null); }}
-                  style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', background: 'rgba(167,139,250,0.06)', borderRadius: '8px', border: '1px solid rgba(167,139,250,0.15)', marginBottom: '1.25rem' }}>
-                <span style={{ fontSize: '1.2rem' }}>{shareFolderTarget.icon || '\ud83d\udcc1'}</span>
-                <span style={{ color: shareFolderTarget.color || '#60a5fa', fontWeight: 700, fontSize: '0.92rem' }}>{shareFolderTarget.name}</span>
-              </div>
-
-              {/* Public Link Section */}
-              <div className="share-modal-section">
-                <div className="share-modal-section-label">Public Access</div>
-                <div className={`share-public-toggle${isPublic ? ' active' : ''}`} onClick={handleTogglePublic}>
-                  <div className={`share-toggle-switch${isPublic ? ' on' : ''}`}></div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.88rem', color: '#e0e6ed', fontWeight: 600 }}>{isPublic ? '🌐 Public — anyone with the link can view' : '🔒 Private — only invited users'}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.15rem' }}>Toggle to make this folder publicly viewable</div>
-                  </div>
-                </div>
-                {isPublic && (
-                  <div className="share-link-box">
-                    <span className="share-link-url">{publicLink}</span>
-                    <button className="share-link-copy" onClick={handleCopyLink}>{sfCopied ? '\u2713 Copied' : 'Copy'}</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Invite Users Section */}
-              <div className="share-modal-section">
-                <div className="share-modal-section-label">Invite People</div>
-                <div className="share-invite-row">
-                  <input className="share-invite-input" placeholder="Enter username…" value={sfInviteUsername}
-                    onChange={e => { setSfInviteUsername(e.target.value); setSfError(''); }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleInvite(); }} />
-                  <select value={sfInvitePerm} onChange={e => setSfInvitePerm(e.target.value)} className="share-user-perm">
-                    <option value="view">View</option>
-                    <option value="edit">Edit</option>
-                  </select>
-                  <button className="share-invite-btn" disabled={!sfInviteUsername.trim() || sfInviting} onClick={handleInvite}>
-                    {sfInviting ? '...' : 'Invite'}
-                  </button>
-                </div>
-                {sfError && <div style={{ fontSize: '0.78rem', color: '#ef4444', marginTop: '0.35rem', paddingLeft: '0.1rem' }}>{sfError}</div>}
-                <div className="tooltip-wrapper" style={{ marginTop: '0.25rem' }}>
-                  <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
-                  <div className="tooltip-content" style={{bottom:'100%',left:0,width:'270px'}}>
-                    <strong>View</strong> — can browse folder contents but cannot add or remove items.<br/>
-                    <strong>Edit</strong> — can add items, remove items, and add URLs to the folder.
-                  </div>
-                </div>
-              </div>
-
-              {/* Shared Users List */}
-              {sharedList.length > 0 && (
-                <div className="share-modal-section">
-                  <div className="share-modal-section-label">Shared With ({sharedList.length})</div>
-                  {sharedList.map(s => (
-                    <div key={s.username} className="share-user-row">
-                      <div className="share-user-avatar">{s.username.charAt(0)}</div>
-                      <span className="share-user-name">{s.username}</span>
-                      <select className="share-user-perm" value={s.permission} onChange={e => handlePermChange(s.username, e.target.value)}>
-                        <option value="view">View</option>
-                        <option value="edit">Edit</option>
-                      </select>
-                      <button className="share-user-remove" onClick={() => handleRemoveUser(s.username)} title="Revoke access">&times;</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Owner info */}
-              <div style={{ fontSize: '0.75rem', color: '#5a6080', borderTop: '1px solid rgba(61,69,99,0.3)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
-                Owner: <strong style={{ color: '#8b92b0' }}>{shareFolderTarget.owner}</strong>
-              </div>
-            </div>
-          </div>
-        );
-      })();
-
-      const saveToFolderModalJSX = (!showSaveToFolderModal || !saveToFolderPayload) ? null : (() => {
-        const [stfSelected, setStfSelected] = React.useState(null);
-        const [stfExpanded, setStfExpanded] = React.useState(new Set());
-        const [stfSaving, setStfSaving] = React.useState(false);
-        const [stfSaved, setStfSaved] = React.useState(false);
-        const [stfInlineCreate, setStfInlineCreate] = React.useState(false);
-        const [stfNewName, setStfNewName] = React.useState('');
-        const [stfCreating, setStfCreating] = React.useState(false);
-        const toggleExpand = (fId) => {
-          setStfExpanded(prev => { const next = new Set(prev); if (next.has(fId)) next.delete(fId); else next.add(fId); return next; });
-        };
-        const handleSave = async () => {
-          if (!stfSelected || stfSaving) return;
-          setStfSaving(true);
-          const result = await addItemToFolder(stfSelected, saveToFolderPayload);
-          setStfSaving(false);
-          if (result) { setStfSaved(true); setTimeout(() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }, 800); }
-        };
-        const handleInlineCreate = async () => {
-          if (!stfNewName.trim() || stfCreating) return;
-          setStfCreating(true);
-          const folder = await createFolder(stfNewName, '#60a5fa', '\ud83d\udcc1', null);
-          setStfCreating(false);
-          if (folder) { setStfNewName(''); setStfInlineCreate(false); setStfSelected(folder.id); }
-        };
-        const renderNode = (node, depth = 0) => {
-          const hasChildren = node.children && node.children.length > 0;
-          const isExpanded = stfExpanded.has(node.id);
-          return (
-            <div key={node.id}>
-              <div className={`folder-tree-item${stfSelected === node.id ? ' selected' : ''}`}
-                style={{ paddingLeft: `${0.75 + depth * 1.25}rem` }}
-                onClick={() => setStfSelected(node.id)}>
-                {hasChildren ? (
-                  <span className={`folder-tree-arrow${isExpanded ? ' open' : ''}`}
-                    onClick={ev => { ev.stopPropagation(); toggleExpand(node.id); }}>&#9654;</span>
-                ) : <span style={{ width: '0.7rem' }} />}
-                <span className="folder-tree-icon" style={{ color: node.color }}>{node.icon}</span>
-                <span className="folder-tree-name">{node.name}</span>
-              </div>
-              {hasChildren && isExpanded && (
-                <div className="folder-tree-children">
-                  {node.children.map(child => renderNode(child, depth + 1))}
-                </div>
-              )}
-            </div>
-          );
-        };
-        const userTree = folderTree.filter(f => f.owner === currentUser?.username);
-        return (
-          <div className="modal" onClick={() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }}>
-            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '440px', padding: '1.5rem', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexShrink: 0 }}>
-                <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.05rem' }}>Save to Folder</h3>
-                <button onClick={() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }}
-                  style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1, padding: '0 0.25rem' }}>&times;</button>
-              </div>
-              <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(96,165,250,0.08)', borderRadius: '8px', border: '1px solid rgba(96,165,250,0.15)', marginBottom: '0.75rem', flexShrink: 0 }}>
-                <div style={{ fontSize: '0.78rem', color: '#8b92b0', marginBottom: '0.15rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
-                  {saveToFolderPayload.item_type}
-                </div>
-                <div style={{ fontSize: '0.9rem', color: '#c0c7d8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {saveToFolderPayload.title || saveToFolderPayload.item_id || 'Untitled'}
-                </div>
-              </div>
-              <div className="folder-tree" style={{ flex: 1, overflowY: 'auto', marginBottom: '0.75rem' }}>
-                {userTree.length === 0 && !stfInlineCreate ? (
-                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#5a6080' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{'\ud83d\udcc1'}</div>
-                    <p style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>No folders yet</p>
-                    <button onClick={() => setStfInlineCreate(true)}
-                      style={{ padding: '0.45rem 1rem', background: 'linear-gradient(135deg,#60a5fa,#3b82f6)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.83rem' }}>
-                      Create Your First Folder
-                    </button>
-                  </div>
-                ) : userTree.map(node => renderNode(node, 0))}
-              </div>
-              {stfInlineCreate ? (
-                <div className="folder-inline-create" style={{ flexShrink: 0 }}>
-                  <input type="text" value={stfNewName} onChange={e => setStfNewName(e.target.value)}
-                    placeholder="New folder name" autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') handleInlineCreate(); else if (e.key === 'Escape') { setStfInlineCreate(false); setStfNewName(''); } }} />
-                  <button onClick={handleInlineCreate} disabled={!stfNewName.trim() || stfCreating}
-                    style={{ background: stfNewName.trim() ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', color: '#fff', opacity: stfNewName.trim() ? 1 : 0.5 }}>
-                    {stfCreating ? '...' : '+'}
-                  </button>
-                  <button onClick={() => { setStfInlineCreate(false); setStfNewName(''); }}
-                    style={{ background: 'none', color: '#8b92b0', border: '1px solid rgba(61,69,99,0.5)' }}>&times;</button>
-                </div>
-              ) : userTree.length > 0 && (
-                <button onClick={() => setStfInlineCreate(true)}
-                  style={{ width: '100%', padding: '0.45rem', background: 'none', border: '1px dashed rgba(96,165,250,0.3)', borderRadius: '8px', color: '#60a5fa', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.75rem', flexShrink: 0, transition: 'all 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(96,165,250,0.06)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  + New Folder
-                </button>
-              )}
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexShrink: 0, paddingTop: '0.5rem', borderTop: '1px solid rgba(61,69,99,0.3)' }}>
-                <button onClick={() => { setShowSaveToFolderModal(false); setSaveToFolderPayload(null); }}
-                  style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
-                <button onClick={handleSave} disabled={!stfSelected || stfSaving}
-                  style={{ padding: '0.5rem 1.2rem', background: stfSelected ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: stfSelected ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: stfSelected ? 1 : 0.5, minWidth: '100px', textAlign: 'center' }}>
-                  {stfSaved ? '\u2713 Saved!' : stfSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })();
+      const createFolderModalJSX = !showCreateFolderModal ? null : (
+        <CreateFolderModal createFolderParentId={createFolderParentId} folders={folders} currentUser={currentUser} createFolder={createFolder} onClose={closeCreateFolder} />
+      );
+      const editFolderModalJSX = (!showEditFolderModal || !editFolderTarget) ? null : (
+        <EditFolderModal editFolderTarget={editFolderTarget} folders={folders} currentUser={currentUser} updateFolder={updateFolder} deleteFolder={deleteFolder} currentFolderId={currentFolderId} navigateToFolder={navigateToFolder} onClose={closeEditFolder} />
+      );
+      const shareFolderModalJSX = (!showShareFolderModal || !shareFolderTarget) ? null : (
+        <ShareFolderModal shareFolderTarget={shareFolderTarget} currentUser={currentUser} supabaseClient={supabaseClient} toggleFolderPublic={toggleFolderPublic} shareFolderWithUser={shareFolderWithUser} updateSharePermission={updateSharePermission} unshareFolderWithUser={unshareFolderWithUser} getAllUsers={getAllUsers} onClose={closeShareFolder} />
+      );
+      const saveToFolderModalJSX = (!showSaveToFolderModal || !saveToFolderPayload) ? null : (
+        <SaveToFolderModal saveToFolderPayload={saveToFolderPayload} folderTree={folderTree} currentUser={currentUser} createFolder={createFolder} addItemToFolder={addItemToFolder} onClose={closeSaveToFolder} />
+      );
 
       // ── Account page — own layout (no nav bar) ──
       if (activeTab === 'account') {
