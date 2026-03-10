@@ -351,6 +351,14 @@
     .fb-add-url-form { display: flex; gap: 0.5rem; align-items: center; padding: 0.6rem 0.85rem; background: rgba(26,31,58,0.5); border: 1px dashed rgba(96,165,250,0.3); border-radius: 10px; margin-top: 0.75rem; }
     .fb-add-url-input { flex: 1; background: rgba(10,14,39,0.6); border: 1px solid rgba(61,69,99,0.5); border-radius: 6px; color: #e0e6ed; padding: 0.4rem 0.7rem; font-family: inherit; font-size: 0.82rem; }
     .fb-add-url-input::placeholder { color: #4a5270; }
+    /* Stage 4: Type filter pills + sort */
+    .fb-filter-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+    .fb-type-pill { padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid rgba(61,69,99,0.5); background: rgba(26,31,58,0.6); color: #8b92b0; transition: all 0.15s; white-space: nowrap; font-family: inherit; }
+    .fb-type-pill:hover { border-color: rgba(96,165,250,0.4); color: #c0c7d8; }
+    .fb-type-pill.active { background: rgba(96,165,250,0.18); border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .fb-sort-select { padding: 0.35rem 0.6rem; background: rgba(10,14,39,0.8); border: 1px solid rgba(61,69,99,0.5); border-radius: 8px; color: #c0c7d8; font-size: 0.78rem; font-family: inherit; outline: none; cursor: pointer; }
+    .fb-sort-select:focus { border-color: #60a5fa; }
+    .fb-folder-act-btn.edit:hover { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
 
     /* ── Hamburger button (hidden on desktop) ── */
     .hamburger-btn { display: none; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 44px; height: 44px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
@@ -3743,6 +3751,10 @@
       const [folderAddUrlInput, setFolderAddUrlInput] = useState('');
       const [folderAddUrlTitle, setFolderAddUrlTitle] = useState('');
       const [folderAddUrlSaving, setFolderAddUrlSaving] = useState(false);
+      const [folderTypeFilter, setFolderTypeFilter] = useState('all'); // 'all','event','topic','person','organization','presentation','url'
+      const [folderSortBy, setFolderSortBy] = useState('added'); // 'added','alpha','type'
+      const [showEditFolderModal, setShowEditFolderModal] = useState(false);
+      const [editFolderTarget, setEditFolderTarget] = useState(null); // folder object being edited
 
       // ── Folders CRUD ──
       const fetchFolders = useCallback(async () => {
@@ -3902,6 +3914,8 @@
       const navigateToFolder = useCallback(async (folderId) => {
         setCurrentFolderId(folderId);
         setFolderSearchQuery('');
+        setFolderTypeFilter('all');
+        setFolderSortBy('added');
         if (folderId) {
           setFolderItemsLoading(true);
           const items = await fetchFolderItems(folderId);
@@ -3948,22 +3962,43 @@
         return folders.filter(f => f.owner !== currentUser.username);
       }, [folders, currentUser]);
 
-      // Filtered folder items for search
+      // Filtered + sorted folder items
       const filteredFolderItems = useMemo(() => {
-        if (!folderSearchQuery.trim()) return currentFolderItems;
-        const q = folderSearchQuery.toLowerCase();
-        return currentFolderItems.filter(item =>
-          (item.title || '').toLowerCase().includes(q) ||
-          (item.description || '').toLowerCase().includes(q) ||
-          (item.item_type || '').toLowerCase().includes(q)
-        );
-      }, [currentFolderItems, folderSearchQuery]);
+        let items = currentFolderItems;
+        // Type filter
+        if (folderTypeFilter !== 'all') {
+          items = items.filter(item => item.item_type === folderTypeFilter);
+        }
+        // Search filter
+        if (folderSearchQuery.trim()) {
+          const q = folderSearchQuery.toLowerCase();
+          items = items.filter(item =>
+            (item.title || '').toLowerCase().includes(q) ||
+            (item.description || '').toLowerCase().includes(q) ||
+            (item.item_type || '').toLowerCase().includes(q)
+          );
+        }
+        // Sort
+        if (folderSortBy === 'alpha') {
+          items = [...items].sort((a, b) => (a.title || a.item_id || '').localeCompare(b.title || b.item_id || ''));
+        } else if (folderSortBy === 'type') {
+          items = [...items].sort((a, b) => (a.item_type || '').localeCompare(b.item_type || '') || (a.title || '').localeCompare(b.title || ''));
+        }
+        // 'added' = default sort_order from DB (no re-sort needed)
+        return items;
+      }, [currentFolderItems, folderSearchQuery, folderTypeFilter, folderSortBy]);
 
       // Remove item from folder and refresh
       const handleRemoveFolderItem = useCallback(async (itemId) => {
         const ok = await removeItemFromFolder(itemId);
         if (ok) setCurrentFolderItems(prev => prev.filter(i => i.id !== itemId));
       }, [removeItemFromFolder]);
+
+      // Open edit folder modal
+      const openEditFolder = useCallback((folder) => {
+        setEditFolderTarget(folder);
+        setShowEditFolderModal(true);
+      }, []);
 
       // ── Load from Supabase on mount ──
       useEffect(() => {
@@ -7809,12 +7844,22 @@
                 presentation: { icon: '🎞️', color: '#ec4899', bg: 'rgba(236,72,153,0.12)', label: 'Pres' },
                 url:          { icon: '🔗', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)', label: 'URL' },
               };
+              const ACC_TYPE_PILLS = [
+                { key: 'all', label: 'All' },
+                { key: 'event', label: '📄 Events' },
+                { key: 'topic', label: '🏷️ Topics' },
+                { key: 'person', label: '👤 People' },
+                { key: 'organization', label: '🏛️ Orgs' },
+                { key: 'presentation', label: '🎞️ Presentations' },
+                { key: 'url', label: '🔗 URLs' },
+              ];
               const accRootFolders = myFolders.filter(f => !f.parent_id);
               const accChildFolders = currentFolderId ? folders.filter(f => f.parent_id === currentFolderId) : [];
               const accCountItems = (fId) => {
                 const subCount = folders.filter(f => f.parent_id === fId).length;
                 return subCount > 0 ? `${subCount} sub-folder${subCount!==1?'s':''}` : '';
               };
+              const accDisplayItems = filteredFolderItems;
 
               return (
                 <div style={{padding:'1rem 0'}}>
@@ -7836,16 +7881,39 @@
                       {currentFolderId && (
                         <input className="fb-search" placeholder="Search…" value={folderSearchQuery} onChange={e => setFolderSearchQuery(e.target.value)} />
                       )}
+                      {currentFolderId && (
+                        <select className="fb-sort-select" value={folderSortBy} onChange={e => setFolderSortBy(e.target.value)} title="Sort items">
+                          <option value="added">Date Added</option>
+                          <option value="alpha">A → Z</option>
+                          <option value="type">By Type</option>
+                        </select>
+                      )}
                       <div className="fb-view-toggle">
                         <button className={`fb-view-btn ${folderViewMode==='grid'?'active':''}`} onClick={() => setFolderViewMode('grid')}>▦</button>
                         <button className={`fb-view-btn ${folderViewMode==='list'?'active':''}`} onClick={() => setFolderViewMode('list')}>☰</button>
                       </div>
+                      {currentFolderId && currentFolder && (
+                        <button onClick={() => openEditFolder(currentFolder)}
+                          style={{padding:'0.4rem 0.8rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'8px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+                          ✏️ Edit
+                        </button>
+                      )}
                       <button onClick={() => { setCreateFolderParentId(currentFolderId); setShowCreateFolderModal(true); }}
                         style={{padding:'0.4rem 0.8rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit'}}>
                         + New Folder
                       </button>
                     </div>
                   </div>
+
+                  {/* Type filter pills — only inside a folder */}
+                  {currentFolderId && currentFolderItems.length > 1 && (
+                    <div className="fb-filter-bar">
+                      {ACC_TYPE_PILLS.map(p => (
+                        <button key={p.key} className={`fb-type-pill${folderTypeFilter===p.key?' active':''}`}
+                          onClick={() => setFolderTypeFilter(p.key)}>{p.label}</button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Root view */}
                   {!currentFolderId && (
@@ -7865,6 +7933,7 @@
                               <div className="fb-folder-name">{folder.name}</div>
                               <div className="fb-folder-meta">{accCountItems(folder.id) || 'Empty'}</div>
                               <div className="fb-folder-actions">
+                                <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
                                 <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
                               </div>
                             </div>
@@ -7895,6 +7964,7 @@
                                     <div className="fb-folder-name">{folder.name}</div>
                                     <div className="fb-folder-meta">{accCountItems(folder.id) || 'Empty'}</div>
                                     <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
                                       <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
                                     </div>
                                   </div>
@@ -7902,11 +7972,11 @@
                               </div>
                             </div>
                           )}
-                          {filteredFolderItems.length > 0 && (
+                          {accDisplayItems.length > 0 && (
                             <div>
-                              <div className="fb-section-label">Items ({filteredFolderItems.length})</div>
+                              <div className="fb-section-label">Items ({accDisplayItems.length}{folderTypeFilter !== 'all' ? ` of ${currentFolderItems.length}` : ''})</div>
                               <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
-                                {filteredFolderItems.map(item => {
+                                {accDisplayItems.map(item => {
                                   const cfg = ITEM_TYPE_CONFIG_ACC[item.item_type] || ITEM_TYPE_CONFIG_ACC.event;
                                   return (
                                     <div key={item.id} className="fb-item-card" onClick={() => handleFolderItemClick(item)}>
@@ -7924,6 +7994,15 @@
                               </div>
                             </div>
                           )}
+
+                          {/* No items match filter */}
+                          {accDisplayItems.length === 0 && currentFolderItems.length > 0 && (folderTypeFilter !== 'all' || folderSearchQuery.trim()) && (
+                            <div className="fb-empty" style={{padding:'2rem 1rem'}}>
+                              <p>No items match the current filter.</p>
+                              <button className="fb-type-pill" onClick={() => { setFolderTypeFilter('all'); setFolderSearchQuery(''); }} style={{marginTop:'0.5rem'}}>Clear filters</button>
+                            </div>
+                          )}
+
                           {/* Add External URL form */}
                           <div className="fb-add-url-form">
                             <span style={{fontSize:'1rem',flexShrink:0}}>🔗</span>
@@ -7934,7 +8013,7 @@
                             </button>
                           </div>
 
-                          {accChildFolders.length === 0 && filteredFolderItems.length === 0 && !folderAddUrlInput && (
+                          {accChildFolders.length === 0 && currentFolderItems.length === 0 && !folderAddUrlInput && (
                             <div className="fb-empty">
                               <div className="fb-empty-icon">{currentFolder?.icon || '📁'}</div>
                               <p>This folder is empty</p>
@@ -8479,6 +8558,126 @@
         );
       })();
 
+      const editFolderModalJSX = !showEditFolderModal || !editFolderTarget ? null : (() => {
+        const FOLDER_COLORS = ['#60a5fa','#3b82f6','#a78bfa','#8b5cf6','#10b981','#14b8a6','#f59e0b','#f97316','#ef4444','#ec4899','#6366f1','#06b6d4','#84cc16','#78716c','#e879f7','#fb923c'];
+        const FOLDER_EMOJIS = ['\ud83d\udcc1','\ud83d\udcc2','\ud83d\udcda','\ud83d\udcd6','\ud83d\udd0d','\ud83c\udf10','\u2b50','\ud83d\udca1','\ud83d\udd12','\ud83c\udff7\ufe0f','\ud83d\udccc','\ud83d\udcca','\ud83d\udce6','\ud83d\udce5','\ud83d\udcc8','\ud83c\udfaf','\ud83d\udee1\ufe0f','\u26a0\ufe0f','\ud83d\udd25','\ud83d\udca3','\ud83c\udfad','\ud83d\udcf0','\ud83c\udfa5','\ud83d\udcf7','\ud83d\udd17','\ud83e\udde9','\ud83e\uddea','\ud83d\udcdd','\ud83d\udd73\ufe0f','\ud83c\udf0d','\ud83c\udfe6','\u2694\ufe0f'];
+        const [efName, setEfName] = React.useState(editFolderTarget.name || '');
+        const [efColor, setEfColor] = React.useState(editFolderTarget.color || '#60a5fa');
+        const [efIcon, setEfIcon] = React.useState(editFolderTarget.icon || '\ud83d\udcc1');
+        const [efParent, setEfParent] = React.useState(editFolderTarget.parent_id || null);
+        const [efSaving, setEfSaving] = React.useState(false);
+        const [efShowEmojis, setEfShowEmojis] = React.useState(false);
+        const [efDeleting, setEfDeleting] = React.useState(false);
+        const handleSave = async () => {
+          if (!efName.trim() || efSaving) return;
+          setEfSaving(true);
+          const updates = { name: efName.trim(), color: efColor, icon: efIcon, parent_id: efParent };
+          const ok = await updateFolder(editFolderTarget.id, updates);
+          setEfSaving(false);
+          if (ok) { setShowEditFolderModal(false); setEditFolderTarget(null); }
+        };
+        const handleDelete = async () => {
+          if (!window.confirm(`Delete folder "${editFolderTarget.name}"? Items inside won't be deleted from the database, but they'll be removed from this folder.`)) return;
+          setEfDeleting(true);
+          const ok = await deleteFolder(editFolderTarget.id);
+          setEfDeleting(false);
+          if (ok) {
+            setShowEditFolderModal(false);
+            setEditFolderTarget(null);
+            if (currentFolderId === editFolderTarget.id) navigateToFolder(editFolderTarget.parent_id || null);
+          }
+        };
+        // Exclude self and descendants from parent options to prevent circular nesting
+        const getDescendantIds = (fId) => {
+          const ids = new Set([fId]);
+          const queue = [fId];
+          while (queue.length) {
+            const pid = queue.shift();
+            folders.filter(f => f.parent_id === pid).forEach(f => { ids.add(f.id); queue.push(f.id); });
+          }
+          return ids;
+        };
+        const excludeIds = getDescendantIds(editFolderTarget.id);
+        const parentOptions = folders.filter(f => f.owner === currentUser?.username && !excludeIds.has(f.id));
+        return (
+          <div className="modal" onClick={() => { setShowEditFolderModal(false); setEditFolderTarget(null); }}>
+            <div className="modal-content" onClick={ev => ev.stopPropagation()} style={{ maxWidth: '480px', padding: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                <h3 style={{ color: '#e0e6ed', margin: 0, fontFamily: "'Space Mono',monospace", fontSize: '1.15rem' }}>Edit Folder</h3>
+                <button onClick={() => { setShowEditFolderModal(false); setEditFolderTarget(null); }}
+                  style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+              </div>
+              <p style={{ color: '#8b92b0', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Rename, restyle, or move this folder.</p>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="filter-label">Name</label>
+                <input type="text" value={efName} onChange={e => setEfName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSave(); else if (e.key === 'Escape') { setShowEditFolderModal(false); setEditFolderTarget(null); } }}
+                  autoFocus
+                  style={{ width: '100%', padding: '0.65rem 0.9rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }} />
+              </div>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="filter-label">Color</label>
+                <div className="folder-color-grid">
+                  {FOLDER_COLORS.map(c => (
+                    <div key={c} className={`folder-color-swatch${efColor === c ? ' active' : ''}`}
+                      style={{ background: c }} onClick={() => setEfColor(c)} />
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="filter-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  Icon
+                  <span onClick={() => setEfShowEmojis(p => !p)}
+                    style={{ fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1, background: 'rgba(45,53,97,0.6)', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(61,69,99,0.5)' }}>
+                    {efIcon}
+                  </span>
+                </label>
+                {efShowEmojis && (
+                  <div className="folder-emoji-grid" style={{ marginTop: '0.5rem' }}>
+                    {FOLDER_EMOJIS.map(em => (
+                      <button key={em} className={`folder-emoji-btn${efIcon === em ? ' active' : ''}`}
+                        onClick={() => { setEfIcon(em); setEfShowEmojis(false); }}>
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label className="filter-label">Parent Folder</label>
+                <select value={efParent || ''} onChange={e => setEfParent(e.target.value || null)}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', background: 'rgba(26,31,58,0.8)', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#e0e6ed', fontFamily: 'inherit', fontSize: '0.88rem', outline: 'none' }}>
+                  <option value="">None (root level)</option>
+                  {parentOptions.map(f => (
+                    <option key={f.id} value={f.id}>{f.icon} {f.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(10,14,39,0.5)', borderRadius: '10px', border: `2px solid ${efColor}40`, marginBottom: '1.5rem' }}>
+                <span style={{ fontSize: '1.5rem' }}>{efIcon}</span>
+                <span style={{ color: efColor, fontWeight: 700, fontSize: '0.95rem' }}>{efName || 'Folder Name'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'space-between' }}>
+                <button onClick={handleDelete} disabled={efDeleting}
+                  style={{ padding: '0.5rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.83rem', fontWeight: 600, transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}>
+                  {efDeleting ? 'Deleting...' : '🗑 Delete Folder'}
+                </button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button onClick={() => { setShowEditFolderModal(false); setEditFolderTarget(null); }}
+                    style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
+                  <button onClick={handleSave} disabled={!efName.trim() || efSaving}
+                    style={{ padding: '0.5rem 1.2rem', background: efName.trim() ? 'linear-gradient(135deg,#60a5fa,#3b82f6)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: efName.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: efName.trim() ? 1 : 0.5 }}>
+                    {efSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })();
+
       const saveToFolderModalJSX = (!showSaveToFolderModal || !saveToFolderPayload) ? null : (() => {
         const [stfSelected, setStfSelected] = React.useState(null);
         const [stfExpanded, setStfExpanded] = React.useState(new Set());
@@ -8623,6 +8822,7 @@
             {showModal && modalData && modalViewJSX}
             {entityProfileModalJSX}
             {createFolderModalJSX}
+            {editFolderModalJSX}
             {saveToFolderModalJSX}
           </div>
         );
@@ -8925,15 +9125,23 @@
                 presentation: { icon: '🎞️', color: '#ec4899', bg: 'rgba(236,72,153,0.12)', label: 'Pres' },
                 url:          { icon: '🔗', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)', label: 'URL' },
               };
+              const TYPE_PILLS = [
+                { key: 'all', label: 'All' },
+                { key: 'event', label: '📄 Events' },
+                { key: 'topic', label: '🏷️ Topics' },
+                { key: 'person', label: '👤 People' },
+                { key: 'organization', label: '🏛️ Orgs' },
+                { key: 'presentation', label: '🎞️ Presentations' },
+                { key: 'url', label: '🔗 URLs' },
+              ];
               const rootFolders = folders.filter(f => !f.parent_id);
               const childFolders = currentFolderId ? folders.filter(f => f.parent_id === currentFolderId) : [];
               const countItems = (fId) => {
-                // count is lazy — just show sub-folder count + stored item count (items only loaded when navigated into)
                 const subCount = folders.filter(f => f.parent_id === fId).length;
                 return subCount > 0 ? `${subCount} sub-folder${subCount!==1?'s':''}` : '';
               };
-              const displayFolders = currentFolderId ? childFolders : rootFolders;
               const displayItems = filteredFolderItems;
+              const isOwnFolder = (f) => f.owner === currentUser?.username;
 
               return (
                 <div>
@@ -8955,10 +9163,23 @@
                       {currentFolderId && (
                         <input className="fb-search" placeholder="Search in folder…" value={folderSearchQuery} onChange={e => setFolderSearchQuery(e.target.value)} />
                       )}
+                      {currentFolderId && (
+                        <select className="fb-sort-select" value={folderSortBy} onChange={e => setFolderSortBy(e.target.value)} title="Sort items">
+                          <option value="added">Date Added</option>
+                          <option value="alpha">A → Z</option>
+                          <option value="type">By Type</option>
+                        </select>
+                      )}
                       <div className="fb-view-toggle">
                         <button className={`fb-view-btn ${folderViewMode==='grid'?'active':''}`} onClick={() => setFolderViewMode('grid')} title="Grid view">▦</button>
                         <button className={`fb-view-btn ${folderViewMode==='list'?'active':''}`} onClick={() => setFolderViewMode('list')} title="List view">☰</button>
                       </div>
+                      {currentFolderId && currentFolder && isOwnFolder(currentFolder) && (
+                        <button onClick={() => openEditFolder(currentFolder)}
+                          style={{padding:'0.4rem 0.8rem',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.25)',borderRadius:'8px',color:'#60a5fa',fontWeight:600,cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+                          ✏️ Edit
+                        </button>
+                      )}
                       <button onClick={() => { setCreateFolderParentId(currentFolderId); setShowCreateFolderModal(true); }}
                         style={{padding:'0.45rem 0.9rem',background:'linear-gradient(135deg,#60a5fa,#3b82f6)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontSize:'0.82rem',fontFamily:'inherit',whiteSpace:'nowrap'}}>
                         + New Folder
@@ -8971,6 +9192,16 @@
                       </div>
                     </div>
                   </div>
+
+                  {/* Type filter pills — only inside a folder */}
+                  {currentFolderId && currentFolderItems.length > 1 && (
+                    <div className="fb-filter-bar">
+                      {TYPE_PILLS.map(p => (
+                        <button key={p.key} className={`fb-type-pill${folderTypeFilter===p.key?' active':''}`}
+                          onClick={() => setFolderTypeFilter(p.key)}>{p.label}</button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Root view: show My Folders + Shared sections */}
                   {!currentFolderId && (
@@ -8994,6 +9225,7 @@
                                     <div className="fb-folder-name">{folder.name}</div>
                                     <div className="fb-folder-meta">{countItems(folder.id) || 'Empty'}</div>
                                     <div className="fb-folder-actions">
+                                      <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>
                                       <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
                                     </div>
                                   </div>
@@ -9044,7 +9276,8 @@
                                     <div className="fb-folder-name">{folder.name}</div>
                                     <div className="fb-folder-meta">{countItems(folder.id) || 'Empty'}</div>
                                     <div className="fb-folder-actions">
-                                      <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete sub-folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>
+                                      {isOwnFolder(folder) && <button className="fb-folder-act-btn edit" onClick={(e) => { e.stopPropagation(); openEditFolder(folder); }} title="Edit">✏️</button>}
+                                      {isOwnFolder(folder) && <button className="fb-folder-act-btn danger" onClick={(e) => { e.stopPropagation(); if(window.confirm(`Delete sub-folder "${folder.name}"?`)) deleteFolder(folder.id); }} title="Delete">🗑</button>}
                                     </div>
                                   </div>
                                 ))}
@@ -9055,7 +9288,7 @@
                           {/* Items */}
                           {displayItems.length > 0 && (
                             <div>
-                              <div className="fb-section-label">Items ({displayItems.length})</div>
+                              <div className="fb-section-label">Items ({displayItems.length}{folderTypeFilter !== 'all' ? ` of ${currentFolderItems.length}` : ''})</div>
                               <div className={folderViewMode==='grid'?'fb-grid':'fb-list'}>
                                 {displayItems.map(item => {
                                   const cfg = ITEM_TYPE_CONFIG[item.item_type] || ITEM_TYPE_CONFIG.event;
@@ -9076,6 +9309,14 @@
                             </div>
                           )}
 
+                          {/* No items match filter */}
+                          {displayItems.length === 0 && currentFolderItems.length > 0 && (folderTypeFilter !== 'all' || folderSearchQuery.trim()) && (
+                            <div className="fb-empty" style={{padding:'2rem 1rem'}}>
+                              <p>No items match the current filter.</p>
+                              <button className="fb-type-pill" onClick={() => { setFolderTypeFilter('all'); setFolderSearchQuery(''); }} style={{marginTop:'0.5rem'}}>Clear filters</button>
+                            </div>
+                          )}
+
                           {/* Add External URL form */}
                           <div className="fb-add-url-form">
                             <span style={{fontSize:'1rem',flexShrink:0}}>🔗</span>
@@ -9093,7 +9334,7 @@
                           </div>
 
                           {/* Empty state inside folder */}
-                          {childFolders.length === 0 && displayItems.length === 0 && !folderAddUrlInput && (
+                          {childFolders.length === 0 && currentFolderItems.length === 0 && !folderAddUrlInput && (
                             <div className="fb-empty">
                               <div className="fb-empty-icon">{currentFolder?.icon || '📁'}</div>
                               <p>This folder is empty</p>
@@ -10452,6 +10693,7 @@
 
           {/* ═══ FOLDER MODALS ═══ */}
           {createFolderModalJSX}
+          {editFolderModalJSX}
           {saveToFolderModalJSX}
 
 
