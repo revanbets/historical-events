@@ -335,6 +335,22 @@
     .fb-list .fb-item-card { border-radius: 8px; padding: 0.65rem 0.9rem; }
     .fb-section-label { font-size: 0.72rem; color: #8b92b0; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin: 1.25rem 0 0.6rem 0; }
     .fb-section-label:first-child { margin-top: 0; }
+    /* Save-to-folder button — reusable across all views */
+    .save-to-folder-btn { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); border-radius: 6px; color: #60a5fa; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 0.75rem; padding: 0.25rem 0.55rem; display: inline-flex; align-items: center; gap: 0.3rem; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+    .save-to-folder-btn:hover { background: rgba(96,165,250,0.2); border-color: rgba(96,165,250,0.5); }
+    .save-to-folder-btn.sm { font-size: 0.7rem; padding: 0.2rem 0.45rem; }
+    /* Timeline save button — overlay on hover */
+    .tl-card { position: relative; }
+    .tl-save-btn { position: absolute; top: 4px; right: 4px; opacity: 0; transition: opacity 0.15s; z-index: 2; }
+    .tl-card:hover .tl-save-btn { opacity: 1; }
+    /* Card save button — overlay on hover */
+    .card { position: relative; }
+    .card-save-btn { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity 0.15s; z-index: 2; }
+    .card:hover .card-save-btn { opacity: 1; }
+    /* Add URL form inside folder */
+    .fb-add-url-form { display: flex; gap: 0.5rem; align-items: center; padding: 0.6rem 0.85rem; background: rgba(26,31,58,0.5); border: 1px dashed rgba(96,165,250,0.3); border-radius: 10px; margin-top: 0.75rem; }
+    .fb-add-url-input { flex: 1; background: rgba(10,14,39,0.6); border: 1px solid rgba(61,69,99,0.5); border-radius: 6px; color: #e0e6ed; padding: 0.4rem 0.7rem; font-family: inherit; font-size: 0.82rem; }
+    .fb-add-url-input::placeholder { color: #4a5270; }
 
     /* ── Hamburger button (hidden on desktop) ── */
     .hamburger-btn { display: none; flex-direction: column; justify-content: center; align-items: center; gap: 5px; width: 44px; height: 44px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
@@ -3724,6 +3740,9 @@
       const [folderItemsLoading, setFolderItemsLoading] = useState(false);
       const [folderViewMode, setFolderViewMode] = useState('grid'); // 'grid' or 'list'
       const [folderSearchQuery, setFolderSearchQuery] = useState('');
+      const [folderAddUrlInput, setFolderAddUrlInput] = useState('');
+      const [folderAddUrlTitle, setFolderAddUrlTitle] = useState('');
+      const [folderAddUrlSaving, setFolderAddUrlSaving] = useState(false);
 
       // ── Folders CRUD ──
       const fetchFolders = useCallback(async () => {
@@ -3862,6 +3881,22 @@
         setSaveToFolderPayload(payload);
         setShowSaveToFolderModal(true);
       }, []);
+
+      // Helper: add external URL directly to a folder
+      const addUrlToCurrentFolder = useCallback(async () => {
+        if (!folderAddUrlInput.trim() || !currentFolderId) return;
+        setFolderAddUrlSaving(true);
+        try {
+          const url = folderAddUrlInput.trim();
+          const title = folderAddUrlTitle.trim() || url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 60);
+          await addItemToFolder(currentFolderId, { item_type: 'url', item_id: url, title, url, description: '' });
+          const items = await fetchFolderItems(currentFolderId);
+          setCurrentFolderItems(items);
+          setFolderAddUrlInput('');
+          setFolderAddUrlTitle('');
+        } catch (err) { console.error('Add URL to folder failed:', err); }
+        setFolderAddUrlSaving(false);
+      }, [folderAddUrlInput, folderAddUrlTitle, currentFolderId, addItemToFolder, fetchFolderItems]);
 
       // ── Folder browser navigation ──
       const navigateToFolder = useCallback(async (folderId) => {
@@ -6773,9 +6808,12 @@
                       <td>{e.dateUploaded ? new Date(e.dateUploaded).toLocaleDateString() : '—'}</td>
                       <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
                       <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
-                        {canDelete(e) && (
-                          <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
-                        )}
+                        <div style={{display:'flex',gap:'0.3rem',justifyContent:'center'}}>
+                          <button className="save-to-folder-btn sm" onClick={()=>openSaveToFolder({item_type:'event',item_id:e.id,title:e.title,description:e.aiSummary||e.description||''})}>📁</button>
+                          {canDelete(e) && (
+                            <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -6815,6 +6853,7 @@
             <div className="modal-header">
               <h2 className="modal-title">{isEditing ? 'Edit Event' : modalData.title}</h2>
               <div className="modal-actions">
+                {!isEditing && <button className="save-to-folder-btn" onClick={()=>openSaveToFolder({item_type:'event',item_id:modalData.id,title:modalData.title,description:modalData.aiSummary||modalData.description||''})}>📁 Save</button>}
                 {!isEditing && <button className="edit-btn" onClick={()=>setIsEditing(true)}>✏️ Edit</button>}
                 {isEditing && <button className="btn btn-primary" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={saveEditedEvent}>💾 Save</button>}
                 {isEditing && <button className="btn btn-danger" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={()=>setIsEditing(false)}>Cancel</button>}
@@ -7171,6 +7210,9 @@
                   <p style={{color:'#8b92b0',fontSize:'0.85rem',marginTop:'0.25rem'}}>{em.relEvents.length} related event{em.relEvents.length!==1?'s':''}</p>
                 </div>
                 <div className="modal-actions">
+                  {!entityModalEditing && (
+                    <button className="save-to-folder-btn" onClick={()=>openSaveToFolder({item_type:em.type==='org'?'organization':em.type,item_id:em.name,title:em.name,description:profile.description||''})}>📁 Save</button>
+                  )}
                   {canEdit && !entityModalEditing && (
                     <>
                       <div className="tooltip-wrapper">
@@ -7421,6 +7463,7 @@
                               <div className="tl-dot"></div>
                               <div className="tl-connector"></div>
                               <div className="tl-card">
+                                <button className="save-to-folder-btn sm tl-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'event',item_id:e.id,title:e.title||'',description:e.aiSummary||e.description||''});}}>📁</button>
                                 <div className="tl-card-title">{e.title||''}</div>
                                 <div className="tl-card-date">{year!=='?'?year:''}</div>
                               </div>
@@ -7504,6 +7547,7 @@
                       const relEvents = myFiltered.filter(e=>(e.topics||[]).includes(t.name)).slice(0,3);
                       return (
                         <div key={t.name} className="card" onClick={()=>openEntityDetail('topic',t.name)}>
+                          <button className="save-to-folder-btn sm card-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'topic',item_id:t.name,title:t.name,description:`${t.count} related events`});}}>📁</button>
                           <div className="card-title">{t.name}</div>
                           <div className="card-count">{t.count} event{t.count!==1?'s':''} →</div>
                           <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
@@ -7521,6 +7565,7 @@
                       const relEvents = myFiltered.filter(e=>(e.people||[]).includes(p.name)).slice(0,3);
                       return (
                         <div key={p.name} className="card" onClick={()=>openEntityDetail('person',p.name)}>
+                          <button className="save-to-folder-btn sm card-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'person',item_id:p.name,title:p.name,description:`${p.count} related events`});}}>📁</button>
                           <div className="card-title">{p.name}</div>
                           <div className="card-count">{p.count} event{p.count!==1?'s':''} →</div>
                           <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
@@ -7538,6 +7583,7 @@
                       const relEvents = myFiltered.filter(e=>(e.organizations||[]).includes(o.name)).slice(0,3);
                       return (
                         <div key={o.name} className="card" onClick={()=>openEntityDetail('org',o.name)}>
+                          <button className="save-to-folder-btn sm card-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'organization',item_id:o.name,title:o.name,description:`${o.count} related events`});}}>📁</button>
                           <div className="card-title">{o.name}</div>
                           <div className="card-count">{o.count} event{o.count!==1?'s':''} →</div>
                           <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
@@ -7577,6 +7623,7 @@
                               <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:p.is_public?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.is_public?'#10b981':'#8b92b0',border:`1px solid ${p.is_public?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>
                                 {p.is_public?'🌐 Public':'🔒 Private'}
                               </span>
+                              <button className="save-to-folder-btn sm" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'presentation',item_id:p.id,title:p.name,description:`${(p.slides||[]).length} slide${(p.slides||[]).length!==1?'s':''}`});}}>📁</button>
                               <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.3rem 0.7rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'7px',color:'#f87171',cursor:'pointer',fontSize:'0.8rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
                             </div>
                           ))}
@@ -7597,6 +7644,7 @@
                                   <div style={{fontSize:'0.8rem',color:'#8b92b0'}}>{(p.slides||[]).length} slide{(p.slides||[]).length!==1?'s':''} · by {p.user_id} · {new Date(p.created_at).toLocaleDateString()}</div>
                                 </div>
                                 <span style={{padding:'0.2rem 0.65rem',borderRadius:'20px',fontSize:'0.72rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
+                                <button className="save-to-folder-btn sm" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'presentation',item_id:p.id,title:p.name,description:`${(p.slides||[]).length} slide${(p.slides||[]).length!==1?'s':''} · by ${p.user_id}`});}}>📁</button>
                               </div>
                             ))}
                           </div>
@@ -7876,11 +7924,21 @@
                               </div>
                             </div>
                           )}
-                          {accChildFolders.length === 0 && filteredFolderItems.length === 0 && (
+                          {/* Add External URL form */}
+                          <div className="fb-add-url-form">
+                            <span style={{fontSize:'1rem',flexShrink:0}}>🔗</span>
+                            <input className="fb-add-url-input" placeholder="Paste a URL…" value={folderAddUrlInput} onChange={e=>setFolderAddUrlInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
+                            <input className="fb-add-url-input" style={{maxWidth:'160px'}} placeholder="Title (optional)" value={folderAddUrlTitle} onChange={e=>setFolderAddUrlTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
+                            <button className="save-to-folder-btn" disabled={!folderAddUrlInput.trim()||folderAddUrlSaving} onClick={addUrlToCurrentFolder} style={{opacity:folderAddUrlInput.trim()?1:0.5}}>
+                              {folderAddUrlSaving ? '…' : '+ Add'}
+                            </button>
+                          </div>
+
+                          {accChildFolders.length === 0 && filteredFolderItems.length === 0 && !folderAddUrlInput && (
                             <div className="fb-empty">
                               <div className="fb-empty-icon">{currentFolder?.icon || '📁'}</div>
                               <p>This folder is empty</p>
-                              <p style={{fontSize:'0.8rem'}}>Save items here from any event, topic, or entity page.</p>
+                              <p style={{fontSize:'0.8rem'}}>Use the 📁 Save button on any event, topic, person, or organization to add it here, or paste a URL above.</p>
                             </div>
                           )}
                         </div>
@@ -8720,6 +8778,7 @@
                           <div className="tl-dot"></div>
                           <div className="tl-connector"></div>
                           <div className="tl-card">
+                            <button className="save-to-folder-btn sm tl-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'event',item_id:e.id,title:e.title||'',description:e.aiSummary||e.description||''});}}>📁</button>
                             <div className="tl-card-title">{e.title||''}</div>
                             <div className="tl-card-date">{year!=='?'?year:''}</div>
                           </div>
@@ -8788,9 +8847,12 @@
                           )}
                         </td>
                         <td onClick={ev=>ev.stopPropagation()} style={{textAlign:'center'}}>
-                          {canDelete(e) && (
-                            <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
-                          )}
+                          <div style={{display:'flex',gap:'0.3rem',justifyContent:'center'}}>
+                            <button className="save-to-folder-btn sm" onClick={()=>openSaveToFolder({item_type:'event',item_id:e.id,title:e.title,description:e.aiSummary||e.description||''})}>📁</button>
+                            {canDelete(e) && (
+                              <button onClick={()=>{if(window.confirm(`Delete "${e.title}"?`))deleteEvent(e.id);}} style={{padding:'0.2rem 0.5rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'4px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}} title="Move to trash">🗑</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -8807,6 +8869,7 @@
                   const relEvents = filteredEvents.filter(e=>(e.topics||[]).includes(t.name)).slice(0,3);
                   return (
                     <div key={t.name} className="card" onClick={()=>openEntityDetail('topic',t.name)}>
+                      <button className="save-to-folder-btn sm card-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'topic',item_id:t.name,title:t.name,description:`${t.count} related events`});}}>📁</button>
                       <div className="card-title">{t.name}</div>
                       <div className="card-count">{t.count} event{t.count!==1?'s':''} →</div>
                       <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
@@ -8824,6 +8887,7 @@
                   const relEvents = filteredEvents.filter(e=>(e.people||[]).includes(p.name)).slice(0,3);
                   return (
                     <div key={p.name} className="card" onClick={()=>openEntityDetail('person',p.name)}>
+                      <button className="save-to-folder-btn sm card-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'person',item_id:p.name,title:p.name,description:`${p.count} related events`});}}>📁</button>
                       <div className="card-title">{p.name}</div>
                       <div className="card-count">{p.count} event{p.count!==1?'s':''} →</div>
                       <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
@@ -8841,6 +8905,7 @@
                   const relEvents = filteredEvents.filter(e=>(e.organizations||[]).includes(o.name)).slice(0,3);
                   return (
                     <div key={o.name} className="card" onClick={()=>openEntityDetail('org',o.name)}>
+                      <button className="save-to-folder-btn sm card-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'organization',item_id:o.name,title:o.name,description:`${o.count} related events`});}}>📁</button>
                       <div className="card-title">{o.name}</div>
                       <div className="card-count">{o.count} event{o.count!==1?'s':''} →</div>
                       <div className="card-tags">{relEvents.map((e,i)=><div key={i} className="card-tag">{e.title.substring(0,22)}…</div>)}</div>
@@ -9011,12 +9076,28 @@
                             </div>
                           )}
 
+                          {/* Add External URL form */}
+                          <div className="fb-add-url-form">
+                            <span style={{fontSize:'1rem',flexShrink:0}}>🔗</span>
+                            <input className="fb-add-url-input" placeholder="Paste a URL…" value={folderAddUrlInput} onChange={e=>setFolderAddUrlInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
+                            <input className="fb-add-url-input" style={{maxWidth:'160px'}} placeholder="Title (optional)" value={folderAddUrlTitle} onChange={e=>setFolderAddUrlTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&folderAddUrlInput.trim())addUrlToCurrentFolder();}} />
+                            <button className="save-to-folder-btn" disabled={!folderAddUrlInput.trim()||folderAddUrlSaving} onClick={addUrlToCurrentFolder} style={{opacity:folderAddUrlInput.trim()?1:0.5}}>
+                              {folderAddUrlSaving ? '…' : '+ Add'}
+                            </button>
+                            <div className="tooltip-wrapper" style={{marginLeft:'-0.2rem'}}>
+                              <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(96,165,250,0.2)',border:'1px solid rgba(96,165,250,0.4)',color:'#60a5fa',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i</span>
+                              <div className="tooltip-content" style={{bottom:'100%',right:0,width:'260px'}}>
+                                Quick-save any external URL (articles, videos, resources) to this folder. Just paste the link and optionally add a title.
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Empty state inside folder */}
-                          {childFolders.length === 0 && displayItems.length === 0 && (
+                          {childFolders.length === 0 && displayItems.length === 0 && !folderAddUrlInput && (
                             <div className="fb-empty">
                               <div className="fb-empty-icon">{currentFolder?.icon || '📁'}</div>
                               <p>This folder is empty</p>
-                              <p style={{fontSize:'0.8rem'}}>Use the Save button on any event, topic, person, or organization to add it here.</p>
+                              <p style={{fontSize:'0.8rem'}}>Use the 📁 Save button on any event, topic, person, or organization to add it here, or paste a URL above.</p>
                             </div>
                           )}
                         </div>
@@ -9394,6 +9475,7 @@
                             <div style={{fontSize:'0.78rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · {new Date(p.updated_at||p.created_at).toLocaleDateString()}</div>
                           </div>
                           <span style={{padding:'0.2rem 0.6rem',borderRadius:'20px',fontSize:'0.7rem',fontWeight:600,flexShrink:0,background:p.is_public?'rgba(16,185,129,0.15)':'rgba(61,69,99,0.3)',color:p.is_public?'#10b981':'#8b92b0',border:`1px solid ${p.is_public?'rgba(16,185,129,0.3)':'rgba(61,69,99,0.5)'}`}}>{p.is_public?'🌐 Public':'🔒 Private'}</span>
+                          <button className="save-to-folder-btn sm" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'presentation',item_id:p.id,title:p.name,description:`${p.slides.length} slide${p.slides.length!==1?'s':''}`});}}>📁</button>
                           <button onClick={ev=>{ev.stopPropagation();deletePresentationById(p.id);}} style={{padding:'0.25rem 0.55rem',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',color:'#f87171',cursor:'pointer',fontSize:'0.78rem',fontFamily:'inherit',flexShrink:0}}>Delete</button>
                         </div>
                       ))}
@@ -9414,6 +9496,7 @@
                               <div style={{fontSize:'0.78rem',color:'#8b92b0'}}>{p.slides.length} slide{p.slides.length!==1?'s':''} · by {p.user_id} · {new Date(p.updated_at||p.created_at).toLocaleDateString()}</div>
                             </div>
                             <span style={{padding:'0.2rem 0.6rem',borderRadius:'20px',fontSize:'0.7rem',fontWeight:600,flexShrink:0,background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'}}>🌐 Public</span>
+                            <button className="save-to-folder-btn sm" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'presentation',item_id:p.id,title:p.name,description:`${p.slides.length} slide${p.slides.length!==1?'s':''} · by ${p.user_id}`});}}>📁</button>
                           </div>
                         ))}
                       </div>
