@@ -18,3 +18,4 @@ trafilatura
 beautifulsoup4
 requests
 openai-whisper
+httpx

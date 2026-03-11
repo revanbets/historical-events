@@ -16,3 +16,4 @@ trafilatura
 beautifulsoup4
 requests
 gunicorn
+httpx

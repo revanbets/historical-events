@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pydantic import BaseModel
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +25,11 @@ from extractors import extract, get_file_type
 from analyzer import analyze_text, condense_text, generate_presentation_slides, analyze_entity_profile
 from video_analyzer import analyze_video_url, fetch_video_metadata_only, is_video_url, is_social_media_url, save_frames_to_disk, save_transcript_to_disk
 from web_scraper import scrape_url
+from source_finder import (
+    run_source_search, cancel_search, get_event_sources,
+    research_single_claim, add_manual_source, add_annotation,
+    sb_insert, sb_select, sb_update,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(BASE_DIR)
@@ -788,6 +793,183 @@ def download_uploaded_file(filename: str):
     return FileResponse(file_path, filename=filename)
 
 
+# ─── Source Finder ────────────────────────────────────────────────────────────
+
+@app.post("/api/source-find")
+async def source_find(body: dict, background_tasks: BackgroundTasks):
+    """
+    Start a source-finding search for an event.
+    Runs as a background task — returns a search_id immediately for polling.
+    Body: { event_id, user_id, depth_tier: "scan"|"investigate"|"deep_dive" }
+    """
+    event_id = body.get("event_id", "").strip()
+    user_id = body.get("user_id", "").strip()
+    depth_tier = body.get("depth_tier", "scan").strip()
+
+    if not event_id:
+        raise HTTPException(status_code=400, detail="event_id is required")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    if depth_tier not in ("scan", "investigate", "deep_dive"):
+        raise HTTPException(status_code=400, detail="depth_tier must be scan, investigate, or deep_dive")
+
+    # Create the search record in Supabase
+    import uuid
+    search_id = str(uuid.uuid4())
+    try:
+        sb_insert("source_searches", {
+            "id": search_id,
+            "event_id": event_id,
+            "user_id": user_id,
+            "depth_tier": depth_tier,
+            "status": "running",
+            "progress": 0,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create search record: {e}")
+
+    # Launch the pipeline as a background task
+    background_tasks.add_task(run_source_search, event_id, user_id, depth_tier, search_id)
+
+    return JSONResponse(content={
+        "search_id": search_id,
+        "status": "running",
+        "message": f"Source search started ({depth_tier} tier)",
+    })
+
+
+@app.get("/api/source-find/status/{search_id}")
+async def source_find_status(search_id: str):
+    """Check the status and progress of a running source search."""
+    rows = sb_select("source_searches", {"id": search_id})
+    if not rows:
+        raise HTTPException(status_code=404, detail="Search not found")
+
+    search = rows[0]
+    return JSONResponse(content={
+        "search_id": search["id"],
+        "status": search["status"],
+        "progress": search.get("progress", 0),
+        "total_claims": search.get("total_claims", 0),
+        "sourced_claims": search.get("sourced_claims", 0),
+        "estimated_time": search.get("estimated_time"),
+        "error_message": search.get("error_message"),
+        "created_at": search.get("created_at"),
+        "completed_at": search.get("completed_at"),
+    })
+
+
+@app.post("/api/source-find/cancel/{search_id}")
+async def source_find_cancel(search_id: str):
+    """Cancel a running source search. Finishes in-progress claims, saves partial results."""
+    rows = sb_select("source_searches", {"id": search_id})
+    if not rows:
+        raise HTTPException(status_code=404, detail="Search not found")
+
+    search = rows[0]
+    if search["status"] != "running":
+        return JSONResponse(content={
+            "message": f"Search is already {search['status']}",
+            "status": search["status"],
+        })
+
+    cancel_search(search_id)
+
+    return JSONResponse(content={
+        "message": "Cancel signal sent. Search will stop after finishing current claim.",
+        "status": "cancelling",
+    })
+
+
+@app.get("/api/sources/{event_id}")
+async def get_sources(event_id: str):
+    """Get all source data for an event (searches, claims, results, annotations)."""
+    try:
+        data = get_event_sources(event_id)
+        return JSONResponse(content=data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get sources: {e}")
+
+
+@app.post("/api/source-find/claim/{claim_id}")
+async def source_find_claim(claim_id: str, body: dict, background_tasks: BackgroundTasks):
+    """
+    Re-search a specific claim with optional user context or auto deep-dive.
+    Body: { user_id, user_context?: string, auto_deep_dive?: boolean }
+    """
+    user_id = body.get("user_id", "").strip()
+    user_context = body.get("user_context", "").strip()
+    auto_deep_dive = body.get("auto_deep_dive", False)
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    try:
+        results = research_single_claim(
+            claim_id=claim_id,
+            user_id=user_id,
+            user_context=user_context,
+            auto_deep_dive=auto_deep_dive,
+        )
+        return JSONResponse(content={
+            "results": results,
+            "count": len(results),
+            "claim_id": claim_id,
+        })
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Re-search failed: {e}")
+
+
+@app.post("/api/sources/{event_id}/manual")
+async def add_source_manual(event_id: str, body: dict):
+    """
+    Add a manually found source to an event.
+    Body: { user_id, url, title?, notes?, claim_id? }
+    """
+    user_id = body.get("user_id", "").strip()
+    url = body.get("url", "").strip()
+    title = body.get("title", "").strip()
+    notes = body.get("notes", "").strip()
+    claim_id = body.get("claim_id", "").strip() or None
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+
+    try:
+        result = add_manual_source(event_id, user_id, url, title, notes, claim_id)
+        return JSONResponse(content={"source": result})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add source: {e}")
+
+
+@app.post("/api/sources/{event_id}/annotate")
+async def annotate_claim(event_id: str, body: dict):
+    """
+    Add an annotation/note to a claim.
+    Body: { user_id, claim_id, note_text }
+    """
+    user_id = body.get("user_id", "").strip()
+    claim_id = body.get("claim_id", "").strip()
+    note_text = body.get("note_text", "").strip()
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    if not claim_id:
+        raise HTTPException(status_code=400, detail="claim_id is required")
+    if not note_text:
+        raise HTTPException(status_code=400, detail="note_text is required")
+
+    try:
+        annotation = add_annotation(claim_id, user_id, note_text)
+        return JSONResponse(content={"annotation": annotation})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add annotation: {e}")
+
+
 # --- Health Check ---
 
 @app.get("/api/health")
@@ -813,6 +995,23 @@ def health_check():
         }
     else:
         checks["anthropic"] = {"status": "ok", "message": "API key present and correctly formatted."}
+
+    # Source Finder API keys
+    sf_keys = {
+        "GOOGLE_CSE_KEY": bool(os.getenv("GOOGLE_CSE_KEY", "")),
+        "GOOGLE_CSE_ID": bool(os.getenv("GOOGLE_CSE_ID", "")),
+        "BRAVE_SEARCH_KEY": bool(os.getenv("BRAVE_SEARCH_KEY", "")),
+        "FIRECRAWL_KEY": bool(os.getenv("FIRECRAWL_KEY", "")),
+        "SUPABASE_SERVICE_KEY": bool(os.getenv("SUPABASE_SERVICE_KEY", "")),
+    }
+    missing_sf = [k for k, v in sf_keys.items() if not v]
+    if missing_sf:
+        checks["source_finder"] = {
+            "status": "warning",
+            "message": f"Source Finder missing keys: {', '.join(missing_sf)}. Feature will have limited functionality.",
+        }
+    else:
+        checks["source_finder"] = {"status": "ok", "message": "All Source Finder API keys present."}
 
     # Disk — warn if uploads or downloads dirs are missing
     for label, path in [("uploads_dir", UPLOADS_DIR), ("frames_dir", FRAMES_DIR), ("transcripts_dir", TRANSCRIPTS_DIR)]:
