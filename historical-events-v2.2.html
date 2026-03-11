@@ -510,6 +510,24 @@
       .modal-content { width: 99%; padding: 1rem 0.875rem; max-height: 98vh; border-radius: 10px; }
       .card { padding: 1rem; }
     }
+    /* ─── Source Finder ─── */
+    .sf-btn { background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(234,88,12,0.15)); border: 1px solid rgba(245,158,11,0.35); border-radius: 6px; color: #f59e0b; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 0.75rem; padding: 0.25rem 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+    .sf-btn:hover { background: linear-gradient(135deg, rgba(245,158,11,0.25), rgba(234,88,12,0.25)); border-color: rgba(245,158,11,0.6); }
+    .sf-badge { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.68rem; padding: 0.1rem 0.45rem; border-radius: 4px; font-weight: 600; background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); white-space: nowrap; flex-shrink: 0; }
+    .sf-depth-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(5,7,18,0.8); z-index: 10001; display: flex; align-items: center; justify-content: center; }
+    .sf-depth-card { background: rgba(15,18,35,0.98); border: 2px solid rgba(245,158,11,0.3); border-radius: 16px; padding: 1.75rem; width: 480px; max-width: 95vw; }
+    .sf-depth-option { padding: 1rem; border: 1px solid rgba(61,69,99,0.4); border-radius: 10px; margin-bottom: 0.6rem; cursor: pointer; transition: all 0.15s; }
+    .sf-depth-option:hover { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.06); }
+    .sf-depth-option.selected { border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+    .sf-progress-card { background: rgba(15,18,35,0.98); border: 2px solid rgba(245,158,11,0.3); border-radius: 16px; padding: 1.75rem; width: 420px; max-width: 95vw; text-align: center; }
+    .sf-progress-bar { height: 6px; background: rgba(61,69,99,0.4); border-radius: 3px; overflow: hidden; margin: 1rem 0; }
+    .sf-progress-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #ea580c); border-radius: 3px; transition: width 0.5s ease; }
+    .sf-summary-box { background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(234,88,12,0.08)); border: 2px solid rgba(245,158,11,0.25); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
+    .sf-claim-card { padding: 0.75rem; background: rgba(26,31,58,0.5); border: 1px solid rgba(61,69,99,0.3); border-radius: 8px; margin-bottom: 0.5rem; }
+    .sf-source-item { padding: 0.5rem 0.75rem; background: rgba(10,14,39,0.6); border-radius: 6px; margin-top: 0.4rem; border-left: 3px solid rgba(245,158,11,0.4); }
+    .sf-source-type { font-size: 0.65rem; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+    .sf-primary { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .sf-secondary { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.25); }
   </style>
 </head>
 <body>
@@ -3989,15 +4007,21 @@
       const [stfInlineCreate, setStfInlineCreate] = React.useState(false);
       const [stfNewName, setStfNewName] = React.useState('');
       const [stfCreating, setStfCreating] = React.useState(false);
+      const isBulk = Array.isArray(saveToFolderPayload);
+      const items = isBulk ? saveToFolderPayload : [saveToFolderPayload];
       const toggleExpand = (fId) => {
         setStfExpanded(prev => { const next = new Set(prev); if (next.has(fId)) next.delete(fId); else next.add(fId); return next; });
       };
       const handleSave = async () => {
         if (!stfSelected || stfSaving) return;
         setStfSaving(true);
-        const result = await addItemToFolder(stfSelected, saveToFolderPayload);
+        let successCount = 0;
+        for (const item of items) {
+          const result = await addItemToFolder(stfSelected, item);
+          if (result) successCount++;
+        }
         setStfSaving(false);
-        if (result) { setStfSaved(true); setTimeout(() => onClose(), 800); }
+        if (successCount > 0) { setStfSaved(true); setTimeout(() => onClose(), 800); }
       };
       const handleInlineCreate = async () => {
         if (!stfNewName.trim() || stfCreating) return;
@@ -4038,13 +4062,26 @@
               <button onClick={onClose}
                 style={{ background: 'none', border: 'none', color: '#8b92b0', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1, padding: '0 0.25rem' }}>&times;</button>
             </div>
-            <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(96,165,250,0.08)', borderRadius: '8px', border: '1px solid rgba(96,165,250,0.15)', marginBottom: '0.75rem', flexShrink: 0 }}>
-              <div style={{ fontSize: '0.78rem', color: '#8b92b0', marginBottom: '0.15rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
-                {saveToFolderPayload.item_type}
-              </div>
-              <div style={{ fontSize: '0.9rem', color: '#c0c7d8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {saveToFolderPayload.title || saveToFolderPayload.item_id || 'Untitled'}
-              </div>
+            <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(96,165,250,0.08)', borderRadius: '8px', border: '1px solid rgba(96,165,250,0.15)', marginBottom: '0.75rem', flexShrink: 0, maxHeight: isBulk ? '120px' : 'none', overflowY: isBulk ? 'auto' : 'visible' }}>
+              {isBulk ? (
+                <React.Fragment>
+                  <div style={{ fontSize: '0.78rem', color: '#a78bfa', marginBottom: '0.35rem', fontWeight: 700 }}>{items.length} events selected</div>
+                  {items.map((it, idx) => (
+                    <div key={idx} style={{ fontSize: '0.82rem', color: '#c0c7d8', padding: '0.15rem 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {it.title || it.item_id || 'Untitled'}
+                    </div>
+                  ))}
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <div style={{ fontSize: '0.78rem', color: '#8b92b0', marginBottom: '0.15rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                    {items[0].item_type}
+                  </div>
+                  <div style={{ fontSize: '0.9rem', color: '#c0c7d8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {items[0].title || items[0].item_id || 'Untitled'}
+                  </div>
+                </React.Fragment>
+              )}
             </div>
             <div className="folder-tree" style={{ flex: 1, overflowY: 'auto', marginBottom: '0.75rem' }}>
               {userTree.length === 0 && !stfInlineCreate ? (
@@ -4083,7 +4120,7 @@
                 style={{ padding: '0.5rem 1.2rem', background: 'none', border: '1px solid rgba(61,69,99,0.5)', borderRadius: '8px', color: '#8b92b0', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem' }}>Cancel</button>
               <button onClick={handleSave} disabled={!stfSelected || stfSaving}
                 style={{ padding: '0.5rem 1.2rem', background: stfSelected ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(45,53,97,0.5)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: stfSelected ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontSize: '0.85rem', opacity: stfSelected ? 1 : 0.5, minWidth: '100px', textAlign: 'center' }}>
-                {stfSaved ? '\u2713 Saved!' : stfSaving ? 'Saving...' : 'Save'}
+                {stfSaved ? '\u2713 Saved!' : stfSaving ? 'Saving...' : isBulk ? `Save ${items.length} Items` : 'Save'}
               </button>
             </div>
           </div>
@@ -4173,6 +4210,78 @@
       const [notifTypeFilters, setNotifTypeFilters] = React.useState([]);
       const [notifReadFilter, setNotifReadFilter] = React.useState('all'); // 'all' | 'unread' | 'read'
       const [notifSort, setNotifSort] = React.useState('newest'); // 'newest' | 'oldest' | 'unread_first'
+
+      // ── Source Finder state ──
+      const [sfShowDepth, setSfShowDepth] = React.useState(null); // event object when depth picker is open
+      const [sfDepthTier, setSfDepthTier] = React.useState('scan');
+      const [sfActiveSearch, setSfActiveSearch] = React.useState(null); // {searchId, eventId, eventTitle, status, progress, totalClaims, sourcedClaims, estimatedTime}
+      const [sfSourceCache, setSfSourceCache] = React.useState({}); // eventId -> {claims, totalSources, ...}
+      const [sfModalExpanded, setSfModalExpanded] = React.useState(false); // whether source summary is expanded in modal
+      const sfPollRef = React.useRef(null);
+
+      const sfStartSearch = async (event) => {
+        if (!currentUser) return;
+        const tier = sfDepthTier;
+        setSfShowDepth(null);
+        try {
+          const resp = await fetch(`${API_BASE}/api/source-find`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ event_id: event.id, user_id: currentUser.username, depth_tier: tier }),
+          });
+          if (!resp.ok) { const err = await resp.json(); alert(`Source search failed: ${err.detail || 'Unknown error'}`); return; }
+          const result = await resp.json();
+          setSfActiveSearch({ searchId: result.search_id, eventId: event.id, eventTitle: event.title, status: 'running', progress: 0, totalClaims: 0, sourcedClaims: 0, estimatedTime: null });
+          sfStartPolling(result.search_id, event);
+        } catch (err) { alert(`Source search failed: ${err.message}`); }
+      };
+
+      const sfStartPolling = (searchId, event) => {
+        if (sfPollRef.current) clearInterval(sfPollRef.current);
+        sfPollRef.current = setInterval(async () => {
+          try {
+            const resp = await fetch(`${API_BASE}/api/source-find/status/${searchId}`);
+            if (!resp.ok) return;
+            const s = await resp.json();
+            setSfActiveSearch(prev => prev ? {...prev, status: s.status, progress: s.progress, totalClaims: s.total_claims, sourcedClaims: s.sourced_claims, estimatedTime: s.estimated_time } : null);
+            if (s.status === 'completed' || s.status === 'cancelled' || s.status === 'failed') {
+              clearInterval(sfPollRef.current);
+              sfPollRef.current = null;
+              // Refresh source data for this event
+              sfLoadSources(event.id);
+              // Create notification
+              const srcCount = s.sourced_claims || 0;
+              const msg = s.status === 'completed' ? `Found sources for ${srcCount} of ${s.total_claims} claims` : s.status === 'cancelled' ? `Cancelled — found sources for ${srcCount} claims so far` : `Search failed`;
+              createNotification('source_finder', `Source search ${s.status}`, `${event.title}: ${msg}`, event.id);
+            }
+          } catch (err) { console.error('[SF] Poll error:', err); }
+        }, 3000);
+      };
+
+      const sfCancelSearch = async () => {
+        if (!sfActiveSearch) return;
+        try {
+          await fetch(`${API_BASE}/api/source-find/cancel/${sfActiveSearch.searchId}`, { method: 'POST' });
+        } catch (err) { console.error('[SF] Cancel error:', err); }
+      };
+
+      const sfLoadSources = async (eventId) => {
+        try {
+          const resp = await fetch(`${API_BASE}/api/sources/${eventId}`);
+          if (!resp.ok) return;
+          const data = await resp.json();
+          setSfSourceCache(prev => ({...prev, [eventId]: data}));
+        } catch (err) { console.error('[SF] Load sources error:', err); }
+      };
+
+      // Cleanup polling on unmount
+      React.useEffect(() => { return () => { if (sfPollRef.current) clearInterval(sfPollRef.current); }; }, []);
+
+      // Load sources when event modal opens (if any exist)
+      React.useEffect(() => {
+        if (showModal && modalData && modalData.id && !sfSourceCache[modalData.id]) {
+          sfLoadSources(modalData.id);
+        }
+      }, [showModal, modalData?.id]);
 
       const fileInputRef = useRef(null);
       // Canvas drag engine refs
@@ -5976,6 +6085,8 @@
         new_user:        { icon: '👤', color: '#10b981' },
         user_role_change:{ icon: '🔑', color: '#a78bfa' },
         extension_update:{ icon: '🧩', color: '#60a5fa' },
+        source_finder:   { icon: '🔍', color: '#f59e0b' },
+        folder_shared:   { icon: '📂', color: '#a78bfa' },
       };
 
       const createNotification = async (type, title, message, eventId = null, metadata = {}) => {
@@ -7379,7 +7490,7 @@
                   {filteredMyUploads.map(e => (
                     <tr key={e.id} style={{cursor:'pointer'}} onClick={()=>openEventModal(e,'my uploads')}>
                       <td>{e.id}</td>
-                      <td style={{fontWeight:600}}>{e.title}</td>
+                      <td style={{fontWeight:600}}>{e.title}{sfSourceCache[e.id]?.total_sources > 0 && <span className="sf-badge" style={{marginLeft:'0.4rem',verticalAlign:'middle'}}>🔍 {sfSourceCache[e.id].total_sources}</span>}</td>
                       <td><span className={`status-${e.eventStatus||'unverified'}`}>{e.eventStatus==='historical_record'?'Historical Record':e.eventStatus==='contested'?'Contested':'Unverified'}</span></td>
                       <td onClick={ev=>ev.stopPropagation()}>
                         <button onClick={()=>toggleEventPublic(e.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0}}>
@@ -7418,6 +7529,82 @@
               { label: '🏠 Home', action: () => { setShowModal(false); navigateToTab('timeline'); } },
               { label: modalTabLabel, action: () => setShowModal(false) }
             ];
+      // ── Source Finder: Depth tier selector popup ──
+      const sfDepthSelectorJSX = !sfShowDepth ? null : (
+        <div className="sf-depth-overlay" onClick={()=>setSfShowDepth(null)}>
+          <div className="sf-depth-card" onClick={ev=>ev.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}>
+              <div>
+                <div style={{color:'#f59e0b',fontWeight:700,fontSize:'1.1rem'}}>🔍 Find Sources</div>
+                <div style={{color:'#8b92b0',fontSize:'0.8rem',marginTop:'0.2rem'}}>{sfShowDepth.title}</div>
+              </div>
+              <button onClick={()=>setSfShowDepth(null)} style={{background:'none',border:'none',color:'#6b7394',fontSize:'1.5rem',cursor:'pointer',lineHeight:1}}>&times;</button>
+            </div>
+            <div style={{color:'#c0c7d8',fontSize:'0.82rem',marginBottom:'1rem',lineHeight:1.5}}>
+              AI will extract claims from this event and search the web for sources and primary documents.
+            </div>
+            {[
+              { key: 'scan', label: 'Scan', time: '~1-3 min', desc: 'Quick search — identifies claims, 1 search per claim, top 3 results' },
+              { key: 'investigate', label: 'Investigate', time: '~5-10 min', desc: 'Deeper search — multiple queries per claim, traces to primary sources' },
+              { key: 'deep_dive', label: 'Deep Dive', time: '~10-20 min', desc: 'Exhaustive — follows links, checks archives, tries alternative search terms' },
+            ].map(opt => (
+              <div key={opt.key} className={`sf-depth-option ${sfDepthTier === opt.key ? 'selected' : ''}`} onClick={()=>setSfDepthTier(opt.key)}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.25rem'}}>
+                  <span style={{color:'#e0e6ed',fontWeight:700,fontSize:'0.9rem'}}>{opt.label}</span>
+                  <span style={{color:'#8b92b0',fontSize:'0.75rem'}}>{opt.time}</span>
+                </div>
+                <div style={{color:'#8b92b0',fontSize:'0.78rem',lineHeight:1.4}}>{opt.desc}</div>
+              </div>
+            ))}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:'0.75rem',marginTop:'1rem'}}>
+              <button onClick={()=>setSfShowDepth(null)} style={{padding:'0.5rem 1rem',background:'none',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'8px',color:'#8b92b0',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Cancel</button>
+              <button onClick={()=>sfStartSearch(sfShowDepth)} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#f59e0b,#ea580c)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>Start Search</button>
+            </div>
+          </div>
+        </div>
+      );
+
+      // ── Source Finder: Progress popup ──
+      const sfProgressJSX = !sfActiveSearch ? null : (
+        <div className="sf-depth-overlay" onClick={()=>{}}>
+          <div className="sf-progress-card" onClick={ev=>ev.stopPropagation()}>
+            <div style={{fontSize:'1.5rem',marginBottom:'0.5rem'}}>🔍</div>
+            <div style={{color:'#f59e0b',fontWeight:700,fontSize:'1rem',marginBottom:'0.25rem'}}>
+              {sfActiveSearch.status === 'running' ? 'Searching for Sources...' : sfActiveSearch.status === 'completed' ? 'Search Complete!' : sfActiveSearch.status === 'cancelled' ? 'Search Cancelled' : 'Search Failed'}
+            </div>
+            <div style={{color:'#8b92b0',fontSize:'0.82rem',marginBottom:'0.5rem'}}>{sfActiveSearch.eventTitle}</div>
+            {sfActiveSearch.status === 'running' && (
+              <>
+                <div className="sf-progress-bar">
+                  <div className="sf-progress-fill" style={{width: `${sfActiveSearch.progress || 0}%`}}></div>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.78rem',color:'#8b92b0',marginBottom:'0.75rem'}}>
+                  <span>{sfActiveSearch.progress || 0}%</span>
+                  <span>{sfActiveSearch.sourcedClaims}/{sfActiveSearch.totalClaims} claims sourced</span>
+                  {sfActiveSearch.estimatedTime != null && <span>~{Math.ceil(sfActiveSearch.estimatedTime / 60)} min left</span>}
+                </div>
+              </>
+            )}
+            {sfActiveSearch.status !== 'running' && (
+              <div style={{color:'#c0c7d8',fontSize:'0.85rem',marginTop:'0.5rem',marginBottom:'0.75rem'}}>
+                Found sources for {sfActiveSearch.sourcedClaims} of {sfActiveSearch.totalClaims} claims
+              </div>
+            )}
+            <div style={{display:'flex',justifyContent:'center',gap:'0.75rem',marginTop:'0.5rem'}}>
+              {sfActiveSearch.status === 'running' && (
+                <>
+                  <button onClick={sfCancelSearch} style={{padding:'0.5rem 1rem',background:'none',border:'1px solid rgba(239,68,68,0.4)',borderRadius:'8px',color:'#ef4444',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>Cancel</button>
+                  <button onClick={()=>setSfActiveSearch(null)} style={{padding:'0.5rem 1rem',background:'rgba(96,165,250,0.15)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'8px',color:'#60a5fa',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',fontWeight:600}}>Continue Browsing</button>
+                </>
+              )}
+              {sfActiveSearch.status !== 'running' && (
+                <button onClick={()=>{setSfActiveSearch(null);if(showModal && modalData){sfLoadSources(modalData.id);}}} style={{padding:'0.5rem 1.2rem',background:'linear-gradient(135deg,#f59e0b,#ea580c)',border:'none',borderRadius:'8px',color:'#fff',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>View Results</button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+
       const modalViewJSX = (!showModal || !modalData || !currentUser) ? null : (
         <div className="modal" onClick={()=>setShowModal(false)}>
           <div className="modal-content" onClick={e=>e.stopPropagation()}>
@@ -7435,6 +7622,10 @@
             <div className="modal-header">
               <h2 className="modal-title">{isEditing ? 'Edit Event' : modalData.title}</h2>
               <div className="modal-actions">
+                {!isEditing && <span className="tooltip-wrapper" style={{display:'inline-flex',alignItems:'center',gap:'0.15rem'}}>
+                  <button className="sf-btn" onClick={()=>{setSfDepthTier('scan');setSfShowDepth(modalData);}}>🔍 Find Sources</button>
+                  <span style={{width:'18px',height:'18px',borderRadius:'50%',background:'rgba(245,158,11,0.2)',border:'1px solid rgba(245,158,11,0.4)',color:'#f59e0b',fontSize:'0.7rem',fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'help'}}>i<span className="tooltip-content" style={{bottom:'100%',right:0,width:'270px'}}>AI extracts claims from this event and searches the web for sources, primary documents, and key quotes. Choose Scan (quick), Investigate (deeper), or Deep Dive (exhaustive).</span></span>
+                </span>}
                 {!isEditing && <button className="save-to-folder-btn" onClick={()=>openSaveToFolder({item_type:'event',item_id:modalData.id,title:modalData.title,description:modalData.aiSummary||modalData.description||''})}>📁 Save</button>}
                 {!isEditing && <button className="edit-btn" onClick={()=>setIsEditing(true)}>✏️ Edit</button>}
                 {isEditing && <button className="btn btn-primary" style={{padding:'0.5rem 1rem',fontSize:'0.875rem'}} onClick={saveEditedEvent}>💾 Save</button>}
@@ -7477,6 +7668,67 @@
                 </div>
                 {/* AI Summary */}
                 {modalData.aiSummary && <div className="ai-summary-box"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><div className="ai-summary-label">AI Summary</div>{modalData._aiAnalyzed && <span style={{fontSize:'0.7rem',padding:'0.2rem 0.6rem',background:'rgba(16,185,129,0.2)',color:'#10b981',border:'1px solid rgba(16,185,129,0.4)',borderRadius:'6px',fontWeight:600}}>AI Analyzed{modalData._analysisMode ? ` · ${modalData._analysisMode.charAt(0).toUpperCase()+modalData._analysisMode.slice(1)}` : ''}{modalData._hasFrames ? ' + Frames' : ''}</span>}</div><p style={{color:'#e0e6ed',lineHeight:1.6}}>{modalData.aiSummary}</p></div>}
+                {/* Source Finder Summary */}
+                {(() => {
+                  const sfData = sfSourceCache[modalData.id];
+                  if (!sfData || !sfData.claims || sfData.claims.length === 0) return null;
+                  const SOURCE_TYPE_LABELS = { government_doc: 'Gov Doc', news: 'News', academic: 'Academic', court_record: 'Court', book: 'Book', interview: 'Interview', archive: 'Archive', social_media: 'Social', wiki: 'Wiki', other: 'Other' };
+                  return (
+                    <div className="sf-summary-box">
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={()=>setSfModalExpanded(!sfModalExpanded)}>
+                        <div style={{display:'flex',alignItems:'center',gap:'0.6rem'}}>
+                          <span style={{fontSize:'1rem'}}>🔍</span>
+                          <span style={{color:'#f59e0b',fontWeight:700,fontSize:'0.9rem'}}>Source Finder</span>
+                          <span className="sf-badge">{sfData.total_sources} source{sfData.total_sources!==1?'s':''}</span>
+                          <span style={{fontSize:'0.75rem',color:'#8b92b0'}}>{sfData.sourced_claims}/{sfData.total_claims} claims sourced</span>
+                        </div>
+                        <span style={{color:'#6b7394',fontSize:'0.8rem'}}>{sfModalExpanded ? '▼' : '▶'}</span>
+                      </div>
+                      {sfModalExpanded && (
+                        <div style={{marginTop:'0.75rem'}}>
+                          {sfData.claims.map((claim, ci) => (
+                            <div key={claim.id || ci} className="sf-claim-card">
+                              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'0.5rem'}}>
+                                <div style={{flex:1}}>
+                                  {claim.timestamp_start != null && <span style={{fontSize:'0.7rem',color:'#f59e0b',fontWeight:600,marginRight:'0.4rem'}}>[{Math.floor(claim.timestamp_start/60)}:{String(Math.floor(claim.timestamp_start%60)).padStart(2,'0')}]</span>}
+                                  <span style={{color:'#e0e6ed',fontSize:'0.85rem'}}>{claim.claim_text}</span>
+                                </div>
+                                <span style={{fontSize:'0.7rem',padding:'0.1rem 0.4rem',borderRadius:'4px',fontWeight:600,flexShrink:0,
+                                  ...(claim.status==='found' ? {background:'rgba(16,185,129,0.15)',color:'#10b981',border:'1px solid rgba(16,185,129,0.3)'} :
+                                     claim.status==='not_found' ? {background:'rgba(239,68,68,0.12)',color:'#ef4444',border:'1px solid rgba(239,68,68,0.25)'} :
+                                     {background:'rgba(96,165,250,0.12)',color:'#60a5fa',border:'1px solid rgba(96,165,250,0.25)'})
+                                }}>{claim.status === 'found' ? 'Found' : claim.status === 'not_found' ? 'Not Found' : claim.status === 'searching' ? 'Searching...' : 'Pending'}</span>
+                              </div>
+                              {(claim.results||[]).map((src, si) => {
+                                const quotes = typeof src.key_quotes === 'string' ? JSON.parse(src.key_quotes || '[]') : (src.key_quotes || []);
+                                return (
+                                  <div key={src.id || si} className="sf-source-item">
+                                    <div style={{display:'flex',alignItems:'center',gap:'0.5rem',marginBottom:'0.25rem',flexWrap:'wrap'}}>
+                                      <a href={src.url} target="_blank" rel="noopener noreferrer" style={{color:'#60a5fa',fontSize:'0.82rem',fontWeight:600,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} onClick={ev=>ev.stopPropagation()}>{src.title || src.url}</a>
+                                      <span className={`sf-source-type ${src.is_primary ? 'sf-primary' : 'sf-secondary'}`}>{src.is_primary ? 'Primary' : 'Secondary'}</span>
+                                      {src.source_type && <span className="sf-source-type" style={{background:'rgba(61,69,99,0.4)',color:'#8b92b0',border:'1px solid rgba(61,69,99,0.5)'}}>{SOURCE_TYPE_LABELS[src.source_type] || src.source_type}</span>}
+                                    </div>
+                                    {src.summary && <div style={{color:'#c0c7d8',fontSize:'0.8rem',lineHeight:1.5,marginBottom:'0.25rem'}}>{src.summary}</div>}
+                                    {quotes.length > 0 && (
+                                      <div style={{borderLeft:'2px solid rgba(245,158,11,0.3)',paddingLeft:'0.6rem',marginTop:'0.3rem'}}>
+                                        {quotes.slice(0,2).map((q,qi) => <div key={qi} style={{color:'#8b92b0',fontSize:'0.75rem',fontStyle:'italic',marginBottom:'0.2rem'}}>"{q}"</div>)}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {claim.status === 'not_found' && (claim.search_terms||[]).length > 0 && (
+                                <div style={{marginTop:'0.4rem',fontSize:'0.75rem',color:'#6b7394'}}>
+                                  Try searching: {claim.search_terms.map((t,ti) => <span key={ti} style={{color:'#60a5fa',cursor:'pointer',marginRight:'0.4rem'}} onClick={()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(t)}`,'_blank')}>{t}</span>)}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {/* Description — bullet points from AI + human notes */}
                 <div className="form-group">
                   <label className="form-label">Description</label>
@@ -8047,7 +8299,10 @@
                               <div className="tl-card">
                                 <button className="save-to-folder-btn sm tl-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'event',item_id:e.id,title:e.title||'',description:e.aiSummary||e.description||''});}}>📁</button>
                                 <div className="tl-card-title">{e.title||''}</div>
-                                <div className="tl-card-date">{year!=='?'?year:''}</div>
+                                <div style={{display:'flex',alignItems:'center',gap:'0.4rem'}}>
+                                  <div className="tl-card-date">{year!=='?'?year:''}</div>
+                                  {sfSourceCache[e.id]?.total_sources > 0 && <span className="sf-badge">🔍 {sfSourceCache[e.id].total_sources}</span>}
+                                </div>
                               </div>
                             </div>
                           );
@@ -8078,9 +8333,19 @@
                   <div className="spreadsheet">
                     {renderSpreadsheetToolbar(myFilters, setMyFilters, mySortedEvents.length)}
                     {selectedMyEvents.size > 0 && (
-                      <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',alignItems:'center'}}>
+                      <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',alignItems:'center',flexWrap:'wrap'}}>
                         <span style={{color:'#a78bfa',fontSize:'0.85rem',fontWeight:600}}>{selectedMyEvents.size} selected</span>
                         <button onClick={()=>setShowDownloadPopup('myuploads')} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#fff',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>Download Selected</button>
+                        <button onClick={()=>{
+                          const payloads = mySortedEvents.filter(e=>selectedMyEvents.has(e.id)).map(e=>({item_type:'event',item_id:e.id,title:e.title,description:e.aiSummary||e.description||''}));
+                          openSaveToFolder(payloads);
+                        }} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#60a5fa',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>📁 Save to Folder</button>
+                        <button onClick={()=>{
+                          const evts = mySortedEvents.filter(e=>selectedMyEvents.has(e.id));
+                          if(!window.confirm(`Delete ${evts.length} selected event${evts.length!==1?'s':''}?`))return;
+                          evts.forEach(e=>deleteEvent(e.id));
+                          setSelectedMyEvents(new Set());
+                        }} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>🗑 Delete Selected</button>
                         <button onClick={()=>setSelectedMyEvents(new Set())} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#8b92b0',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit'}}>Clear</button>
                       </div>
                     )}
@@ -9137,6 +9402,8 @@
             {editFolderModalJSX}
             {saveToFolderModalJSX}
             {shareFolderModalJSX}
+            {sfDepthSelectorJSX}
+            {sfProgressJSX}
           </div>
         );
       }
@@ -9293,7 +9560,10 @@
                           <div className="tl-card">
                             <button className="save-to-folder-btn sm tl-save-btn" onClick={ev=>{ev.stopPropagation();openSaveToFolder({item_type:'event',item_id:e.id,title:e.title||'',description:e.aiSummary||e.description||''});}}>📁</button>
                             <div className="tl-card-title">{e.title||''}</div>
-                            <div className="tl-card-date">{year!=='?'?year:''}</div>
+                            <div style={{display:'flex',alignItems:'center',gap:'0.4rem'}}>
+                              <div className="tl-card-date">{year!=='?'?year:''}</div>
+                              {sfSourceCache[e.id]?.total_sources > 0 && <span className="sf-badge">🔍 {sfSourceCache[e.id].total_sources}</span>}
+                            </div>
                           </div>
                         </div>
                       );
@@ -9327,9 +9597,24 @@
               <div className="spreadsheet">
                 {renderSpreadsheetToolbar(filters, setFilters, sortedEvents.length)}
                 {selectedEvents.size > 0 && (
-                  <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',alignItems:'center'}}>
+                  <div style={{display:'flex',gap:'0.5rem',marginBottom:'0.75rem',alignItems:'center',flexWrap:'wrap'}}>
                     <span style={{color:'#a78bfa',fontSize:'0.85rem',fontWeight:600}}>{selectedEvents.size} selected</span>
                     <button onClick={()=>setShowDownloadPopup('spreadsheet')} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#fff',background:'linear-gradient(135deg,#7c3aed,#2563eb)',border:'none',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>Download Selected</button>
+                    <button onClick={()=>{
+                      const payloads = sortedEvents.filter(e=>selectedEvents.has(e.id)).map(e=>({item_type:'event',item_id:e.id,title:e.title,description:e.aiSummary||e.description||''}));
+                      openSaveToFolder(payloads);
+                    }} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#60a5fa',background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>📁 Save to Folder</button>
+                    <button onClick={()=>{
+                      const evts = sortedEvents.filter(e=>selectedEvents.has(e.id));
+                      const deletable = evts.filter(e=>canDelete(e));
+                      if(deletable.length===0){alert('You don\'t have permission to delete any of the selected events.');return;}
+                      const msg = deletable.length < evts.length
+                        ? `Delete ${deletable.length} of ${evts.length} selected events? (${evts.length-deletable.length} skipped — no permission)`
+                        : `Delete ${deletable.length} selected event${deletable.length!==1?'s':''}?`;
+                      if(!window.confirm(msg))return;
+                      deletable.forEach(e=>deleteEvent(e.id));
+                      setSelectedEvents(new Set());
+                    }} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>🗑 Delete Selected</button>
                     <button onClick={()=>setSelectedEvents(new Set())} style={{padding:'0.4rem 0.8rem',fontSize:'0.8rem',color:'#8b92b0',background:'rgba(61,69,99,0.3)',border:'1px solid rgba(61,69,99,0.5)',borderRadius:'6px',cursor:'pointer',fontFamily:'inherit'}}>Clear</button>
                   </div>
                 )}
@@ -9347,7 +9632,7 @@
                           <input type="checkbox" checked={selectedEvents.has(e.id)} onChange={()=>setSelectedEvents(prev=>{const n=new Set(prev);n.has(e.id)?n.delete(e.id):n.add(e.id);return n;})} style={{width:'16px',height:'16px',cursor:'pointer',accentColor:'#7c3aed'}} />
                         </td>
                         <td>{e.id}</td>
-                        <td style={{fontWeight:600}}>{e.title}</td>
+                        <td style={{fontWeight:600}}>{e.title}{sfSourceCache[e.id]?.total_sources > 0 && <span className="sf-badge" style={{marginLeft:'0.4rem',verticalAlign:'middle'}}>🔍 {sfSourceCache[e.id].total_sources}</span>}</td>
                         <td style={{color:'#8b92b0',fontSize:'0.8rem'}}>{e.aiSummary?(e.aiSummary.substring(0,80)+'...'):'—'}</td>
                         <td>{(e.topics||[]).slice(0,2).join(', ')}</td>
                         <td><span className={`level-${e.researchLevel}`}>L{e.researchLevel}</span></td>
@@ -10379,6 +10664,21 @@
                         {isProcessing ? '⏳ Analyzing...' : `🧠 Analyze Selected (${selectedForAnalysis.size})`}
                       </button>
                       {selectedForAnalysis.size > 0 && <button onClick={()=>setShowDownloadPopup('recent')} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#fff',background:'rgba(61,69,99,0.5)',border:'2px solid rgba(61,69,99,0.5)',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit'}}>Download Selected ({selectedForAnalysis.size})</button>}
+                      {selectedForAnalysis.size > 0 && <button onClick={()=>{
+                        const payloads = recentUploads.filter(e=>selectedForAnalysis.has(e.id)).map(e=>({item_type:'event',item_id:e.id,title:e.title,description:e.aiSummary||e.description||''}));
+                        openSaveToFolder(payloads);
+                      }} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#60a5fa',background:'rgba(96,165,250,0.1)',border:'2px solid rgba(96,165,250,0.3)',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit'}}>📁 Save to Folder ({selectedForAnalysis.size})</button>}
+                      {selectedForAnalysis.size > 0 && <button onClick={()=>{
+                        const evts = recentUploads.filter(e=>selectedForAnalysis.has(e.id));
+                        const deletable = evts.filter(e=>canDelete(e));
+                        if(deletable.length===0){alert('You don\'t have permission to delete any of the selected events.');return;}
+                        const msg = deletable.length < evts.length
+                          ? `Delete ${deletable.length} of ${evts.length} selected events? (${evts.length-deletable.length} skipped — no permission)`
+                          : `Delete ${deletable.length} selected event${deletable.length!==1?'s':''}?`;
+                        if(!window.confirm(msg))return;
+                        deletable.forEach(e=>deleteEvent(e.id));
+                        setSelectedForAnalysis(new Set());
+                      }} style={{padding:'0.75rem 1.25rem',fontSize:'0.95rem',fontWeight:700,color:'#ef4444',background:'rgba(239,68,68,0.1)',border:'2px solid rgba(239,68,68,0.3)',borderRadius:'10px',cursor:'pointer',fontFamily:'inherit'}}>🗑 Delete Selected ({selectedForAnalysis.size})</button>}
                     </div>
 
                     {/* ── Recent Uploads Section ── */}
@@ -11047,6 +11347,8 @@
           {editFolderModalJSX}
           {saveToFolderModalJSX}
           {shareFolderModalJSX}
+          {sfDepthSelectorJSX}
+          {sfProgressJSX}
 
 
           {/* Undo Delete Toast */}
